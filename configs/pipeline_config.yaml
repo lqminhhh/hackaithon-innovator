@@ -1,0 +1,30 @@
+models:
+  primary: "Qwen/Qwen2.5-7B-Instruct"
+  secondary: "google/gemma-2-9b-it"
+  embedder: "keepitreal/vietnamese-sbert"
+
+retrieval:
+  chunk_size: 300
+  chunk_overlap: 50
+  top_k: 5
+  relevance_threshold: 0.65
+  bm25_weight: 0.4
+  dense_weight: 0.6
+
+inference:
+  max_new_tokens: 512
+  temperature_deterministic: 0.1
+  temperature_sampling: 0.7
+
+confidence_gate:
+  fast_exit_threshold: 0.85
+  ensemble_threshold: 0.55
+
+consistency_sampler:
+  n_initial: 2
+  n_second: 5
+  n_max: 7
+
+quantisation:
+  load_in_4bit: true
+  compute_dtype: "float16"
