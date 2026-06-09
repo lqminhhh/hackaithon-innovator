@@ -70,7 +70,7 @@ def main():
             confidence = parse_confidence(raw_output)
 
             record = {
-                "id": int(row["id"]) if "id" in row else int(row.name),
+                "id": str(row["id"]) if "id" in row else str(row.name),
                 "question": question,
                 "options": options,
                 "correct_answer": answer,
