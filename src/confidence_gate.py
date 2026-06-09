@@ -25,11 +25,17 @@ def _load_thresholds() -> dict:
     return cfg["confidence_gate"]
 
 
+_THRESHOLDS: dict | None = None
+
+
 def route(confidence: float) -> Route:
     """Determine which downstream path to take based on confidence."""
-    thresholds = _load_thresholds()
-    if confidence >= thresholds["fast_exit_threshold"]:
+    global _THRESHOLDS
+    if _THRESHOLDS is None:
+        _THRESHOLDS = _load_thresholds()
+
+    if confidence >= _THRESHOLDS["fast_exit_threshold"]:
         return "fast_exit"
-    if confidence >= thresholds["ensemble_threshold"]:
+    if confidence >= _THRESHOLDS["ensemble_threshold"]:
         return "consistency"
     return "ensemble"
