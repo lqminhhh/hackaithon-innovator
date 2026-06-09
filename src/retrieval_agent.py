@@ -80,9 +80,11 @@ class RetrievalAgent:
         dense_ids = [int(i) for i in dense_ids[0] if i >= 0]
 
         # BM25 retrieval
-        tokens = query.lower().split()
-        bm25_scores = self.bm25.get_scores(tokens)
-        bm25_ids = list(np.argsort(bm25_scores)[::-1][:k_fetch])
+        bm25_ids: list[int] = []
+        if self.bm25 is not None:
+            tokens = query.lower().split()
+            bm25_scores = self.bm25.get_scores(tokens)
+            bm25_ids = list(np.argsort(bm25_scores)[::-1][:k_fetch])
 
         # Reciprocal rank fusion
         scores: dict[int, float] = {}
