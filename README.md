@@ -23,7 +23,7 @@ public_test.csv → Classifier → [Retrieval + CoT Pass 1 in parallel]
 
 ```bash
 git clone <your-repo>
-cd hackaithon-bangc
+cd hackaithon-innovator
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 ```
