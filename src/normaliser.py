@@ -43,7 +43,7 @@ def normalise_answer(raw_output: str) -> str:
 def parse_confidence(raw_output: str) -> float:
     """Extract the confidence score from model output, defaulting to 0.5."""
     m = re.search(
-        r"[ĐĐđ][ỘỘộo]\s*T[ỰỰựu]\s*TIN[:\s]*([\d.]+)",
+        r"[ĐĐđ][ỘỘộo]\s*T[ỰỰựu]\s*TIN[:\s]*([-+]?\d*\.?\d+)",
         raw_output,
         re.IGNORECASE,
     )
