@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Generate CoT reasoning chains for public test questions.
+"""Generate CoT reasoning chains from SAMPLE/REFERENCE questions.
 
-For every question in the test file, runs the primary model with CoT
-prompting and saves the full reasoning trace.  These chains are later
-embedded into the FAISS index so the model can retrieve worked examples
-for similar private-test questions.
+Runs the primary model over each sample question and saves the full
+reasoning trace.  These chains are embedded into the FAISS index so
+the model can retrieve worked examples at inference time.
+
+IMPORTANT: Only run this on sample/reference questions (public_test.csv),
+NEVER on the actual test file you will run inference on.  The test file
+is for inference only.
 
 Usage:
     python scripts/generate_cot_chains.py \
-        --input data/public-test_1780368312.json \
+        --input data/public_test.csv \
         --output data/cot_chains.jsonl
 """
 
@@ -33,8 +36,8 @@ def main():
     parser = argparse.ArgumentParser(description="Generate CoT chains for public test")
     parser.add_argument(
         "--input",
-        default="data/public-test_1780368312.json",
-        help="Path to test file (JSON or CSV)",
+        default="data/public_test.csv",
+        help="Path to sample/reference questions (NOT the test file)",
     )
     parser.add_argument(
         "--output",

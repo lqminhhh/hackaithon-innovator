@@ -53,6 +53,22 @@ The entire system runs offline inside a Docker container with no internet access
 
 **Step 4 — Answer normalisation:** Model outputs are parsed through a multi-layer regex extractor that handles various output formats (Vietnamese, English, parenthesised, bare letters) and always produces a valid A/B/C/D answer.
 
+## Data Files & Leakage Prevention
+
+| File | Role | Used in |
+|---|---|---|
+| `data/public_test.csv` | **Sample/reference questions** (3 questions, inline choices) | CoT chain generation only |
+| `data/public-test_1780368312.json` | **Actual test set** (463 questions, no answers) | Inference only |
+
+### How data leakage is prevented
+
+CoT and inference use **strictly separate files**:
+
+- **Build time:** `generate_cot_chains.py` runs on `public_test.csv` (sample questions). The resulting worked examples are embedded into the FAISS index alongside Vietnamese Wikipedia.
+- **Inference time:** `pipeline.py` runs on the actual test file (`public-test_1780368312.json`). The model never sees its own prior answers — CoT chains in the index come from the sample set, not the test set.
+
+As a safety net, the retrieval agent also supports same-QID decontamination (`exclude_qid` parameter) which silently skips any CoT chunk whose `qid` matches the question currently being answered. This prevents leakage even if someone accidentally generates CoT chains from the test file.
+
 ## Tech Stack
 
 | Component | Model / Library | Why |
@@ -93,7 +109,7 @@ The entire system runs offline inside a Docker container with no internet access
 ├── tests/                       Unit and integration tests
 ├── notebooks/
 │   └── colab_full_run.ipynb     Complete Colab notebook (clone → run → submit)
-├── data/                        Test files, FAISS index, chunk metadata
+├── data/                        Test files, FAISS index, chunk metadata, CoT chains
 ├── Dockerfile                   Production container with baked-in models
 ├── run.sh                       Container entrypoint
 ├── docker-compose.yml           Local dev with GPU volume mounts
@@ -118,14 +134,16 @@ pip install -r requirements.txt
 pip install mwparserfromhell
 bash scripts/download_wiki.sh
 
-# 2. Generate CoT reasoning chains from the test questions (~1-2 hours on T4)
-python scripts/generate_cot_chains.py --input data/public-test_1780368312.json
+# 2. Generate CoT reasoning chains from SAMPLE questions
+#    Uses public_test.csv (reference set), NOT the test file
+python scripts/generate_cot_chains.py --input data/public_test.csv
 
 # 3. Build the FAISS index (~30-60 min)
+#    Merges Wikipedia + CoT chains + any domain texts into a single index
 python scripts/build_index.py
 ```
 
-### Run inference
+### Run inference (on actual test file)
 
 ```bash
 python src/pipeline.py \

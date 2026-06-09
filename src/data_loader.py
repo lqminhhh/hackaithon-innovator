@@ -3,14 +3,17 @@
 Handles both JSON and CSV formats. Normalises all inputs into a
 consistent internal representation regardless of source format.
 
-Expected JSON format (from organiser):
-    [{"qid": "test_0001", "question": "...", "choices": ["...", "...", "...", "..."]}, ...]
+Supported formats:
 
-Expected CSV format:
-    id,question,A,B,C,D
+1. JSON (organiser format):
+   [{"qid": "test_0001", "question": "...", "choices": ["...", "...", "..."]}, ...]
 
-Choice text may optionally have "A: " / "B: " prefixes — these are stripped.
-Some questions may have fewer than 4 choices — missing slots are filled with empty strings.
+2. CSV with separate columns:
+   qid,question,A,B,C,D
+
+3. CSV with choices embedded in the question text:
+   qid,question
+   1,"What is X? A. foo B. bar C. baz D. qux"
 """
 
 from __future__ import annotations
@@ -25,10 +28,34 @@ LABELS = ["A", "B", "C", "D"]
 
 _LABEL_PREFIX_RE = re.compile(r"^[A-D][:\.\)]\s*")
 
+_INLINE_CHOICES_RE = re.compile(
+    r"^(.*?)\s*"
+    r"A[.\):\s]+(.+?)\s+"
+    r"B[.\):\s]+(.+?)\s+"
+    r"C[.\):\s]+(.+?)\s+"
+    r"D[.\):\s]+(.+?)\s*$",
+    re.DOTALL,
+)
+
 
 def _strip_label_prefix(text: str) -> str:
     """Remove leading 'A: ', 'B. ', 'C) ' etc. from a choice string."""
     return _LABEL_PREFIX_RE.sub("", text).strip()
+
+
+def _parse_inline_choices(text: str) -> tuple[str, dict[str, str]] | None:
+    """Try to split 'question A. x B. y C. z D. w' into question + options."""
+    m = _INLINE_CHOICES_RE.match(text)
+    if not m:
+        return None
+    question = m.group(1).strip()
+    options = {
+        "A": m.group(2).strip(),
+        "B": m.group(3).strip(),
+        "C": m.group(4).strip(),
+        "D": m.group(5).strip(),
+    }
+    return question, options
 
 
 def load_questions(path: str | Path) -> list[dict]:
@@ -54,7 +81,6 @@ def _load_json(path: Path) -> list[dict]:
     questions = []
     for item in raw:
         choices = item.get("choices", [])
-        # Pad to 4 choices if fewer
         while len(choices) < 4:
             choices.append("")
 
@@ -74,18 +100,27 @@ def _load_csv(path: Path) -> list[dict]:
     df = pd.read_csv(path)
     questions = []
 
-    # Detect column naming: "qid" or "id"
     id_col = "qid" if "qid" in df.columns else "id"
+    has_separate_choices = all(label in df.columns for label in LABELS)
 
     for _, row in df.iterrows():
-        options = {}
-        for label in LABELS:
-            val = str(row.get(label, "")) if label in row else ""
-            options[label] = _strip_label_prefix(val)
+        if has_separate_choices:
+            question_text = str(row["question"])
+            options = {}
+            for label in LABELS:
+                options[label] = _strip_label_prefix(str(row[label]))
+        else:
+            # Choices are embedded in the question text: "question? A. x B. y C. z D. w"
+            parsed = _parse_inline_choices(str(row["question"]))
+            if parsed:
+                question_text, options = parsed
+            else:
+                question_text = str(row["question"])
+                options = {"A": "", "B": "", "C": "", "D": ""}
 
         questions.append({
             "qid": str(row[id_col]),
-            "question": str(row["question"]),
+            "question": question_text,
             "options": options,
         })
     return questions

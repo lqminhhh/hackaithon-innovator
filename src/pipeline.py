@@ -43,7 +43,8 @@ async def process_question(
     loop = asyncio.get_running_loop()
 
     # Step 1: run retrieval and first CoT pass in parallel
-    retrieve_fut = loop.run_in_executor(None, retriever.retrieve, question)
+    qid = q["qid"]
+    retrieve_fut = loop.run_in_executor(None, retriever.retrieve, question, qid)
     cot_fut = loop.run_in_executor(
         None, primary_agent.infer_no_context, question, options
     )

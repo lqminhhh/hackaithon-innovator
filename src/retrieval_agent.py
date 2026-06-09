@@ -52,8 +52,14 @@ class RetrievalAgent:
 
     # ── public API ───────────────────────────────────────────────────────
 
-    def retrieve(self, query: str) -> list[str]:
-        """Return top-k relevant chunks that pass the relevance gate."""
+    def retrieve(self, query: str, exclude_qid: str | None = None) -> list[str]:
+        """Return top-k relevant chunks that pass the relevance gate.
+
+        Args:
+            query:       The search query (typically the question text).
+            exclude_qid: If set, CoT-chain chunks originating from this
+                         question ID are silently skipped (decontamination).
+        """
         if self.index.ntotal == 0:
             return []
 
@@ -62,6 +68,9 @@ class RetrievalAgent:
 
         results: list[str] = []
         for doc_id in fused_ids:
+            chunk = self.chunks[doc_id]
+            if exclude_qid and chunk.get("source") == "cot_chain" and chunk.get("qid") == exclude_qid:
+                continue
             chunk_emb = self._get_embedding(doc_id)
             if chunk_emb is not None and self._passes_gate(query_emb, chunk_emb):
                 results.append(self.chunk_texts[doc_id])

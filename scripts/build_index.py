@@ -97,6 +97,7 @@ def load_cot_chains(cot_path: Path) -> list[dict]:
             chunks.append({
                 "text": text,
                 "source": "cot_chain",
+                "qid": obj.get("qid", ""),
                 "correct_answer": obj.get("correct_answer", ""),
                 "chunk_idx": 0,
             })
