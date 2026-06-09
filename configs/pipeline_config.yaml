@@ -8,9 +8,6 @@ retrieval:
   chunk_overlap: 50
   top_k: 5
   relevance_threshold: 0.65
-  bm25_weight: 0.4
-  dense_weight: 0.6
-
 inference:
   max_new_tokens: 512
   temperature_deterministic: 0.1
