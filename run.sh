@@ -1,4 +1,4 @@
 #!/bin/bash
-INPUT_CSV=${1:-/data/public_test.csv}
-OUTPUT_CSV=${2:-/data/submission.csv}
-python src/pipeline.py --input "$INPUT_CSV" --output "$OUTPUT_CSV"
+INPUT=${1:-/data/public_test.json}
+OUTPUT=${2:-/data/submission.csv}
+python src/pipeline.py --input "$INPUT" --output "$OUTPUT"

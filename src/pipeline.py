@@ -1,6 +1,6 @@
 """Main pipeline orchestrator.
 
-Wires all modules together: reads input CSV, classifies questions,
+Wires all modules together: reads input (JSON or CSV), classifies questions,
 runs retrieval + reasoning in parallel, gates by confidence, and
 writes the final submission.csv.
 """
@@ -12,9 +12,9 @@ import asyncio
 import time
 from pathlib import Path
 
-import pandas as pd
 import yaml
 
+from src.data_loader import load_questions, write_submission
 from src.models import load_primary_model, load_secondary_model, load_embedder
 from src.classifier import classify
 from src.retrieval_agent import RetrievalAgent
@@ -30,23 +30,6 @@ _CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "pipeline_confi
 def _load_config() -> dict:
     with open(_CFG_PATH) as f:
         return yaml.safe_load(f)
-
-
-def load_questions(csv_path: str) -> list[dict]:
-    df = pd.read_csv(csv_path)
-    questions = []
-    for _, row in df.iterrows():
-        questions.append({
-            "id": row["id"],
-            "question": str(row["question"]),
-            "options": {
-                "A": str(row["A"]),
-                "B": str(row["B"]),
-                "C": str(row["C"]),
-                "D": str(row["D"]),
-            },
-        })
-    return questions
 
 
 async def process_question(
@@ -87,13 +70,13 @@ async def process_question(
     path = route(confidence)
 
     if path == "fast_exit":
-        return {"id": q["id"], "answer": answer}
+        return {"qid": q["qid"], "answer": answer}
 
     if path == "consistency":
         answer, _ = await loop.run_in_executor(
             None, adaptive_consistency, primary_agent, question, options, context
         )
-        return {"id": q["id"], "answer": answer}
+        return {"qid": q["qid"], "answer": answer}
 
     # path == "ensemble"
     if secondary_agent is not None:
@@ -110,10 +93,10 @@ async def process_question(
         answer, _ = await loop.run_in_executor(
             None, adaptive_consistency, primary_agent, question, options, context
         )
-    return {"id": q["id"], "answer": answer}
+    return {"qid": q["qid"], "answer": answer}
 
 
-async def run_pipeline(input_csv: str, output_csv: str):
+async def run_pipeline(input_path: str, output_path: str):
     """Run the full pipeline end-to-end."""
     t_start = time.time()
     cfg = _load_config()
@@ -138,7 +121,7 @@ async def run_pipeline(input_csv: str, output_csv: str):
     )
     print(f"Models loaded in {time.time() - t_start:.1f}s")
 
-    questions = load_questions(input_csv)
+    questions = load_questions(input_path)
     print(f"Processing {len(questions)} questions...")
 
     results = []
@@ -150,16 +133,15 @@ async def run_pipeline(input_csv: str, output_csv: str):
         if (i + 1) % 50 == 0:
             print(f"  [{i + 1}/{len(questions)}] done")
 
-    Path(output_csv).parent.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(results).to_csv(output_csv, index=False)
+    write_submission(results, output_path)
     elapsed = time.time() - t_start
-    print(f"Written {len(results)} predictions to {output_csv}")
+    print(f"Written {len(results)} predictions to {output_path}")
     print(f"Total time: {elapsed:.1f}s ({elapsed / len(questions):.2f}s/question)")
 
 
 def main():
     parser = argparse.ArgumentParser(description="HackAIthon Bảng C pipeline")
-    parser.add_argument("--input", required=True, help="Path to input CSV")
+    parser.add_argument("--input", required=True, help="Path to input file (JSON or CSV)")
     parser.add_argument("--output", required=True, help="Path to output submission CSV")
     args = parser.parse_args()
 

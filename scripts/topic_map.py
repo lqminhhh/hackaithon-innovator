@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
-"""Analyse public_test.csv to identify topic distribution and gaps.
+"""Analyse test questions to identify topic distribution and gaps.
 
 Scans all questions, classifies them by topic using keyword heuristics,
 and prints a summary table.  Use this to decide which domain texts to
 add to the knowledge base.
 
 Usage:
-    python scripts/topic_map.py --input data/public_test.csv
+    python scripts/topic_map.py --input data/public-test_1780368312.json
 """
 
 from __future__ import annotations
 
 import argparse
-import re
+import sys
 from collections import Counter
 from pathlib import Path
 
-import pandas as pd
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from src.data_loader import load_questions
 
 TOPIC_KEYWORDS: dict[str, list[str]] = {
     "Lịch sử": [
@@ -68,27 +70,27 @@ def detect_topic(text: str) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="Analyse topic distribution")
-    parser.add_argument("--input", default="data/public_test.csv")
+    parser.add_argument("--input", default="data/public-test_1780368312.json")
     args = parser.parse_args()
 
-    df = pd.read_csv(args.input)
-    print(f"Total questions: {len(df)}\n")
+    questions = load_questions(args.input)
+    print(f"Total questions: {len(questions)}\n")
 
     topic_counter = Counter()
-    for _, row in df.iterrows():
-        text = f"{row['question']} {row['A']} {row['B']} {row['C']} {row['D']}"
+    for q in questions:
+        text = f"{q['question']} {' '.join(q['options'].values())}"
         topic = detect_topic(text)
         topic_counter[topic] += 1
 
     print(f"{'Topic':<25} {'Count':>6} {'%':>7}")
     print("-" * 40)
     for topic, count in topic_counter.most_common():
-        pct = 100 * count / len(df)
+        pct = 100 * count / len(questions)
         print(f"{topic:<25} {count:>6} {pct:>6.1f}%")
 
     if "Khác" in topic_counter:
         print(
-            f"\n⚠  {topic_counter['Khác']} questions ({100*topic_counter['Khác']/len(df):.1f}%) "
+            f"\n⚠  {topic_counter['Khác']} questions ({100*topic_counter['Khác']/len(questions):.1f}%) "
             f"are unclassified — consider adding domain texts for these topics."
         )
 
