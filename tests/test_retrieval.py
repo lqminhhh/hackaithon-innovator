@@ -1,5 +1,10 @@
-"""Tests for the retrieval agent (requires FAISS index to be built)."""
+"""Tests for the retrieval agent (requires FAISS index to be built).
 
+Note: this test downloads a SentenceTransformer model; it is skipped by default
+unless RUN_INTEGRATION_TESTS=1 is set.
+"""
+
+import os
 import sys
 import json
 import tempfile
@@ -7,6 +12,10 @@ from pathlib import Path
 
 import numpy as np
 import faiss
+import pytest
+
+if os.getenv("RUN_INTEGRATION_TESTS") != "1":
+    pytest.skip("Skipping integration retrieval test (set RUN_INTEGRATION_TESTS=1 to run)", allow_module_level=True)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
