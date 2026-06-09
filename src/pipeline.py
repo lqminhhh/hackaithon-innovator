@@ -59,7 +59,7 @@ async def process_question(
     """Process a single question through the full pipeline."""
     question = q["question"]
     options = q["options"]
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
 
     # Step 1: classify
     q_type = classify(question, options)
