@@ -44,8 +44,11 @@ class RetrievalAgent:
                 self.chunks.append(obj)
                 self.chunk_texts.append(obj["text"])
 
-        tokenized = [t.lower().split() for t in self.chunk_texts]
-        self.bm25 = BM25Okapi(tokenized)
+        if self.chunk_texts:
+            tokenized = [t.lower().split() for t in self.chunk_texts]
+            self.bm25: BM25Okapi | None = BM25Okapi(tokenized)
+        else:
+            self.bm25 = None
 
     # ── public API ───────────────────────────────────────────────────────
 
