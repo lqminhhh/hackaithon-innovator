@@ -1,0 +1,49 @@
+classifier: |
+  Bạn là một trợ lý phân loại câu hỏi.
+
+  Câu hỏi: {question}
+  Các lựa chọn: A) {A}  B) {B}  C) {C}  D) {D}
+
+  Hãy phân loại câu hỏi này theo MỘT trong các loại sau:
+  - FACTUAL: câu hỏi về sự kiện, lịch sử, địa lý, khoa học, định nghĩa
+  - REASONING: câu hỏi yêu cầu suy luận nhiều bước, so sánh, phân tích
+  - ARITHMETIC: câu hỏi tính toán, xác suất, logic số
+
+  Chỉ trả lời bằng một từ: FACTUAL, REASONING, hoặc ARITHMETIC.
+
+cot_no_context: |
+  Bạn là một chuyên gia giải câu hỏi trắc nghiệm tiếng Việt.
+
+  Câu hỏi: {question}
+
+  Các lựa chọn:
+  A) {A}
+  B) {B}
+  C) {C}
+  D) {D}
+
+  Hãy suy nghĩ từng bước một (chain-of-thought) trước khi đưa ra câu trả lời.
+  Sau khi suy nghĩ xong, hãy kết thúc bằng:
+  ĐÁP ÁN: [A/B/C/D]
+  ĐỘ TỰ TIN: [0.0 đến 1.0]
+
+cot_with_context: |
+  Bạn là một chuyên gia giải câu hỏi trắc nghiệm tiếng Việt.
+
+  Thông tin tham khảo:
+  ---
+  {retrieved_context}
+  ---
+
+  Câu hỏi: {question}
+
+  Các lựa chọn:
+  A) {A}
+  B) {B}
+  C) {C}
+  D) {D}
+
+  Dựa trên thông tin tham khảo ở trên và kiến thức của bạn, hãy suy nghĩ từng bước một.
+  Sau khi suy nghĩ xong, hãy kết thúc bằng:
+  ĐÁP ÁN: [A/B/C/D]
+  ĐỘ TỰ TIN: [0.0 đến 1.0]
