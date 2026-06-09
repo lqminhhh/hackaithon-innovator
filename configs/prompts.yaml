@@ -1,16 +1,3 @@
-classifier: |
-  Bạn là một trợ lý phân loại câu hỏi.
-
-  Câu hỏi: {question}
-  Các lựa chọn: A) {A}  B) {B}  C) {C}  D) {D}
-
-  Hãy phân loại câu hỏi này theo MỘT trong các loại sau:
-  - FACTUAL: câu hỏi về sự kiện, lịch sử, địa lý, khoa học, định nghĩa
-  - REASONING: câu hỏi yêu cầu suy luận nhiều bước, so sánh, phân tích
-  - ARITHMETIC: câu hỏi tính toán, xác suất, logic số
-
-  Chỉ trả lời bằng một từ: FACTUAL, REASONING, hoặc ARITHMETIC.
-
 cot_no_context: |
   Bạn là một chuyên gia giải câu hỏi trắc nghiệm tiếng Việt.
 

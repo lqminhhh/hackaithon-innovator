@@ -1,8 +1,7 @@
 """Main pipeline orchestrator.
 
-Wires all modules together: reads input (JSON or CSV), classifies questions,
-runs retrieval + reasoning in parallel, gates by confidence, and
-writes the final submission.csv.
+Wires all modules together: reads input (JSON or CSV), runs retrieval +
+reasoning in parallel, gates by confidence, and writes submission.csv.
 """
 
 from __future__ import annotations
@@ -16,7 +15,6 @@ import yaml
 
 from src.data_loader import load_questions, write_submission
 from src.models import load_primary_model, load_secondary_model, load_embedder
-from src.classifier import classify
 from src.retrieval_agent import RetrievalAgent
 from src.reasoning_agent import ReasoningAgent
 from src.confidence_gate import route
@@ -44,10 +42,7 @@ async def process_question(
     options = q["options"]
     loop = asyncio.get_running_loop()
 
-    # Step 1: classify
-    q_type = classify(question, options)
-
-    # Step 2: run retrieval and first CoT pass in parallel
+    # Step 1: run retrieval and first CoT pass in parallel
     retrieve_fut = loop.run_in_executor(None, retriever.retrieve, question)
     cot_fut = loop.run_in_executor(
         None, primary_agent.infer_no_context, question, options
@@ -66,7 +61,7 @@ async def process_question(
     answer = normalise_answer(raw_cot)
     confidence = parse_confidence(raw_cot)
 
-    # Step 3: confidence gate
+    # Step 2: confidence gate
     path = route(confidence)
 
     if path == "fast_exit":

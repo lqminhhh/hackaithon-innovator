@@ -27,7 +27,6 @@ from src.data_loader import load_questions
 from src.models import load_primary_model
 from src.reasoning_agent import ReasoningAgent
 from src.normaliser import normalise_answer, parse_confidence
-from src.classifier import classify
 
 
 def main():
@@ -56,7 +55,6 @@ def main():
 
     with open(output_path, "w", encoding="utf-8") as f:
         for q in tqdm(questions):
-            q_type = classify(q["question"], q["options"])
             raw_output = agent.infer_no_context(q["question"], q["options"])
             answer = normalise_answer(raw_output)
             confidence = parse_confidence(raw_output)
@@ -68,8 +66,6 @@ def main():
                 "correct_answer": answer,
                 "confidence": confidence,
                 "cot_chain": raw_output,
-                "q_type": q_type,
-                "topic_tags": [],
             }
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
