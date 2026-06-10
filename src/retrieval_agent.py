@@ -8,6 +8,7 @@ the cosine relevance threshold are dropped silently.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import faiss
@@ -34,8 +35,11 @@ class RetrievalAgent:
         self.top_k = top_k
         self.relevance_threshold = relevance_threshold
 
+        t = time.time()
         self.index = faiss.read_index(str(index_path))
+        print(f"    FAISS index: {self.index.ntotal} vectors ({time.time() - t:.1f}s)", flush=True)
 
+        t = time.time()
         self.chunks: list[dict] = []
         self.chunk_texts: list[str] = []
         with open(chunks_path, encoding="utf-8") as f:
@@ -43,12 +47,15 @@ class RetrievalAgent:
                 obj = json.loads(line)
                 self.chunks.append(obj)
                 self.chunk_texts.append(obj["text"])
+        print(f"    Chunks loaded: {len(self.chunks)} ({time.time() - t:.1f}s)", flush=True)
 
+        t = time.time()
         if self.chunk_texts:
             tokenized = [t.lower().split() for t in self.chunk_texts]
             self.bm25: BM25Okapi | None = BM25Okapi(tokenized)
         else:
             self.bm25 = None
+        print(f"    BM25 index built ({time.time() - t:.1f}s)", flush=True)
 
     # ── public API ───────────────────────────────────────────────────────
 
@@ -79,14 +86,59 @@ class RetrievalAgent:
 
         return results
 
+    def batch_retrieve(
+        self,
+        queries: list[str],
+        exclude_qids: list[str | None] | None = None,
+    ) -> list[list[str]]:
+        """Batch retrieval — encodes all queries at once for speed."""
+        if self.index.ntotal == 0:
+            return [[] for _ in queries]
+
+        if exclude_qids is None:
+            exclude_qids = [None] * len(queries)
+
+        all_query_embs = self.embedder.encode(
+            queries, normalize_embeddings=True, batch_size=64, show_progress_bar=True
+        )
+
+        results: list[list[str]] = []
+        for i, (query, query_emb, exclude_qid) in enumerate(
+            zip(queries, all_query_embs, exclude_qids)
+        ):
+            fused_ids = self._hybrid_search_with_emb(
+                query, query_emb.astype(np.float32)
+            )
+            hits: list[str] = []
+            for doc_id in fused_ids:
+                chunk = self.chunks[doc_id]
+                if exclude_qid and chunk.get("source") == "cot_chain" and chunk.get("qid") == exclude_qid:
+                    continue
+                chunk_emb = self._get_embedding(doc_id)
+                if chunk_emb is not None and self._passes_gate(query_emb, chunk_emb):
+                    hits.append(self.chunk_texts[doc_id])
+                if len(hits) >= self.top_k:
+                    break
+            results.append(hits)
+
+        return results
+
     # ── internals ────────────────────────────────────────────────────────
 
     def _hybrid_search(self, query: str) -> list[int]:
         """BM25 + dense search merged by reciprocal rank fusion."""
+        q_emb = self.embedder.encode([query], normalize_embeddings=True).astype(np.float32)
+        return self._hybrid_search_with_emb(query, q_emb)
+
+    def _hybrid_search_with_emb(
+        self, query: str, q_emb: np.ndarray
+    ) -> list[int]:
+        """RRF with a pre-computed query embedding."""
         k_fetch = self.top_k * 4
 
         # Dense retrieval
-        q_emb = self.embedder.encode([query], normalize_embeddings=True).astype(np.float32)
+        if q_emb.ndim == 1:
+            q_emb = q_emb.reshape(1, -1)
         n_search = min(k_fetch, self.index.ntotal)
         _, dense_ids = self.index.search(q_emb, n_search)
         dense_ids = [int(i) for i in dense_ids[0] if i >= 0]

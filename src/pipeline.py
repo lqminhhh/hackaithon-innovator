@@ -48,9 +48,10 @@ def _run_batched(input_path: str, output_path: str):
     t_start = time.time()
     cfg = _load_config()
 
-    # Phase 0: retrieval (embedder on CPU to keep GPU free for vLLM)
-    print("Loading embedder for retrieval (CPU)...", flush=True)
-    embedder = load_embedder(device="cpu")
+    # Phase 0: retrieval (embedder on GPU for speed, freed before vLLM starts)
+    print("Loading embedder for retrieval...", flush=True)
+    embedder = load_embedder()
+    print("  Loading retrieval index...", flush=True)
     retriever = RetrievalAgent(
         embedder=embedder,
         top_k=cfg["retrieval"]["top_k"],
@@ -58,13 +59,16 @@ def _run_batched(input_path: str, output_path: str):
     )
 
     questions = load_questions(input_path)
-    print(f"Phase 1: Retrieving context for {len(questions)} questions...", flush=True)
+    print(f"Phase 1: Batch retrieval ({len(questions)} questions)...", flush=True)
     t1 = time.time()
 
-    all_contexts: list[str | None] = []
-    for q in questions:
-        chunks = retriever.retrieve(q["question"], q["qid"])
-        all_contexts.append("\n\n".join(chunks) if chunks else None)
+    query_texts = [q["question"] for q in questions]
+    exclude_qids = [q["qid"] for q in questions]
+    all_chunk_lists = retriever.batch_retrieve(query_texts, exclude_qids)
+
+    all_contexts: list[str | None] = [
+        "\n\n".join(chunks) if chunks else None for chunks in all_chunk_lists
+    ]
 
     n_ctx = sum(1 for c in all_contexts if c is not None)
     print(f"  {n_ctx}/{len(questions)} got context ({time.time() - t1:.1f}s)", flush=True)
