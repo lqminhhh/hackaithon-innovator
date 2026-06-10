@@ -53,21 +53,40 @@ The entire system runs offline inside a Docker container with no internet access
 
 **Step 4 — Answer normalisation:** Model outputs are parsed through a multi-layer regex extractor that handles various output formats (Vietnamese, English, parenthesised, bare letters) and always produces a valid A/B/C/D answer.
 
-## Data Files & Leakage Prevention
+## Data Layout & Leakage Prevention
 
-| File | Role | Used in |
-|---|---|---|
-| `data/public_test.csv` | **Sample/reference questions** (3 questions, inline choices) | CoT chain generation only |
-| `data/public-test_1780368312.json` | **Actual test set** (463 questions, no answers) | Inference only |
+```
+data/
+├── reference/                      ← Reference questions for CoT generation
+│   ├── public_test.csv             ← Initial 3-question sample
+│   ├── round1_test.json            ← Add past test files here over time
+│   └── ...
+│
+├── public-test_1780368312.json     ← Active test file (inference only)
+├── cot_chains.jsonl                ← Generated CoT chains (built from reference/)
+├── faiss.index                     ← FAISS vector index
+└── chunks.jsonl                    ← Chunk metadata
+```
+
+### Adding new reference files
+
+As you receive more test files, move completed ones into `data/reference/` and re-run:
+
+```bash
+python scripts/generate_cot_chains.py --input data/reference/
+python scripts/build_index.py
+```
+
+The script **appends** new chains and **skips** questions already processed, so you never redo work.
 
 ### How data leakage is prevented
 
 CoT and inference use **strictly separate files**:
 
-- **Build time:** `generate_cot_chains.py` runs on `public_test.csv` (sample questions). The resulting worked examples are embedded into the FAISS index alongside Vietnamese Wikipedia.
-- **Inference time:** `pipeline.py` runs on the actual test file (`public-test_1780368312.json`). The model never sees its own prior answers — CoT chains in the index come from the sample set, not the test set.
+- **Build time:** `generate_cot_chains.py` scans `data/reference/` (past sample/test files). The resulting worked examples are embedded into the FAISS index alongside Vietnamese Wikipedia.
+- **Inference time:** `pipeline.py` runs on the active test file. The model never sees its own prior answers — CoT chains in the index come from the reference set, not the active test file.
 
-As a safety net, the retrieval agent also supports same-QID decontamination (`exclude_qid` parameter) which silently skips any CoT chunk whose `qid` matches the question currently being answered. This prevents leakage even if someone accidentally generates CoT chains from the test file.
+As a safety net, the retrieval agent also supports same-QID decontamination (`exclude_qid` parameter) which silently skips any CoT chunk whose `qid` matches the question currently being answered.
 
 ## Tech Stack
 
@@ -109,7 +128,8 @@ As a safety net, the retrieval agent also supports same-QID decontamination (`ex
 ├── tests/                       Unit and integration tests
 ├── notebooks/
 │   └── colab_full_run.ipynb     Complete Colab notebook (clone → run → submit)
-├── data/                        Test files, FAISS index, chunk metadata, CoT chains
+├── data/
+│   └── reference/               Reference question files for CoT generation
 ├── Dockerfile                   Production container with baked-in models
 ├── run.sh                       Container entrypoint
 ├── docker-compose.yml           Local dev with GPU volume mounts
@@ -134,9 +154,9 @@ pip install -r requirements.txt
 pip install mwparserfromhell
 bash scripts/download_wiki.sh
 
-# 2. Generate CoT reasoning chains from SAMPLE questions
-#    Uses public_test.csv (reference set), NOT the test file
-python scripts/generate_cot_chains.py --input data/public_test.csv
+# 2. Generate CoT reasoning chains from reference questions
+#    Scans data/reference/ — add more files there as you get them
+python scripts/generate_cot_chains.py --input data/reference/
 
 # 3. Build the FAISS index (~30-60 min)
 #    Merges Wikipedia + CoT chains + any domain texts into a single index

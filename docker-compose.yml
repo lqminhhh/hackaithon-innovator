@@ -12,4 +12,4 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    command: ["/data/public_test.csv", "/data/submission.csv"]
+    command: ["/data/public-test_1780368312.json", "/data/submission.csv"]

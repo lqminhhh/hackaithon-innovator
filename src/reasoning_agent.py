@@ -1,6 +1,10 @@
 """Reasoning agent — wraps an LLM to perform CoT inference.
 
-Supports two modes:
+Supports two backends:
+  - vLLM  (fast, batched, CUDA only) — pass ``llm`` arg
+  - HuggingFace Transformers (fallback) — pass ``model`` + ``tokenizer``
+
+And two inference modes per backend:
   1. No-context (pure CoT) — uses the question + options only.
   2. With-context — injects retrieved chunks before the question.
 
@@ -12,9 +16,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import torch
 import yaml
-from transformers import PreTrainedModel, PreTrainedTokenizerBase
 
 _PROMPTS_PATH = Path(__file__).resolve().parent.parent / "configs" / "prompts.yaml"
 _CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "pipeline_config.yaml"
@@ -31,15 +33,108 @@ def _load_config() -> dict:
 
 
 class ReasoningAgent:
-    def __init__(
-        self,
-        model: PreTrainedModel,
-        tokenizer: PreTrainedTokenizerBase,
-    ):
-        self.model = model
-        self.tokenizer = tokenizer
+    """Unified reasoning agent supporting vLLM and HuggingFace backends."""
+
+    def __init__(self, llm=None, model=None, tokenizer=None):
         self.prompts = _load_prompts()
         self.cfg = _load_config()["inference"]
+
+        self._llm = llm
+        self._model = model
+        self._tokenizer = tokenizer
+
+        if llm is None and model is None:
+            raise ValueError("Provide either a vLLM LLM instance or a HF model + tokenizer")
+
+    @property
+    def is_vllm(self) -> bool:
+        return self._llm is not None
+
+    # ── prompt construction ───────────────────────────────────────────
+
+    @staticmethod
+    def _format_options(options: dict[str, str]) -> tuple[str, str]:
+        labels = sorted(options.keys())
+        block = "\n".join(f"{l}) {options[l]}" for l in labels)
+        hint = "/".join(labels)
+        return block, hint
+
+    def build_prompt(
+        self,
+        question: str,
+        options: dict[str, str],
+        context: str | None = None,
+    ) -> str:
+        """Build the user-facing prompt text (without chat template wrapping)."""
+        options_block, valid_labels = self._format_options(options)
+        kwargs = dict(
+            question=question,
+            options_block=options_block,
+            valid_labels=valid_labels,
+        )
+        if context is not None:
+            return self.prompts["cot_with_context"].format(
+                retrieved_context=context, **kwargs
+            )
+        return self.prompts["cot_no_context"].format(**kwargs)
+
+    # ── generation (batch + single) ───────────────────────────────────
+
+    def generate_batch(
+        self,
+        prompts: list[str],
+        temperature: float | None = None,
+    ) -> list[str]:
+        """Generate responses for a batch of prompts.
+
+        With vLLM this is truly batched (continuous batching).
+        With HF this falls back to sequential generation.
+        """
+        if self.is_vllm:
+            return self._vllm_batch(prompts, temperature)
+        return [self._hf_generate(p, temperature) for p in prompts]
+
+    def _vllm_batch(self, prompts: list[str], temperature: float | None) -> list[str]:
+        from vllm import SamplingParams
+
+        temp = temperature if temperature is not None else self.cfg["temperature_deterministic"]
+        params = SamplingParams(
+            temperature=temp,
+            max_tokens=self.cfg["max_new_tokens"],
+            top_p=0.9 if temp > 0 else 1.0,
+        )
+        conversations = [[{"role": "user", "content": p}] for p in prompts]
+        outputs = self._llm.chat(conversations, params)
+        return [o.outputs[0].text for o in outputs]
+
+    def _hf_generate(self, prompt: str, temperature: float | None) -> str:
+        import torch
+
+        temp = temperature if temperature is not None else self.cfg["temperature_deterministic"]
+        max_new = self.cfg["max_new_tokens"]
+
+        messages = [{"role": "user", "content": prompt}]
+        text = self._tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        inputs = self._tokenizer(text, return_tensors="pt").to(self._model.device)
+
+        gen_kwargs: dict = dict(
+            max_new_tokens=max_new,
+            do_sample=temp > 0,
+            pad_token_id=self._tokenizer.eos_token_id,
+        )
+        if temp > 0:
+            gen_kwargs["temperature"] = temp
+            gen_kwargs["top_p"] = 0.9
+
+        with torch.no_grad():
+            output_ids = self._model.generate(**inputs, **gen_kwargs)
+
+        new_tokens = output_ids[0][inputs["input_ids"].shape[1]:]
+        return self._tokenizer.decode(new_tokens, skip_special_tokens=True)
+
+    # ── backward-compatible single-question methods ───────────────────
 
     def infer_no_context(
         self,
@@ -47,15 +142,9 @@ class ReasoningAgent:
         options: dict[str, str],
         temperature: float | None = None,
     ) -> str:
-        """Run CoT with no retrieved context."""
-        prompt = self.prompts["cot_no_context"].format(
-            question=question,
-            A=options["A"],
-            B=options["B"],
-            C=options["C"],
-            D=options["D"],
-        )
-        return self._generate(prompt, temperature)
+        """Run CoT with no retrieved context (single question)."""
+        prompt = self.build_prompt(question, options)
+        return self.generate_batch([prompt], temperature)[0]
 
     def infer_with_context(
         self,
@@ -64,38 +153,6 @@ class ReasoningAgent:
         context: str,
         temperature: float | None = None,
     ) -> str:
-        """Run CoT with retrieved context injected."""
-        prompt = self.prompts["cot_with_context"].format(
-            question=question,
-            A=options["A"],
-            B=options["B"],
-            C=options["C"],
-            D=options["D"],
-            retrieved_context=context,
-        )
-        return self._generate(prompt, temperature)
-
-    def _generate(self, prompt: str, temperature: float | None = None) -> str:
-        temp = temperature if temperature is not None else self.cfg["temperature_deterministic"]
-        max_new = self.cfg["max_new_tokens"]
-
-        messages = [{"role": "user", "content": prompt}]
-        text = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        inputs = self.tokenizer(text, return_tensors="pt").to(self.model.device)
-
-        gen_kwargs: dict = dict(
-            max_new_tokens=max_new,
-            do_sample=temp > 0,
-            pad_token_id=self.tokenizer.eos_token_id,
-        )
-        if temp > 0:
-            gen_kwargs["temperature"] = temp
-            gen_kwargs["top_p"] = 0.9
-
-        with torch.no_grad():
-            output_ids = self.model.generate(**inputs, **gen_kwargs)
-
-        new_tokens = output_ids[0][inputs["input_ids"].shape[1]:]
-        return self.tokenizer.decode(new_tokens, skip_special_tokens=True)
+        """Run CoT with retrieved context injected (single question)."""
+        prompt = self.build_prompt(question, options, context)
+        return self.generate_batch([prompt], temperature)[0]

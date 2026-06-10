@@ -50,6 +50,7 @@ def adaptive_consistency(
     inf_cfg = cfg["inference"]
     sc_cfg = cfg["consistency_sampler"]
     temp = inf_cfg["temperature_sampling"]
+    valid_labels = tuple(sorted(options.keys()))
 
     answers: list[str] = []
 
@@ -58,7 +59,7 @@ def adaptive_consistency(
             raw = agent.infer_with_context(question, options, context, temperature=temp)
         else:
             raw = agent.infer_no_context(question, options, temperature=temp)
-        return normalise_answer(raw)
+        return normalise_answer(raw, valid_labels)
 
     # Phase 1: N=2
     for _ in range(sc_cfg["n_initial"]):

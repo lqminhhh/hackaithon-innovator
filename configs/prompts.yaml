@@ -4,14 +4,11 @@ cot_no_context: |
   Câu hỏi: {question}
 
   Các lựa chọn:
-  A) {A}
-  B) {B}
-  C) {C}
-  D) {D}
+  {options_block}
 
   Hãy suy nghĩ từng bước một (chain-of-thought) trước khi đưa ra câu trả lời.
   Sau khi suy nghĩ xong, hãy kết thúc bằng:
-  ĐÁP ÁN: [A/B/C/D]
+  ĐÁP ÁN: [{valid_labels}]
   ĐỘ TỰ TIN: [0.0 đến 1.0]
 
 cot_with_context: |
@@ -25,12 +22,9 @@ cot_with_context: |
   Câu hỏi: {question}
 
   Các lựa chọn:
-  A) {A}
-  B) {B}
-  C) {C}
-  D) {D}
+  {options_block}
 
   Dựa trên thông tin tham khảo ở trên và kiến thức của bạn, hãy suy nghĩ từng bước một.
   Sau khi suy nghĩ xong, hãy kết thúc bằng:
-  ĐÁP ÁN: [A/B/C/D]
+  ĐÁP ÁN: [{valid_labels}]
   ĐỘ TỰ TIN: [0.0 đến 1.0]

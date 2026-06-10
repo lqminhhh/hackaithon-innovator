@@ -9,6 +9,11 @@ models/
 # Raw wiki extraction (too large to commit)
 data/wiki_text/
 
+# Generated artifacts (rebuilt from reference/ + wiki)
+data/faiss.index
+data/chunks.jsonl
+data/cot_chains.jsonl
+
 # Wiki dump files
 *.bz2
 *.xml

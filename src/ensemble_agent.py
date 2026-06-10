@@ -23,12 +23,14 @@ def ensemble_answer(
 
     Returns (answer_letter, confidence).
     """
+    valid_labels = tuple(sorted(options.keys()))
+
     # Run primary (Qwen)
     if context:
         raw_qwen = primary_agent.infer_with_context(question, options, context)
     else:
         raw_qwen = primary_agent.infer_no_context(question, options)
-    answer_qwen = normalise_answer(raw_qwen)
+    answer_qwen = normalise_answer(raw_qwen, valid_labels)
     conf_qwen = parse_confidence(raw_qwen)
 
     # Run secondary (Gemma)
@@ -36,7 +38,7 @@ def ensemble_answer(
         raw_gemma = secondary_agent.infer_with_context(question, options, context)
     else:
         raw_gemma = secondary_agent.infer_no_context(question, options)
-    answer_gemma = normalise_answer(raw_gemma)
+    answer_gemma = normalise_answer(raw_gemma, valid_labels)
     conf_gemma = parse_confidence(raw_gemma)
 
     # Agreement → high confidence

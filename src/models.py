@@ -87,7 +87,28 @@ def load_secondary_model(device_map: str | None = None):
     return _load_model(cfg["models"]["secondary"], device_map)
 
 
-def load_embedder() -> SentenceTransformer:
-    """Load the Vietnamese-tuned sentence embedding model."""
+def load_embedder(device: str | None = None) -> SentenceTransformer:
+    """Load the Vietnamese-tuned sentence embedding model.
+
+    Pass device="cpu" to keep GPU free for vLLM.
+    """
     cfg = _load_config()
-    return SentenceTransformer(cfg["models"]["embedder"])
+    kwargs = {}
+    if device is not None:
+        kwargs["device"] = device
+    return SentenceTransformer(cfg["models"]["embedder"], **kwargs)
+
+
+def load_vllm_primary():
+    """Load primary model via vLLM for fast batched inference (CUDA only)."""
+    from vllm import LLM
+
+    cfg = _load_config()
+    vllm_cfg = cfg.get("vllm", {})
+    return LLM(
+        model=cfg["models"]["primary"],
+        dtype="half",
+        gpu_memory_utilization=vllm_cfg.get("gpu_memory_utilization", 0.9),
+        max_model_len=vllm_cfg.get("max_model_len", 8192),
+        trust_remote_code=True,
+    )

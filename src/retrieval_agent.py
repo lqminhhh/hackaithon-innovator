@@ -96,7 +96,7 @@ class RetrievalAgent:
         if self.bm25 is not None:
             tokens = query.lower().split()
             bm25_scores = self.bm25.get_scores(tokens)
-            bm25_ids = list(np.argsort(bm25_scores)[::-1][:k_fetch])
+            bm25_ids = [int(i) for i in np.argsort(bm25_scores)[::-1][:k_fetch]]
 
         # Reciprocal rank fusion
         scores: dict[int, float] = {}
@@ -111,7 +111,7 @@ class RetrievalAgent:
         """Reconstruct a stored embedding from the FAISS index."""
         try:
             vec = np.zeros((1, self.index.d), dtype=np.float32)
-            self.index.reconstruct(doc_id, vec[0])
+            self.index.reconstruct(int(doc_id), vec[0])
             return vec[0]
         except RuntimeError:
             return None

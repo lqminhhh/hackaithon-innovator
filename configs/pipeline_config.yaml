@@ -25,3 +25,7 @@ consistency_sampler:
 quantisation:
   load_in_4bit: true
   compute_dtype: "float16"
+
+vllm:
+  gpu_memory_utilization: 0.9
+  max_model_len: 8192
