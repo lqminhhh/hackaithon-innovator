@@ -8,6 +8,8 @@ retrieval:
   chunk_overlap: 50
   top_k: 5
   relevance_threshold: 0.65
+  use_bm25: true
+  bm25_max_corpus: 50000
 inference:
   max_new_tokens: 512
   temperature_deterministic: 0.1

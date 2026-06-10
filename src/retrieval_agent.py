@@ -1,8 +1,11 @@
 """Hybrid BM25 + dense retrieval agent with relevance gating.
 
-Retrieves the top-k chunks from the FAISS index, fused with BM25
-keyword matches via Reciprocal Rank Fusion.  Chunks that fall below
-the cosine relevance threshold are dropped silently.
+Retrieves the top-k chunks from the FAISS index, optionally fused with BM25
+keyword matches via Reciprocal Rank Fusion.  BM25 is auto-disabled on large
+corpora (>50k chunks) because scoring every doc per query is too slow.
+
+Embeddings are L2-normalised and stored in IndexFlatIP, so FAISS inner-product
+scores equal cosine similarity — no per-chunk reconstruct needed.
 """
 
 from __future__ import annotations
@@ -13,10 +16,19 @@ from pathlib import Path
 
 import faiss
 import numpy as np
+import yaml
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
 _DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+_CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "pipeline_config.yaml"
+
+_DEFAULT_BM25_MAX_CORPUS = 50_000
+
+
+def _load_retrieval_config() -> dict:
+    with open(_CFG_PATH) as f:
+        return yaml.safe_load(f).get("retrieval", {})
 
 
 class RetrievalAgent:
@@ -27,9 +39,15 @@ class RetrievalAgent:
         chunks_path: str | Path | None = None,
         top_k: int = 5,
         relevance_threshold: float = 0.65,
+        use_bm25: bool | None = None,
+        bm25_max_corpus: int | None = None,
     ):
+        retrieval_cfg = _load_retrieval_config()
         index_path = Path(index_path) if index_path else _DATA_DIR / "faiss.index"
         chunks_path = Path(chunks_path) if chunks_path else _DATA_DIR / "chunks.jsonl"
+        bm25_max = bm25_max_corpus or retrieval_cfg.get(
+            "bm25_max_corpus", _DEFAULT_BM25_MAX_CORPUS
+        )
 
         self.embedder = embedder
         self.top_k = top_k
@@ -37,7 +55,10 @@ class RetrievalAgent:
 
         t = time.time()
         self.index = faiss.read_index(str(index_path))
-        print(f"    FAISS index: {self.index.ntotal} vectors ({time.time() - t:.1f}s)", flush=True)
+        print(
+            f"    FAISS index: {self.index.ntotal} vectors ({time.time() - t:.1f}s)",
+            flush=True,
+        )
 
         t = time.time()
         self.chunks: list[dict] = []
@@ -47,132 +68,148 @@ class RetrievalAgent:
                 obj = json.loads(line)
                 self.chunks.append(obj)
                 self.chunk_texts.append(obj["text"])
-        print(f"    Chunks loaded: {len(self.chunks)} ({time.time() - t:.1f}s)", flush=True)
+        print(
+            f"    Chunks loaded: {len(self.chunks)} ({time.time() - t:.1f}s)",
+            flush=True,
+        )
 
-        t = time.time()
-        if self.chunk_texts:
-            tokenized = [t.lower().split() for t in self.chunk_texts]
-            self.bm25: BM25Okapi | None = BM25Okapi(tokenized)
+        if use_bm25 is None:
+            use_bm25 = retrieval_cfg.get("use_bm25", True)
+        if use_bm25 and self.index.ntotal > bm25_max:
+            print(
+                f"    BM25 disabled (corpus {self.index.ntotal:,} > {bm25_max:,}); "
+                "using dense FAISS only",
+                flush=True,
+            )
+            use_bm25 = False
+
+        self.bm25: BM25Okapi | None = None
+        if use_bm25 and self.chunk_texts:
+            t = time.time()
+            tokenized = [text.lower().split() for text in self.chunk_texts]
+            self.bm25 = BM25Okapi(tokenized)
+            print(f"    BM25 index built ({time.time() - t:.1f}s)", flush=True)
+        elif use_bm25:
+            print("    BM25 skipped (no chunks)", flush=True)
         else:
-            self.bm25 = None
-        print(f"    BM25 index built ({time.time() - t:.1f}s)", flush=True)
+            print("    BM25 skipped", flush=True)
 
     # ── public API ───────────────────────────────────────────────────────
 
     def retrieve(self, query: str, exclude_qid: str | None = None) -> list[str]:
-        """Return top-k relevant chunks that pass the relevance gate.
-
-        Args:
-            query:       The search query (typically the question text).
-            exclude_qid: If set, CoT-chain chunks originating from this
-                         question ID are silently skipped (decontamination).
-        """
+        """Return top-k relevant chunks that pass the relevance gate."""
         if self.index.ntotal == 0:
             return []
 
-        fused_ids = self._hybrid_search(query)
-        query_emb = self.embedder.encode([query], normalize_embeddings=True)[0]
+        q_emb = self.embedder.encode([query], normalize_embeddings=True).astype(np.float32)
+        candidate_ids, candidate_scores = self._dense_search(q_emb, self._candidate_k())
+        ranked_ids = self._maybe_fuse_bm25(query, candidate_ids)
 
-        results: list[str] = []
-        for doc_id in fused_ids:
-            chunk = self.chunks[doc_id]
-            if exclude_qid and chunk.get("source") == "cot_chain" and chunk.get("qid") == exclude_qid:
-                continue
-            chunk_emb = self._get_embedding(doc_id)
-            if chunk_emb is not None and self._passes_gate(query_emb, chunk_emb):
-                results.append(self.chunk_texts[doc_id])
-            if len(results) >= self.top_k:
-                break
-
-        return results
+        return self._select_hits_from_map(ranked_ids, score_map, exclude_qid)
 
     def batch_retrieve(
         self,
         queries: list[str],
         exclude_qids: list[str | None] | None = None,
     ) -> list[list[str]]:
-        """Batch retrieval — encodes all queries at once for speed."""
+        """Batch retrieval — one embed call + one batched FAISS search."""
         if self.index.ntotal == 0:
             return [[] for _ in queries]
 
         if exclude_qids is None:
             exclude_qids = [None] * len(queries)
 
+        print(f"    Encoding {len(queries)} queries...", flush=True)
         all_query_embs = self.embedder.encode(
-            queries, normalize_embeddings=True, batch_size=64, show_progress_bar=True
-        )
+            queries,
+            normalize_embeddings=True,
+            batch_size=64,
+            show_progress_bar=True,
+        ).astype(np.float32)
+
+        candidate_k = self._candidate_k()
+        print(f"    FAISS batch search (k={candidate_k})...", flush=True)
+        t = time.time()
+        scores, indices = self.index.search(all_query_embs, candidate_k)
+        print(f"    FAISS search done ({time.time() - t:.1f}s)", flush=True)
 
         results: list[list[str]] = []
-        for i, (query, query_emb, exclude_qid) in enumerate(
-            zip(queries, all_query_embs, exclude_qids)
-        ):
-            fused_ids = self._hybrid_search_with_emb(
-                query, query_emb.astype(np.float32)
+        for i, exclude_qid in enumerate(exclude_qids):
+            ranked_ids = self._maybe_fuse_bm25(
+                queries[i],
+                [int(doc_id) for doc_id in indices[i] if doc_id >= 0],
             )
-            hits: list[str] = []
-            for doc_id in fused_ids:
-                chunk = self.chunks[doc_id]
-                if exclude_qid and chunk.get("source") == "cot_chain" and chunk.get("qid") == exclude_qid:
-                    continue
-                chunk_emb = self._get_embedding(doc_id)
-                if chunk_emb is not None and self._passes_gate(query_emb, chunk_emb):
-                    hits.append(self.chunk_texts[doc_id])
-                if len(hits) >= self.top_k:
-                    break
+            score_map = {
+                int(doc_id): float(score)
+                for doc_id, score in zip(indices[i], scores[i])
+                if doc_id >= 0
+            }
+            hits = self._select_hits_from_map(
+                ranked_ids, score_map, exclude_qid
+            )
             results.append(hits)
 
         return results
 
     # ── internals ────────────────────────────────────────────────────────
 
-    def _hybrid_search(self, query: str) -> list[int]:
-        """BM25 + dense search merged by reciprocal rank fusion."""
-        q_emb = self.embedder.encode([query], normalize_embeddings=True).astype(np.float32)
-        return self._hybrid_search_with_emb(query, q_emb)
+    def _candidate_k(self) -> int:
+        """Fetch extra candidates so decontamination + gating still fill top_k."""
+        return min(max(self.top_k * 8, self.top_k + 20), self.index.ntotal)
 
-    def _hybrid_search_with_emb(
-        self, query: str, q_emb: np.ndarray
-    ) -> list[int]:
-        """RRF with a pre-computed query embedding."""
-        k_fetch = self.top_k * 4
+    def _dense_search(
+        self, query_emb: np.ndarray, k: int
+    ) -> tuple[list[int], dict[int, float]]:
+        if query_emb.ndim == 1:
+            query_emb = query_emb.reshape(1, -1)
+        scores, indices = self.index.search(query_emb, k)
+        ids = [int(doc_id) for doc_id in indices[0] if doc_id >= 0]
+        score_map = {
+            int(doc_id): float(score)
+            for doc_id, score in zip(indices[0], scores[0])
+            if doc_id >= 0
+        }
+        return ids, score_map
 
-        # Dense retrieval
-        if q_emb.ndim == 1:
-            q_emb = q_emb.reshape(1, -1)
-        n_search = min(k_fetch, self.index.ntotal)
-        _, dense_ids = self.index.search(q_emb, n_search)
-        dense_ids = [int(i) for i in dense_ids[0] if i >= 0]
+    def _maybe_fuse_bm25(self, query: str, dense_ids: list[int]) -> list[int]:
+        if self.bm25 is None:
+            return dense_ids
 
-        # BM25 retrieval
-        bm25_ids: list[int] = []
-        if self.bm25 is not None:
-            tokens = query.lower().split()
-            bm25_scores = self.bm25.get_scores(tokens)
-            bm25_ids = [int(i) for i in np.argsort(bm25_scores)[::-1][:k_fetch]]
+        k_fetch = min(self.top_k * 4, len(self.chunk_texts))
+        tokens = query.lower().split()
+        bm25_scores = self.bm25.get_scores(tokens)
+        bm25_ids = [int(i) for i in np.argsort(bm25_scores)[::-1][:k_fetch]]
 
-        # Reciprocal rank fusion
-        scores: dict[int, float] = {}
+        fused: dict[int, float] = {}
         for rank, doc_id in enumerate(dense_ids):
-            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (rank + 60)
+            fused[doc_id] = fused.get(doc_id, 0.0) + 1.0 / (rank + 60)
         for rank, doc_id in enumerate(bm25_ids):
-            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (rank + 60)
+            fused[doc_id] = fused.get(doc_id, 0.0) + 1.0 / (rank + 60)
 
-        return sorted(scores, key=scores.get, reverse=True)
+        return sorted(fused, key=fused.get, reverse=True)
 
-    def _get_embedding(self, doc_id: int) -> np.ndarray | None:
-        """Reconstruct a stored embedding from the FAISS index."""
-        try:
-            vec = np.zeros((1, self.index.d), dtype=np.float32)
-            self.index.reconstruct(int(doc_id), vec[0])
-            return vec[0]
-        except RuntimeError:
-            return None
+    def _select_hits_from_map(
+        self,
+        ranked_ids: list[int],
+        score_map: dict[int, float],
+        exclude_qid: str | None,
+    ) -> list[str]:
+        hits: list[str] = []
+        for doc_id in ranked_ids:
+            chunk = self.chunks[doc_id]
+            if (
+                exclude_qid
+                and chunk.get("source") == "cot_chain"
+                and chunk.get("qid") == exclude_qid
+            ):
+                continue
 
-    def _passes_gate(self, query_emb: np.ndarray, chunk_emb: np.ndarray) -> bool:
-        """Check cosine similarity against the relevance threshold."""
-        q_norm = np.linalg.norm(query_emb)
-        c_norm = np.linalg.norm(chunk_emb)
-        if q_norm == 0 or c_norm == 0:
-            return False
-        cosine = float(np.dot(query_emb, chunk_emb) / (q_norm * c_norm))
-        return cosine >= self.relevance_threshold
+            score = score_map.get(doc_id)
+            if score is None:
+                continue
+            if score >= self.relevance_threshold:
+                hits.append(self.chunk_texts[doc_id])
+            if len(hits) >= self.top_k:
+                break
+
+        return hits
