@@ -1,8 +1,8 @@
 # HackAIthon 2026 — Bảng C (Innovator) Agent: Full Engineering Plan
 
-**Codename:** Entropy-Gated Jury (EGJ)
-**Target:** ≥80 on accuracy + speed alone; ≥90 total with the creativity component
-**Status:** Design locked — ready for implementation
+**Codename:** Entropy-Gated Jury (EGJ)  
+**Target:** ≥80 on accuracy + speed alone; ≥90 total with the creativity component  
+**Status:** Design locked — ready for implementation  
 **Last updated:** June 2026
 
 ---
