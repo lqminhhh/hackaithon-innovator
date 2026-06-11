@@ -1,0 +1,5 @@
+model:
+  primary: "Qwen/Qwen2.5-7B-Instruct"
+
+inference:
+  max_questions: null

@@ -75,10 +75,13 @@ def _load_model(model_id: str, device_map_override: str | None = None):
     return model, tokenizer
 
 
-def load_primary_model(device_map: str | None = None):
-    """Load Qwen2.5-7B-Instruct."""
+def load_primary_model(
+    device_map: str | None = None,
+    model_id: str | None = None,
+):
+    """Load the configured primary model, or an explicit override."""
     cfg = _load_config()
-    return _load_model(cfg["models"]["primary"], device_map)
+    return _load_model(model_id or cfg["models"]["primary"], device_map)
 
 
 def load_secondary_model(device_map: str | None = None):
