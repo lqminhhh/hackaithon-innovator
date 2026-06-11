@@ -90,15 +90,17 @@ As a safety net, the retrieval agent also supports same-QID decontamination (`ex
 
 ## Tech Stack
 
-| Component | Model / Library | Why |
-|---|---|---|
-| Primary LLM | Qwen/Qwen2.5-7B-Instruct | Best Vietnamese + multilingual reasoning at 7B parameters |
-| Secondary LLM | google/gemma-2-9b-it | Different model family reduces correlated errors in ensemble |
-| Embeddings | keepitreal/vietnamese-sbert | Vietnamese-tuned, accurate token boundaries for Vietnamese text |
-| Vector search | FAISS (IndexFlatIP) | Fast offline cosine similarity search, no server needed |
-| Keyword search | rank_bm25 | Catches exact term matches that dense embeddings miss |
-| Quantisation | bitsandbytes 4-bit | Fits both models in ≤24 GB VRAM on a single GPU |
-| Orchestration | Python asyncio | Runs retrieval and reasoning in parallel per question |
+
+| Component      | Model / Library             | Why                                                             |
+| -------------- | --------------------------- | --------------------------------------------------------------- |
+| Primary LLM    | Qwen/Qwen2.5-7B-Instruct    | Best Vietnamese + multilingual reasoning at 7B parameters       |
+| Secondary LLM  | google/gemma-2-9b-it        | Different model family reduces correlated errors in ensemble    |
+| Embeddings     | keepitreal/vietnamese-sbert | Vietnamese-tuned, accurate token boundaries for Vietnamese text |
+| Vector search  | FAISS (IndexFlatIP)         | Fast offline cosine similarity search, no server needed         |
+| Keyword search | rank_bm25                   | Catches exact term matches that dense embeddings miss           |
+| Quantisation   | bitsandbytes 4-bit          | Fits both models in ≤24 GB VRAM on a single GPU                 |
+| Orchestration  | Python asyncio              | Runs retrieval and reasoning in parallel per question           |
+
 
 ## Project Structure
 
@@ -143,7 +145,7 @@ As a safety net, the retrieval agent also supports same-QID decontamination (`ex
 ```bash
 git clone https://github.com/lqminhhh/hackaithon-innovator.git
 cd hackaithon-innovator
-python -m venv venv && source venv/bin/activate
+python3.11 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -192,15 +194,17 @@ Open `notebooks/colab_full_run.ipynb` in Colab with a T4/A100 GPU runtime. The n
 
 All tunable parameters are in `configs/pipeline_config.yaml`:
 
-| Parameter | Default | What it controls |
-|---|---|---|
-| `retrieval.relevance_threshold` | 0.65 | Minimum cosine similarity to inject context |
-| `retrieval.top_k` | 5 | Number of chunks to retrieve |
-| `confidence_gate.fast_exit_threshold` | 0.85 | Skip further processing above this confidence |
-| `confidence_gate.ensemble_threshold` | 0.55 | Trigger dual-model ensemble below this |
-| `consistency_sampler.n_max` | 7 | Maximum samples for majority vote |
-| `inference.temperature_sampling` | 0.7 | Temperature for consistency sampling |
-| `quantisation.load_in_4bit` | true | Enable 4-bit quantisation (requires CUDA) |
+
+| Parameter                             | Default | What it controls                              |
+| ------------------------------------- | ------- | --------------------------------------------- |
+| `retrieval.relevance_threshold`       | 0.65    | Minimum cosine similarity to inject context   |
+| `retrieval.top_k`                     | 5       | Number of chunks to retrieve                  |
+| `confidence_gate.fast_exit_threshold` | 0.85    | Skip further processing above this confidence |
+| `confidence_gate.ensemble_threshold`  | 0.55    | Trigger dual-model ensemble below this        |
+| `consistency_sampler.n_max`           | 7       | Maximum samples for majority vote             |
+| `inference.temperature_sampling`      | 0.7     | Temperature for consistency sampling          |
+| `quantisation.load_in_4bit`           | true    | Enable 4-bit quantisation (requires CUDA)     |
+
 
 ## Input / Output Format
 
@@ -225,5 +229,6 @@ test_0002,C
 
 - **Event:** Vietnamese Student HackAIthon 2026
 - **Track:** Bảng C — Innovator
-- **Site:** http://hackaithon.vsds.vn
+- **Site:** [http://hackaithon.vsds.vn](http://hackaithon.vsds.vn)
 - **Deadline:** June 23, 2026
+
