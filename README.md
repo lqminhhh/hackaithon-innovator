@@ -10,21 +10,21 @@ The entire system runs offline inside a Docker container with no internet access
                          Input (JSON/CSV)
                               │
                               ▼
-               ┌──────────────────────────────┐
-               │     Parallel execution        │
-               │                               │
-               │  Retrieval Agent    Reasoning  │
-               │  BM25 + FAISS      Agent      │
-               │  hybrid search     (CoT, no   │
-               │       │            context)    │
-               │       ▼                │      │
-               │  Relevance Gate        │      │
-               │  cosine ≥ 0.65?        │      │
-               │  YES → inject context  │      │
-               │  NO  → drop            │      │
-               └──────────┬────────────┘      │
-                          │                    │
-                          ▼                    ▼
+               ┌─────────────────────────────────┐
+               │     Parallel execution          │
+               │                                 │
+               │  Retrieval Agent    Reasoning   │
+               │  BM25 + FAISS      Agent        │
+               │  hybrid search     (CoT, no     │
+               │       │            context)     │
+               │       ▼                │        │
+               │  Relevance Gate        │        │
+               │  cosine ≥ 0.65?        │        │
+               │  YES → inject context  │        │
+               │  NO  → drop            │        │
+               └──────────┬─────────────┘        │
+                          │                      │
+                          ▼                      ▼
                     CoT Pass 2 (with context)
                           │
                           ▼
