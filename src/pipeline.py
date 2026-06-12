@@ -1,36 +1,53 @@
-"""Main pipeline orchestrator.
+"""Entropy-Gated Jury — main orchestrator.
 
-Two execution paths:
-  - **Batched (vLLM):** all questions processed in phases — retrieval,
-    first CoT, context-augmented CoT, confidence gate, consistency.
-    Each phase sends one big batch to vLLM for maximum GPU utilisation.
-  - **Sequential (HuggingFace fallback):** one question at a time with
-    async parallel retrieval + CoT, used when vLLM is unavailable.
+Flow (planning doc §3):
+  1. Parse & flag     parsing.py
+  2. Tier 1           batched greedy pass, masked answer token, logprobs recorded
+  3. Confidence gate  top1−top2 logprob margin vs τ
+  4. Tier 2 (jury)    escalated questions only
+       a. Self-consistency n=6
+       b. Gemma verdict
+       c. Tool: code_exec (quantitative) / gated RAG (knowledge/legal)
+       d. Resolution rules
+  5. Assemble         invariant checks → submission.csv + audit_log.json
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
-import gc
+import logging
 import sys
 import time
-from collections import Counter, defaultdict
 from pathlib import Path
 
-import torch
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.data_loader import load_questions, write_submission
-from src.models import load_primary_model, load_secondary_model, load_embedder
-from src.retrieval_agent import RetrievalAgent
-from src.reasoning_agent import ReasoningAgent
-from src.confidence_gate import route
-from src.consistency_sampler import adaptive_consistency
-from src.ensemble_agent import ensemble_answer
-from src.normaliser import normalise_answer, parse_confidence
+from src.assemble import assemble
+from src.data_loader import load_questions
+from src.gate import escalation_rate, should_escalate
+from src.inference import (
+    InferenceRequest,
+    InferenceResult,
+    build_backend,
+    build_chat_messages,
+    get_model_family,
+)
+from src.jury import JuryVerdict, run_jury
+from src.parsing import ParsedQuestion, parse_questions
+from src.prompts import (
+    build_user_message,
+    get_system_prompt,
+    select_template,
+    thinking_budget,
+)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 _CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "pipeline_config.yaml"
 
@@ -40,282 +57,345 @@ def _load_config() -> dict:
         return yaml.safe_load(f)
 
 
-# ── vLLM batched pipeline ────────────────────────────────────────────
+# ── prompt builder ────────────────────────────────────────────────────
 
 
-def _run_batched(input_path: str, output_path: str):
-    """Process all questions in bulk phases using vLLM."""
-    t_start = time.time()
-    cfg = _load_config()
-
-    # Phase 0: retrieval (embedder on GPU for speed, freed before vLLM starts)
-    print("Loading embedder for retrieval...", flush=True)
-    embedder = load_embedder()
-    print("  Loading retrieval index...", flush=True)
-    retriever = RetrievalAgent(
-        embedder=embedder,
-        top_k=cfg["retrieval"]["top_k"],
-        relevance_threshold=cfg["retrieval"]["relevance_threshold"],
-    )
-
-    questions = load_questions(input_path)
-    print(f"Phase 1: Batch retrieval ({len(questions)} questions)...", flush=True)
-    t1 = time.time()
-
-    query_texts = [q["question"] for q in questions]
-    exclude_qids = [q["qid"] for q in questions]
-    all_chunk_lists = retriever.batch_retrieve(query_texts, exclude_qids)
-
-    all_contexts: list[str | None] = [
-        "\n\n".join(chunks) if chunks else None for chunks in all_chunk_lists
-    ]
-
-    n_ctx = sum(1 for c in all_contexts if c is not None)
-    print(f"  {n_ctx}/{len(questions)} got context ({time.time() - t1:.1f}s)", flush=True)
-
-    del retriever, embedder
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
-    # Phase 1: load vLLM engine
-    print("Loading vLLM engine...", flush=True)
-    from src.models import load_vllm_primary
-
-    llm = load_vllm_primary()
-    agent = ReasoningAgent(llm=llm)
-    print(f"  Engine ready ({time.time() - t_start:.1f}s total)", flush=True)
-
-    # Phase 2: first CoT pass (no context) — all questions at once
-    print(f"Phase 2: First CoT pass ({len(questions)} prompts)...", flush=True)
-    t2 = time.time()
-    prompts_p2 = [
-        agent.build_prompt(q["question"], q["options"]) for q in questions
-    ]
-    raw_outputs = agent.generate_batch(prompts_p2)
-    print(f"  done ({time.time() - t2:.1f}s)", flush=True)
-
-    # Phase 3: context-augmented pass for questions that got retrieval hits
-    ctx_indices = [i for i, c in enumerate(all_contexts) if c is not None]
-    if ctx_indices:
-        print(
-            f"Phase 3: Context-augmented pass ({len(ctx_indices)} prompts)...",
-            flush=True,
-        )
-        t3 = time.time()
-        prompts_p3 = [
-            agent.build_prompt(
-                questions[i]["question"], questions[i]["options"], all_contexts[i]
-            )
-            for i in ctx_indices
-        ]
-        ctx_outputs = agent.generate_batch(prompts_p3)
-        for idx, output in zip(ctx_indices, ctx_outputs):
-            raw_outputs[idx] = output
-        print(f"  done ({time.time() - t3:.1f}s)", flush=True)
-
-    # Phase 4: confidence gate
-    results: list[dict | None] = [None] * len(questions)
-    needs_consistency: list[int] = []
-    n_fast = 0
-
-    for i, (q, raw) in enumerate(zip(questions, raw_outputs)):
-        valid_labels = tuple(sorted(q["options"].keys()))
-        answer = normalise_answer(raw, valid_labels)
-        confidence = parse_confidence(raw)
-        path = route(confidence)
-
-        if path == "fast_exit":
-            results[i] = {"qid": q["qid"], "answer": answer}
-            n_fast += 1
-        else:
-            needs_consistency.append(i)
-
-    print(
-        f"Phase 4: Gate — {n_fast} fast-exit, "
-        f"{len(needs_consistency)} need consistency",
-        flush=True,
-    )
-
-    # Phase 5: consistency sampling — batch all samples at once
-    if needs_consistency:
-        n_samples = cfg["consistency_sampler"]["n_max"]
-        total = len(needs_consistency) * n_samples
-        print(
-            f"Phase 5: Consistency ({len(needs_consistency)} × {n_samples} = "
-            f"{total} prompts)...",
-            flush=True,
-        )
-        t5 = time.time()
-
-        consistency_prompts: list[str] = []
-        prompt_to_qidx: list[int] = []
-        for idx in needs_consistency:
-            q = questions[idx]
-            ctx = all_contexts[idx]
-            prompt = agent.build_prompt(q["question"], q["options"], ctx)
-            for _ in range(n_samples):
-                consistency_prompts.append(prompt)
-                prompt_to_qidx.append(idx)
-
-        temp = cfg["inference"]["temperature_sampling"]
-        consistency_outputs = agent.generate_batch(
-            consistency_prompts, temperature=temp
-        )
-
-        groups: dict[int, list[str]] = defaultdict(list)
-        for idx, output in zip(prompt_to_qidx, consistency_outputs):
-            q = questions[idx]
-            valid_labels = tuple(sorted(q["options"].keys()))
-            groups[idx].append(normalise_answer(output, valid_labels))
-
-        for idx, answers in groups.items():
-            best = Counter(answers).most_common(1)[0][0]
-            results[idx] = {"qid": questions[idx]["qid"], "answer": best}
-
-        print(f"  done ({time.time() - t5:.1f}s)", flush=True)
-
-    # Phase 6: write
-    write_submission(results, output_path)
-    elapsed = time.time() - t_start
-    print(f"Written {len(results)} predictions to {output_path}")
-    print(f"Total time: {elapsed:.1f}s ({elapsed / len(questions):.2f}s/question)")
-
-
-# ── HuggingFace sequential pipeline (fallback) ───────────────────────
-
-
-async def _process_question_sequential(
-    q: dict,
-    retriever: RetrievalAgent,
-    primary_agent: ReasoningAgent,
-    secondary_agent: ReasoningAgent | None,
+def _make_request(
+    q: ParsedQuestion,
     cfg: dict,
-) -> dict:
-    """Process a single question through the full pipeline (HF path)."""
-    question = q["question"]
-    options = q["options"]
-    valid_labels = tuple(sorted(options.keys()))
-    loop = asyncio.get_running_loop()
+    model_family: str | None = None,
+    temperature: float = 0.0,
+    n_samples: int = 1,
+    top_p: float = 1.0,
+) -> InferenceRequest:
+    """Build an InferenceRequest for the given question and backend."""
+    if model_family is None:
+        model_family = get_model_family(cfg, "primary")
 
-    qid = q["qid"]
-    retrieve_fut = loop.run_in_executor(None, retriever.retrieve, question, qid)
-    cot_fut = loop.run_in_executor(
-        None, primary_agent.infer_no_context, question, options
+    template = select_template(
+        has_context=q.has_context,
+        is_quantitative=q.is_quantitative,
     )
-    retrieved_chunks, raw_cot = await asyncio.gather(retrieve_fut, cot_fut)
+    system = get_system_prompt(template)
+    user = build_user_message(
+        query=q.query,
+        options=q.options,
+        context=q.context,
+        template=template,
+    )
+    budget = thinking_budget(template, cfg)
+    backend_type = cfg.get("backend", "llamacpp")
 
-    context = "\n\n".join(retrieved_chunks) if retrieved_chunks else None
-    if context:
-        raw_cot = await loop.run_in_executor(
-            None, primary_agent.infer_with_context, question, options, context
+    if backend_type == "llamacpp":
+        from src.inference import build_chat_prompt_llamacpp
+        prompt = build_chat_prompt_llamacpp(system, user, budget, model_family)
+        return InferenceRequest(
+            prompt=prompt,
+            allowed_letters=q.valid_letters,
+            thinking_budget=budget,
+            temperature=temperature,
+            top_p=top_p,
+            n_samples=n_samples,
         )
 
-    answer = normalise_answer(raw_cot, valid_labels)
-    confidence = parse_confidence(raw_cot)
-    path = route(confidence)
+    # vLLM — pass structured messages; VllmBackend.chat() applies the template
+    messages = build_chat_messages(system, user)
+    return InferenceRequest(
+        prompt="",  # unused for vLLM
+        allowed_letters=q.valid_letters,
+        thinking_budget=budget,
+        temperature=temperature,
+        top_p=top_p,
+        n_samples=n_samples,
+        messages=messages,
+    )
 
-    if path == "fast_exit":
-        return {"qid": q["qid"], "answer": answer}
 
-    if path == "consistency":
-        answer, _ = await loop.run_in_executor(
-            None, adaptive_consistency, primary_agent, question, options, context
+def _make_prompt(q: ParsedQuestion, cfg: dict, model_family: str | None = None) -> str:
+    """Legacy helper — returns a raw prompt string (llamacpp only)."""
+    if model_family is None:
+        model_family = get_model_family(cfg, "primary")
+    template = select_template(
+        has_context=q.has_context,
+        is_quantitative=q.is_quantitative,
+    )
+    system = get_system_prompt(template)
+    user = build_user_message(
+        query=q.query,
+        options=q.options,
+        context=q.context,
+        template=template,
+    )
+    budget = thinking_budget(template, cfg)
+    from src.inference import build_chat_prompt_llamacpp
+    return build_chat_prompt_llamacpp(system, user, budget, model_family)
+
+
+# ── tool runner ───────────────────────────────────────────────────────
+
+
+def _run_tool(
+    q: ParsedQuestion,
+    qwen_backend,
+    retriever,
+    cfg: dict,
+) -> str | None:
+    """Run code_exec (quantitative) or gated RAG (knowledge/legal).
+
+    Returns the answer letter or None on failure.
+    """
+    backend_type = cfg.get("backend", "llamacpp")
+
+    if q.is_quantitative:
+        from src.tools.code_exec import build_code_prompt, execute_code, match_to_choice
+
+        code_system = get_system_prompt("code_exec")
+        code_user = build_code_prompt(q.query, q.options)
+        budget = thinking_budget("code_exec", cfg)
+
+        code_text = _generate_full_text(
+            qwen_backend,
+            system=code_system,
+            user=code_user,
+            cfg=cfg,
         )
-        return {"qid": q["qid"], "answer": answer}
+        if code_text is None:
+            return None
 
-    if secondary_agent is not None:
-        answer, _ = await loop.run_in_executor(
-            None,
-            ensemble_answer,
-            primary_agent,
-            secondary_agent,
-            question,
-            options,
-            context,
-        )
-    else:
-        answer, _ = await loop.run_in_executor(
-            None, adaptive_consistency, primary_agent, question, options, context
-        )
-    return {"qid": q["qid"], "answer": answer}
+        stdout, err = execute_code(code_text)
+        if err or stdout is None:
+            logger.debug("code_exec failed for %s: %s", q.qid, err)
+            return None
+
+        return match_to_choice(stdout, q.options)
+
+    elif (q.is_legal or not q.has_context) and retriever is not None:
+        context = retriever.retrieve_for_question(q.query, exclude_qid=q.qid)
+        if context is None:
+            return None  # gate rejected — flat profile (Lesson A)
+
+        template = "evidence_extract" if q.has_context else "general_knowledge"
+        system = get_system_prompt(template)
+        user = build_user_message(q.query, q.options, context, template)
+        budget = thinking_budget(template, cfg)
+
+        if backend_type == "llamacpp":
+            from src.inference import build_chat_prompt_llamacpp
+            prompt = build_chat_prompt_llamacpp(system, user, budget, "qwen3")
+            req = InferenceRequest(
+                prompt=prompt,
+                allowed_letters=q.valid_letters,
+                thinking_budget=budget,
+                temperature=0.0,
+            )
+        else:
+            messages = build_chat_messages(system, user)
+            req = InferenceRequest(
+                prompt="",
+                allowed_letters=q.valid_letters,
+                thinking_budget=budget,
+                temperature=0.0,
+                messages=messages,
+            )
+
+        results = qwen_backend.generate_batch([req])
+        return results[0][0].letter if results and results[0] else None
+
+    return None
 
 
-async def _run_sequential(input_path: str, output_path: str):
-    """One-at-a-time pipeline using HuggingFace Transformers."""
+def _generate_full_text(
+    backend,
+    system: str,
+    user: str,
+    cfg: dict,
+    max_tokens: int = 1024,
+) -> str | None:
+    """Free-form text generation (code_exec). Works for both backends."""
+    backend_type = cfg.get("backend", "llamacpp")
+    try:
+        if backend_type == "vllm" and hasattr(backend, "generate_text"):
+            messages = build_chat_messages(system, user)
+            return backend.generate_text(messages, max_tokens=max_tokens)
+
+        # LlamaCppBackend — build a prompt and call the underlying llm()
+        from src.inference import build_chat_prompt_llamacpp
+        budget = thinking_budget("code_exec", cfg)
+        prompt = build_chat_prompt_llamacpp(system, user, budget, "qwen3")
+        llm = backend._llm
+        out = llm(prompt, max_tokens=max_tokens, temperature=0.0, logprobs=None)
+        return out["choices"][0].get("text", "")
+    except Exception as exc:
+        logger.debug("Full-text generation failed: %s", exc)
+    return None
+
+
+# ── main pipeline ─────────────────────────────────────────────────────
+
+
+def run_pipeline(
+    input_path: str,
+    output_path: str,
+    audit_path: str | None = None,
+    strict: bool = False,
+):
     t_start = time.time()
     cfg = _load_config()
 
-    print("Loading models (HuggingFace)...", flush=True)
-    primary_model, primary_tok = load_primary_model()
-    primary_agent = ReasoningAgent(model=primary_model, tokenizer=primary_tok)
-    print("  Primary model loaded.", flush=True)
+    if audit_path is None:
+        audit_path = str(Path(output_path).with_suffix("")) + "_audit.json"
 
-    secondary_agent: ReasoningAgent | None = None
-    try:
-        secondary_model, secondary_tok = load_secondary_model()
-        secondary_agent = ReasoningAgent(model=secondary_model, tokenizer=secondary_tok)
-        print("  Secondary model (ensemble) loaded.", flush=True)
-    except Exception as e:
-        print(f"  Secondary model not available, skipping ensemble: {e}", flush=True)
+    # ── Load data ─────────────────────────────────────────────────────
+    raw_questions = load_questions(input_path)
+    questions: list[ParsedQuestion] = parse_questions(raw_questions)
+    n = len(questions)
+    logger.info("Loaded %d questions", n)
 
-    embedder = load_embedder()
-    retriever = RetrievalAgent(
-        embedder=embedder,
-        top_k=cfg["retrieval"]["top_k"],
-        relevance_threshold=cfg["retrieval"]["relevance_threshold"],
+    flag_counts = {
+        "has_context": sum(q.has_context for q in questions),
+        "is_quantitative": sum(q.is_quantitative for q in questions),
+        "has_refusal_choice": sum(q.has_refusal_choice for q in questions),
+        "is_legal": sum(q.is_legal for q in questions),
+    }
+    logger.info("Flags: %s", flag_counts)
+
+    # ── Load backends ─────────────────────────────────────────────────
+    logger.info("Loading Qwen backend (primary)...")
+    qwen_backend = build_backend(cfg, model_key="primary")
+
+    gemma_backend = None
+    if cfg.get("models", {}).get("secondary"):
+        try:
+            logger.info("Loading Gemma backend (secondary)...")
+            gemma_backend = build_backend(cfg, model_key="secondary")
+        except Exception as e:
+            logger.warning("Secondary model unavailable: %s — proceeding without Gemma", e)
+
+    # Pre-warm
+    logger.info("Pre-warming backends...")
+    qwen_backend.warmup()
+    if gemma_backend:
+        gemma_backend.warmup()
+
+    # ── Load retriever (lazy) ─────────────────────────────────────────
+    retriever = None
+    if cfg.get("rag", {}).get("enabled", True):
+        try:
+            from sentence_transformers import SentenceTransformer
+            from src.tools.retrieval import load_retriever
+
+            logger.info("Loading BGE-M3 embedder for retrieval...")
+            embedder_id = cfg["models"].get("embedder", "BAAI/bge-m3")
+            embedder = SentenceTransformer(embedder_id)
+            retriever = load_retriever(cfg, embedder)
+            logger.info("Retriever ready.")
+        except Exception as e:
+            logger.warning("Retriever unavailable: %s — RAG disabled", e)
+
+    # ── Tier 1: batched greedy pass over all questions ────────────────
+    logger.info("Tier 1: batched greedy pass (%d prompts)...", n)
+    t1_start = time.time()
+
+    tier1_requests = [_make_request(q, cfg, temperature=0.0) for q in questions]
+
+    tier1_nested = qwen_backend.generate_batch(tier1_requests)
+    tier1_results: list[InferenceResult] = [samples[0] for samples in tier1_nested]
+
+    logger.info("Tier 1 done in %.1fs", time.time() - t1_start)
+
+    # ── Confidence gate ───────────────────────────────────────────────
+    tau = cfg.get("gate", {}).get("tau", 1.5)
+    escalate_flags: list[bool] = []
+    escalate_reasons: list[str] = []
+    for q, t1 in zip(questions, tier1_results):
+        esc, reason = should_escalate(t1, q.n_choices, tau=tau)
+        escalate_flags.append(esc)
+        escalate_reasons.append(reason)
+
+    tier1_accepted = [not e for e in escalate_flags]
+    n_fast = sum(tier1_accepted)
+    n_escalated = n - n_fast
+    logger.info(
+        "Gate: %d fast-exit (%.0f%%), %d escalated",
+        n_fast, 100 * n_fast / n, n_escalated,
     )
-    print(f"Models loaded in {time.time() - t_start:.1f}s", flush=True)
 
-    questions = load_questions(input_path)
-    print(f"Processing {len(questions)} questions (sequential)...", flush=True)
+    # ── Tier 2: jury on escalated questions ───────────────────────────
+    jury_verdicts: dict[str, JuryVerdict] = {}
 
-    results = []
-    for i, q in enumerate(questions):
-        q_start = time.time()
-        result = await _process_question_sequential(
-            q, retriever, primary_agent, secondary_agent, cfg
-        )
-        results.append(result)
-        q_elapsed = time.time() - q_start
-        avg = (time.time() - t_start) / (i + 1)
-        eta = avg * (len(questions) - i - 1)
-        print(
-            f"  [{i + 1}/{len(questions)}] {q['qid']} → {result['answer']} "
-            f"({q_elapsed:.1f}s, avg {avg:.1f}s/q, ETA {eta / 60:.0f}min)",
-            flush=True,
-        )
+    if n_escalated > 0:
+        logger.info("Tier 2: jury on %d questions...", n_escalated)
+        t2_start = time.time()
 
-    write_submission(results, output_path)
+        escalated = [
+            (q, t1)
+            for q, t1, esc in zip(questions, tier1_results, escalate_flags)
+            if esc
+        ]
+
+        for q, t1 in escalated:
+            # Run tool first (code_exec or RAG)
+            tool_answer = None
+            try:
+                tool_answer = _run_tool(q, qwen_backend, retriever, cfg)
+                if tool_answer:
+                    logger.debug("qid=%s: tool → %s", q.qid, tool_answer)
+            except Exception as e:
+                logger.warning("Tool error for %s: %s", q.qid, e)
+
+            try:
+                verdict = run_jury(
+                    question=q,
+                    qwen_backend=qwen_backend,
+                    gemma_backend=gemma_backend,
+                    tier1_result=t1,
+                    tool_answer=tool_answer,
+                    cfg=cfg,
+                )
+                jury_verdicts[q.qid] = verdict
+            except Exception as e:
+                logger.error("Jury error for %s: %s — using tier-1 fallback", q.qid, e)
+                jury_verdicts[q.qid] = JuryVerdict(
+                    qid=q.qid,
+                    answer=t1.letter,
+                    tier=2,
+                    resolution_rule=f"jury_error:{e}",
+                )
+
+        logger.info("Tier 2 done in %.1fs", time.time() - t2_start)
+
+    # ── Assemble ──────────────────────────────────────────────────────
+    logger.info("Assembling %d results...", n)
+    df = assemble(
+        questions=questions,
+        tier1_results=tier1_results,
+        tier1_accepted=tier1_accepted,
+        jury_verdicts=jury_verdicts,
+        output_csv=output_path,
+        output_audit=audit_path,
+        strict=strict,
+    )
+
     elapsed = time.time() - t_start
-    print(f"Written {len(results)} predictions to {output_path}")
-    print(f"Total time: {elapsed:.1f}s ({elapsed / len(questions):.2f}s/question)")
+    logger.info(
+        "Done. %d predictions written to %s (%.1fs, %.2fs/q)",
+        len(df), output_path, elapsed, elapsed / n,
+    )
+    return df
 
 
 # ── entry point ───────────────────────────────────────────────────────
 
 
-def run_pipeline(input_path: str, output_path: str):
-    """Auto-detect vLLM availability and run the best pipeline."""
-    try:
-        import vllm  # noqa: F401
-
-        if not torch.cuda.is_available():
-            raise RuntimeError("vLLM requires CUDA")
-        print("vLLM detected — using batched pipeline", flush=True)
-        _run_batched(input_path, output_path)
-    except (ImportError, RuntimeError) as e:
-        print(f"vLLM not available ({e}), falling back to sequential pipeline", flush=True)
-        asyncio.run(_run_sequential(input_path, output_path))
-
-
 def main():
-    parser = argparse.ArgumentParser(description="HackAIthon Bảng C pipeline")
-    parser.add_argument("--input", required=True, help="Path to input file (JSON or CSV)")
-    parser.add_argument("--output", required=True, help="Path to output submission CSV")
+    parser = argparse.ArgumentParser(description="Entropy-Gated Jury pipeline")
+    parser.add_argument("--input", required=True, help="Input file (JSON or CSV)")
+    parser.add_argument("--output", required=True, help="Output submission CSV")
+    parser.add_argument("--audit", default=None, help="Audit log JSON (default: <output>_audit.json)")
+    parser.add_argument("--strict", action="store_true", help="Fail on invariant violations")
     args = parser.parse_args()
 
-    run_pipeline(args.input, args.output)
+    run_pipeline(args.input, args.output, args.audit, args.strict)
 
 
 if __name__ == "__main__":

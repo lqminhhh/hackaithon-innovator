@@ -1,33 +1,90 @@
+# Entropy-Gated Jury — pipeline configuration
+# Switch backend: "llamacpp" (local MacBook) or "vllm" (Docker/CUDA)
+
+backend: llamacpp   # llamacpp | vllm
+
+# ── Model IDs (used by VllmBackend and embedder) ──────────────────────
 models:
-  primary: "Qwen/Qwen2.5-7B-Instruct"
-  secondary: "google/gemma-2-9b-it"
-  embedder: "keepitreal/vietnamese-sbert"
+  primary:   "Qwen/Qwen3.5-9B"         # whitelisted primary
+  secondary: "google/gemma-4-E4B-it"   # whitelisted juror (E4B = 4.5B effective / 8B total)
+  # fallback_juror: "Qwen/Qwen3.5-4B"  # swap if Gemma is flaky
+  embedder:  "BAAI/bge-m3"             # whitelisted embedder
 
-retrieval:
-  chunk_size: 300
-  chunk_overlap: 50
-  top_k: 5
-  relevance_threshold: 0.65
-  use_bm25: true
-  bm25_max_corpus: 50000
-inference:
-  max_new_tokens: 512
-  temperature_deterministic: 0.1
-  temperature_sampling: 0.7
+# ── GGUF paths for local LlamaCppBackend ─────────────────────────────
+# Run: bash scripts/download_weights.sh gguf
+# Then paste the printed paths here.
+gguf_paths:
+  primary:   "weights/Qwen3.5-9B-Q4_K_M.gguf"   # weights/Qwen3.5-9B-Q4_K_M.gguf
+  secondary: "weights/gemma-4-E4B.Q4_K_M.gguf"   # weights/gemma-4-4b-it-Q4_K_M.gguf
 
-confidence_gate:
-  fast_exit_threshold: 0.85
-  ensemble_threshold: 0.55
+# ── Model family tags (for chat-template selection) ───────────────────
+model_family:
+  primary:   qwen3    # <|im_start|> format
+  secondary: gemma4   # <start_of_turn> format
 
-consistency_sampler:
-  n_initial: 2
-  n_second: 5
-  n_max: 7
+# ── llama-cpp-python settings ─────────────────────────────────────────
+llamacpp:
+  n_gpu_layers: -1      # -1 = all layers to Metal GPU
+  n_ctx: 32768          # 8192 caused llama_decode -3 on long prompts
+  verbose: false
 
-quantisation:
-  load_in_4bit: true
-  compute_dtype: "float16"
-
+# ── vLLM settings (used only when backend: vllm) ─────────────────────
 vllm:
-  gpu_memory_utilization: 0.9
-  max_model_len: 8192
+  dtype: bfloat16              # bfloat16 preferred on A100/H100
+  gpu_memory_utilization: 0.92
+  max_model_len: 16384         # fits Qwen3.5-9B and Gemma 4 E4B on 40 GB VRAM
+  enable_prefix_caching: true
+  tensor_parallel_size: 1      # increase to 2 if running 2× GPUs
+
+# ── Confidence gate ───────────────────────────────────────────────────
+gate:
+  tau: 1.5             # logprob margin threshold; lower = more escalation
+  disc_check_min_choices: 10   # discriminative cross-check for n_choices ≥ this
+
+# ── Thinking budgets per template (tokens) ───────────────────────────
+thinking_budgets:
+  context_grounded:  400
+  quantitative:     1000
+  general_knowledge: 600
+  evidence_extract:  500
+  code_exec:         800
+
+# ── Jury settings ─────────────────────────────────────────────────────
+jury:
+  n_consistency: 6          # Qwen self-consistency samples
+  temperature_consistency: 0.7
+  top_p_consistency: 0.95
+  n_max_effort: 8           # samples in max-effort 3-way-disagree retry
+
+# ── Gated RAG settings ────────────────────────────────────────────────
+rag:
+  enabled: true
+  index_file: faiss_narrow.index
+  chunks_file: chunks_narrow.jsonl
+  top_k: 5
+  spike_threshold: 0.30    # relative-delta gate; lower = more retrieval
+  use_rerank: false        # enable only if ablation proves net-positive
+
+# ── Code execution (tools/code_exec.py) ──────────────────────────────
+code_exec:
+  timeout_s: 5
+  max_stdout_bytes: 1024
+  rel_tolerance: 0.01
+
+# ── Component toggles for ablation (eval/ablate.py) ──────────────────
+ablation:
+  use_jury: true
+  use_code_exec: true
+  use_rag: true
+  use_gemma: true
+  use_thinking: true
+
+# ── Failure hardening ─────────────────────────────────────────────────
+hardening:
+  # Per-question crash isolation: one bad question must never kill the run
+  isolate_questions: true
+  # OOM back-off: auto-reduce batch size on CUDA OOM (vLLM path)
+  oom_backoff: true
+  oom_min_batch: 4
+  # Max-effort retry budget (jury 3-way disagree)
+  max_effort_thinking_multiplier: 2.0

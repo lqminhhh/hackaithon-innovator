@@ -6,6 +6,10 @@
 env/
 # Model weights (download locally, never commit)
 models/
+weights/
+*.gguf
+*.safetensors
+*.bin
 # Raw wiki extraction (too large to commit)
 data/wiki_text/
 

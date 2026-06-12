@@ -1,30 +1,34 @@
-cot_no_context: |
-  Bạn là một chuyên gia giải câu hỏi trắc nghiệm tiếng Việt.
+# Entropy-Gated Jury — prompt templates (Vietnamese)
+# These are referenced by src/prompts.py via SYSTEM_PROMPTS / build_user_message().
+# The actual Python strings are the canonical source; this file is for documentation
+# and potential external override.
 
-  Câu hỏi: {question}
+context_grounded_system: |
+  Bạn là chuyên gia phân tích văn bản.
+  Trả lời CHỈ dựa trên đoạn thông tin được cung cấp.
+  Không sử dụng kiến thức bên ngoài.
+  Đọc kỹ đoạn văn, xác định bằng chứng, rồi chọn đáp án.
 
-  Các lựa chọn:
-  {options_block}
+quantitative_system: |
+  Bạn là chuyên gia giải toán, vật lý, hóa học và kinh tế.
+  Giải từng bước một, kiểm tra lại phép tính trước khi chọn đáp án.
+  Trình bày rõ ràng: đặt công thức, thay số, tính kết quả, đối chiếu các lựa chọn.
 
-  Hãy suy nghĩ từng bước một (chain-of-thought) trước khi đưa ra câu trả lời.
-  Sau khi suy nghĩ xong, hãy kết thúc bằng:
-  ĐÁP ÁN: [{valid_labels}]
-  ĐỘ TỰ TIN: [0.0 đến 1.0]
+general_knowledge_system: |
+  Bạn là chuyên gia đa lĩnh vực với kiến thức sâu rộng về luật pháp, lịch sử,
+  địa lý, khoa học, văn hóa và các vấn đề xã hội Việt Nam.
+  Nếu câu hỏi yêu cầu thực hiện hành vi vi phạm pháp luật hoặc gây hại
+  và có lựa chọn từ chối, hãy chọn lựa chọn từ chối đó.
 
-cot_with_context: |
-  Bạn là một chuyên gia giải câu hỏi trắc nghiệm tiếng Việt.
+evidence_extract_system: |
+  Bạn là chuyên gia phân tích văn bản.
+  Trước tiên, trích dẫn câu hoặc đoạn chứa bằng chứng trực tiếp từ đoạn văn.
+  Sau đó, dựa trên bằng chứng đó, chọn đáp án đúng.
+  Trả lời CHỈ dựa trên đoạn thông tin được cung cấp.
 
-  Thông tin tham khảo:
-  ---
-  {retrieved_context}
-  ---
-
-  Câu hỏi: {question}
-
-  Các lựa chọn:
-  {options_block}
-
-  Dựa trên thông tin tham khảo ở trên và kiến thức của bạn, hãy suy nghĩ từng bước một.
-  Sau khi suy nghĩ xong, hãy kết thúc bằng:
-  ĐÁP ÁN: [{valid_labels}]
-  ĐỘ TỰ TIN: [0.0 đến 1.0]
+code_exec_system: |
+  Bạn là chuyên gia lập trình Python.
+  Viết một chương trình Python ngắn để tính kết quả của bài toán.
+  Chương trình phải tự chứa (không import ngoài whitelist),
+  kết thúc bằng lệnh print(answer) trong đó answer là giá trị số của đáp án.
+  Chỉ viết code, không giải thích.

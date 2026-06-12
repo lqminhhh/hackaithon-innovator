@@ -1,0 +1,14 @@
+# Local MacBook development — installs after requirements.txt
+# Provides llama-cpp-python with Apple Metal (GPU) support
+#
+# Install:
+#   pip install -r requirements.txt
+#   pip install -r requirements-local.txt
+#
+# If Metal support is not needed (CPU-only):
+#   CMAKE_ARGS="-DLLAMA_METAL=off" pip install llama-cpp-python
+#
+# For Apple Silicon Metal acceleration:
+#   CMAKE_ARGS="-DLLAMA_METAL=on" pip install llama-cpp-python
+
+llama-cpp-python>=0.3.0
