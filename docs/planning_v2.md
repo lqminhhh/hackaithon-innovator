@@ -55,6 +55,7 @@ MARGIN_LOW  = 0.15        # prob(top1) - prob(top2) below this -> escalate
 SC_N        = 5           # self-consistency samples for STEM/escalation
 SC_TEMP     = 0.6
 RERANK_MIN  = 0.5         # inject RAG context only if top rerank score >= this
+FORCE_RETRIEVE_DOMAINS = {"vn_law","vn_decree","vn_admin","local_facts"}  # always retrieve here
 TOK = {"READING":512, "STEM":3072, "KNOWLEDGE":256, "SAFETY":128}
 FALLBACK    = "A"
 ```
@@ -149,11 +150,12 @@ not fire on STEM.
 | SAFETY | no_think | 128 | no | off |
 **Escalation ladder:**
 ```
+0. if domain in FORCE_RETRIEVE_DOMAINS -> fetch S6 context, include it in the first pass
 1. single guided-choice pass -> (letter, margin)
 2. margin >= MARGIN_LOW -> accept
 3. margin <  MARGIN_LOW:
      STEM/other -> /think + self-consistency(SC_N) -> majority-vote letter
-     KNOWLEDGE  -> second pass (optionally with S6 RAG context)
+     KNOWLEDGE  -> fetch S6 context (if not already) -> second pass WITH that context
 4. tie -> highest-logprob letter. NEVER blank.
 ```
 - Self-consistency: sample SC_N completions (temp SC_TEMP), each ends in guided-choice, take the
@@ -200,7 +202,12 @@ Inject a forced exception on one question → that qid gets FALLBACK, all others
 - **Corpus (general, not cherry-picked):** VN legal codes (Hiến pháp, Dân sự, Hình sự, Lao động),
   civics/HCM-tư-tưởng, Vietnamese Wikipedia. Build a BGE-m3 dense (+ optional sparse) index offline.
 - **Retrieve:** top-20. **Rerank:** RERANK_MODEL. **Inject:** top-3 only if score ≥ RERANK_MIN.
-- Fire only when route == KNOWLEDGE and domain == recall. Never on READING/STEM/SAFETY.
+- **When to retrieve (3 filters, cheapest first — implemented in S4):**
+  1. *Route exclude:* READING/STEM/SAFETY -> never retrieve.
+  2. *Domain force:* domain in FORCE_RETRIEVE_DOMAINS -> always retrieve (model's confidence is
+     untrustworthy here), even on the first pass.
+  3. *Confidence gate:* otherwise answer first with NO retrieval; retrieve + re-answer only when
+     margin < MARGIN_LOW. High margin -> trust the model, skip retrieval (saves time, avoids distraction).
 - Keep `exclude_qid` decontamination.
 - **Time-box** retrieval so it can't stall the run.
 **Accept:** recall question retrieves relevant passages; concept/STEM questions never trigger retrieval;

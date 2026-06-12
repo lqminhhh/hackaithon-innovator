@@ -35,6 +35,64 @@ is what makes the whole thing robust.
 
 ---
 
+## The pipeline at a glance
+
+```
+   ┌───────────────────────────────────────────────────────────────┐
+   │                       ONE QUESTION COMES IN                      │
+   └────────────────────────────────┬──────────────────────────────┘
+                                     ▼
+        ┌───────────────────────────────────────────────────────┐
+        │  ROUTER — "how hard should I think about this?"          │
+        │    Layer 1: fast keyword / structure rules               │
+        │    Layer 2: match by meaning (only for the leftovers)    │
+        └────────────────────────────────┬──────────────────────┘
+            ┌──────────────┬──────────────┼───────────────┐
+            ▼              ▼              ▼               ▼
+        READING          STEM          SAFETY         KNOWLEDGE
+     answer from      think step     refusal is      general fact
+     the passage      by step +      allowed         or recall
+     · fast           vote           here            (look up? see
+     · no lookup      · no lookup    · no lookup       box below)
+            └──────────────┴──────────────┴───────────────┘
+                                     ▼
+        ┌───────────────────────────────────────────────────────┐
+        │  ANSWER via GUIDED CHOICE                                │
+        │  (output is forced to be a real option letter, A–J)      │
+        │  + a CONFIDENCE number (the "logprob margin")            │
+        └────────────────────────────────┬──────────────────────┘
+                                     ▼
+                          ┌────────────────────────┐
+                          │   Confident enough?      │
+                          └────────┬────────┬────────┘
+                            YES     │        │     NO
+                                    ▼        ▼
+                                 accept   THINK HARDER:
+                                          · STEM → reason again + vote (n=5)
+                                          · knowledge → look up docs,
+                                            re-answer using them
+                                                  │
+                                                  ▼
+        ┌───────────────────────────────────────────────────────┐
+        │  NEVER-CRASH RUNNER → always writes submission.csv       │
+        └───────────────────────────────────────────────────────┘
+```
+
+**When do we look up documents (retrieval)?** Three simple rules:
+
+```
+   reading · STEM · safety       →  NEVER   (answer's in the passage, or it's a calculation)
+   law · decrees · local facts   →  ALWAYS  (model is unreliable here, even when it sounds sure)
+   everything else               →  answer first, then:
+                                       confident?  →  don't look up
+                                       unsure?     →  look up + re-answer
+```
+
+This is how the system "knows what it doesn't know": it doesn't trust the model to say so — it
+watches the confidence number, and force-looks-up the fact-heavy domains regardless.
+
+---
+
 ## 3. What's actually in the test (we looked at all 463 public questions)
 
 It's genuinely "every field." Roughly:
