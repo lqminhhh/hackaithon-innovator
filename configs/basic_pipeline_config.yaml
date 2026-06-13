@@ -3,3 +3,4 @@ model:
 
 inference:
   max_questions: null
+  batch_size: 32

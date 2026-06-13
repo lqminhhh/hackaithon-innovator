@@ -102,14 +102,14 @@ def load_embedder(device: str | None = None) -> SentenceTransformer:
     return SentenceTransformer(cfg["models"]["embedder"], **kwargs)
 
 
-def load_vllm_primary():
+def load_vllm_primary(model_id: str | None = None):
     """Load primary model via vLLM for fast batched inference (CUDA only)."""
     from vllm import LLM
 
     cfg = _load_config()
     vllm_cfg = cfg.get("vllm", {})
     return LLM(
-        model=cfg["models"]["primary"],
+        model=model_id or cfg["models"]["primary"],
         dtype="half",
         gpu_memory_utilization=vllm_cfg.get("gpu_memory_utilization", 0.9),
         max_model_len=vllm_cfg.get("max_model_len", 8192),
