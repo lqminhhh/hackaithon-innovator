@@ -78,6 +78,61 @@ class ReasoningAgent:
             )
         return self.prompts["cot_no_context"].format(**kwargs)
 
+    def build_guided_choice_prompt(
+        self,
+        question: str,
+        options: dict[str, str],
+        context: str | None = None,
+    ) -> str:
+        """Build a short prompt for constrained answer selection.
+
+        This path is intentionally concise: the model should decide among the
+        existing choices and output only one legal option label.
+        """
+        options_block, valid_labels = self._format_options(options)
+        kwargs = dict(
+            question=question,
+            options_block=options_block,
+            valid_labels=valid_labels,
+            label_list=", ".join(sorted(options.keys())),
+        )
+
+        if context is not None:
+            return self.prompts["guided_choice_with_context"].format(
+                retrieved_context=context, **kwargs
+            )
+        return self.prompts["guided_choice_no_context"].format(**kwargs)
+
+    def build_route_prompt(
+        self,
+        route: str,
+        question: str,
+        options: dict[str, str],
+        context: str | None = None,
+    ) -> str:
+        """Build a route-specific direct-answer prompt."""
+        route_to_template = {
+            "reading": "reading_direct",
+            "stem": "stem_direct",
+            "safety": "safety_direct",
+            "knowledge": "knowledge_direct",
+        }
+        template_name = route_to_template[route]
+
+        options_block, valid_labels = self._format_options(options)
+        kwargs = dict(
+            question=question,
+            options_block=options_block,
+            valid_labels=valid_labels,
+            label_list=", ".join(sorted(options.keys())),
+        )
+
+        if route == "reading":
+            return self.prompts[template_name].format(
+                retrieved_context=context or "", **kwargs
+            )
+        return self.prompts[template_name].format(**kwargs)
+
     # ── generation (batch + single) ───────────────────────────────────
 
     def generate_batch(
@@ -133,6 +188,65 @@ class ReasoningAgent:
 
         new_tokens = output_ids[0][inputs["input_ids"].shape[1]:]
         return self._tokenizer.decode(new_tokens, skip_special_tokens=True)
+
+    # ── guided-choice decoding ───────────────────────────────────────
+
+    def score_valid_labels(
+        self,
+        prompt: str,
+        valid_labels: tuple[str, ...] | list[str],
+    ) -> dict[str, float]:
+        """Score only the legal answer labels for one prompt.
+
+        Returns a dict of label -> logprob score. Higher is better.
+        Currently implemented for HuggingFace backends; vLLM support can be
+        added later with token-level logprob extraction.
+        """
+        if self.is_vllm:
+            raise NotImplementedError(
+                "Guided-choice scoring is not implemented for vLLM yet."
+            )
+
+        return {
+            label: self._hf_score_completion(prompt, f" {label}")
+            for label in valid_labels
+        }
+
+    def predict_guided_choice(
+        self,
+        question: str,
+        options: dict[str, str],
+        context: str | None = None,
+    ) -> tuple[str, dict[str, float]]:
+        """Select the best legal label using constrained completion scoring."""
+        valid_labels = tuple(sorted(options.keys()))
+        prompt = self.build_guided_choice_prompt(question, options, context)
+        scores = self.score_valid_labels(prompt, valid_labels)
+        best = max(scores, key=scores.get)
+        return best, scores
+
+    def _hf_score_completion(self, prompt: str, completion: str) -> float:
+        import torch
+
+        messages = [{"role": "user", "content": prompt}]
+        prompt_text = self._tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        full_text = prompt_text + completion
+
+        prompt_inputs = self._tokenizer(prompt_text, return_tensors="pt")
+        full_inputs = self._tokenizer(full_text, return_tensors="pt").to(self._model.device)
+
+        prompt_len = prompt_inputs["input_ids"].shape[1]
+        target_ids = full_inputs["input_ids"][:, prompt_len:]
+
+        with torch.no_grad():
+            outputs = self._model(**full_inputs)
+
+        logits = outputs.logits[:, prompt_len - 1 : -1, :]
+        logprobs = torch.log_softmax(logits, dim=-1)
+        token_scores = logprobs.gather(-1, target_ids.unsqueeze(-1)).squeeze(-1)
+        return float(token_scores.sum().item())
 
     # ── backward-compatible single-question methods ───────────────────
 
