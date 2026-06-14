@@ -12,7 +12,7 @@ tqdm>=4.66.4
 pyyaml>=6.0.1
 accelerate>=1.1.1
 huggingface-hub>=0.26.0
-
+pytest>=8.3.2,<9.0.0
 # vLLM is OPTIONAL — install separately after base deps (Colab CUDA 12):
 #   pip install vllm==0.6.3.post1
 # Do NOT add vllm to requirements.txt; it upgrades torch/transformers and breaks the stack.
