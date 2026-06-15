@@ -36,6 +36,8 @@ def _load_config() -> dict:
 class ReasoningAgent:
     """Unified reasoning agent supporting vLLM and HuggingFace backends."""
 
+    _VLLM_MAX_LOGPROBS = 20
+
     def __init__(self, llm=None, model=None, tokenizer=None):
         self.prompts = _load_prompts()
         self.cfg = _load_config()["inference"]
@@ -290,7 +292,7 @@ class ReasoningAgent:
             temperature=0.0,
             max_tokens=1,
             top_p=1.0,
-            logprobs=len(token_map),
+            logprobs=min(len(token_map), self._VLLM_MAX_LOGPROBS),
             allowed_token_ids=list(token_map.keys()),
         )
         outputs = self._llm.generate([prompt], params)
@@ -327,15 +329,24 @@ class ReasoningAgent:
         self,
         valid_labels: tuple[str, ...] | list[str],
     ) -> dict[int, str]:
-        """Map vLLM token ids back to legal labels for one-token constrained decoding."""
+        """Map one vLLM token id per legal label for constrained decoding.
+
+        We intentionally keep a single token id for each label. Some tokenizers
+        expose both ``"A"`` and ``" A"`` as separate one-token variants, but
+        passing every variant through to vLLM can exceed its logprob cap on
+        questions with many choices (for example A-J).
+        """
         token_map: dict[int, str] = {}
         tokenizer = self.tokenizer
 
         for label in valid_labels:
-            for variant in (label, f" {label}"):
+            # Prefer the whitespace-prefixed form because the label is generated
+            # after prompt text, but fall back to the bare label when needed.
+            for variant in (f" {label}", label):
                 token_ids = tokenizer.encode(variant, add_special_tokens=False)
                 if len(token_ids) == 1:
                     token_map[int(token_ids[0])] = label
+                    break
         return token_map
 
     @staticmethod
