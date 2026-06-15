@@ -92,6 +92,7 @@ class ParsedQuestion:
     query: str
     context: str | None
     options: dict[str, str]
+    refusal_labels: tuple[str, ...]
     n_choices: int
     has_context: bool
     is_quantitative: bool
@@ -109,6 +110,10 @@ def parse_question(question: dict) -> ParsedQuestion:
     options = question["options"]
     context, query = _split_context_and_query(raw_question)
 
+    refusal_labels = tuple(
+        label for label, value in options.items()
+        if _is_refusal_option(value)
+    )
     option_text = " ".join(options.values()).lower()
     query_plus_options = f"{query}\n{option_text}"
     full_text = f"{raw_question}\n{option_text}".lower()
@@ -126,11 +131,12 @@ def parse_question(question: dict) -> ParsedQuestion:
         query=query,
         context=context,
         options=options,
+        refusal_labels=refusal_labels,
         n_choices=len(options),
         has_context=has_context,
         is_quantitative=is_quantitative,
         is_legal=is_legal,
-        has_refusal_choice=has_refusal_choice,
+        has_refusal_choice=bool(refusal_labels),
         is_harmful=is_harmful,
     )
 
@@ -164,3 +170,8 @@ def _looks_quantitative(text: str, options: dict[str, str]) -> bool:
         return True
 
     return keyword_hits >= 2 or symbol_hits >= 3 or digit_count >= 8
+
+
+def _is_refusal_option(text: str) -> bool:
+    lowered = text.lower()
+    return any(term in lowered for term in _REFUSAL_TERMS)

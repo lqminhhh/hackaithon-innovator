@@ -22,3 +22,14 @@ def route_question(parsed: ParsedQuestion) -> Route:
     if parsed.is_quantitative:
         return "stem"
     return "knowledge"
+
+
+def get_forced_answer(parsed: ParsedQuestion, route: Route) -> str | None:
+    """Return a deterministic answer override for special cases.
+
+    For genuinely harmful questions, if one choice is an explicit refusal,
+    the refusal option is the correct answer and should be selected directly.
+    """
+    if route == "safety" and parsed.refusal_labels:
+        return parsed.refusal_labels[0]
+    return None

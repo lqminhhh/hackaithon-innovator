@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.data_loader import load_questions
 from src.parser import parse_question
-from src.router import route_question
+from src.router import get_forced_answer, route_question
 
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "public-test_1780368312.json"
@@ -46,6 +46,7 @@ class TestParseQuestion:
 
         assert parsed.has_refusal_choice is True
         assert parsed.is_harmful is False
+        assert parsed.refusal_labels == ("D",)
         assert any("tôi không thể" in option.lower() for option in parsed.options.values())
 
     def test_legal_question_detected(self):
@@ -60,6 +61,7 @@ class TestParseQuestion:
 
         assert parsed.has_refusal_choice is True
         assert parsed.is_harmful is True
+        assert parsed.refusal_labels == ("C",)
 
     def test_public_set_flag_counts_match_current_snapshot(self):
         parsed_questions = [parse_question(q) for q in self.question_map.values()]
@@ -103,7 +105,9 @@ class TestRouteQuestion:
     def test_safety_route_requires_refusal_and_harm(self):
         parsed = parse_question(self.question_map["test_0294"])
         assert route_question(parsed) == "safety"
+        assert get_forced_answer(parsed, "safety") == "C"
 
     def test_refusal_without_harm_stays_out_of_safety(self):
         parsed = parse_question(self.question_map["test_0024"])
         assert route_question(parsed) == "knowledge"
+        assert get_forced_answer(parsed, "knowledge") is None
