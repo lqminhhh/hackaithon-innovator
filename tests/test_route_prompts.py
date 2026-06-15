@@ -17,6 +17,14 @@ def _make_agent() -> ReasoningAgent:
     return ReasoningAgent(model=object(), tokenizer=_DummyTokenizer())
 
 
+class _ScoredAgent(ReasoningAgent):
+    def __init__(self):
+        super().__init__(model=object(), tokenizer=_DummyTokenizer())
+
+    def score_valid_labels(self, prompt, valid_labels):
+        return {label: {"A": -3.0, "B": -0.2, "C": -1.5}.get(label, -9.0) for label in valid_labels}
+
+
 class TestRoutePrompts:
     def test_reading_prompt_uses_context_and_passage_instruction(self):
         agent = _make_agent()
@@ -63,3 +71,14 @@ class TestRoutePrompts:
 
         assert "dùng kiến thức chung" in prompt
         assert "không chọn phương án từ chối" in prompt
+
+    def test_route_prediction_returns_best_scored_label(self):
+        agent = _ScoredAgent()
+        answer, scores = agent.predict_route_choice(
+            route="stem",
+            question="1 + 1 bằng bao nhiêu?",
+            options={"A": "1", "B": "2", "C": "3"},
+        )
+
+        assert answer == "B"
+        assert scores["B"] > scores["C"] > scores["A"]
