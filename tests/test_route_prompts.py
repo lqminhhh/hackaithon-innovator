@@ -53,6 +53,26 @@ class TestRoutePrompts:
         assert "Tác giả là X." in prompt
         assert "A, B" in prompt
 
+    def test_reading_prompt_guards_against_mentioned_distractors(self):
+        agent = _make_agent()
+        prompt = agent.build_route_prompt(
+            route="reading",
+            question="Theo ngữ cảnh, lý do chính nhân vật xây pháo đài là gì?",
+            options={
+                "A": "Để ngăn một kẻ thù cũng được nhắc đến trong đoạn.",
+                "B": "Để chấm dứt tuyến buôn bán nô lệ được đoạn nêu trực tiếp.",
+            },
+            context=(
+                "Để chặn đứng bọn cướp, nhân vật quyết định xây pháo đài. "
+                "Pháo đài chắn ngang con đường mua bán nô lệ. "
+                "Sau đó nhân vật còn giải phóng vùng đất khỏi một kẻ thù khác."
+            ),
+        )
+
+        assert "Một chi tiết chỉ \"được nhắc đến\" trong đoạn chưa chắc là đáp án đúng" in prompt
+        assert "lý do/mục đích/nguyên nhân" in prompt
+        assert "\"để\"" in prompt
+
     def test_stem_prompt_mentions_calculation(self):
         agent = _make_agent()
         prompt = agent.build_route_prompt(

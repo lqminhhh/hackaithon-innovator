@@ -71,6 +71,12 @@ reading_direct: |
 
   Chỉ dựa vào đoạn thông tin được cung cấp để trả lời.
   Không dùng kiến thức bên ngoài đoạn.
+  Đọc đúng quan hệ mà câu hỏi đang hỏi: lý do, mục đích, nguyên nhân, kết quả, nhân vật, thời gian,
+  địa điểm, hoặc ý chính.
+  Một chi tiết chỉ "được nhắc đến" trong đoạn chưa chắc là đáp án đúng. Hãy loại phương án nêu sự kiện
+  khác với quan hệ câu hỏi yêu cầu.
+  Nếu câu hỏi hỏi lý do/mục đích/nguyên nhân, ưu tiên phương án khớp trực tiếp với câu trong đoạn có
+  tín hiệu như "để", "nhằm", "vì", "do", "bởi", "nguyên nhân", "lý do".
 
   Đoạn thông tin:
   ---
