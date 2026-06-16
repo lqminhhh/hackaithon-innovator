@@ -65,6 +65,18 @@ def solve_question(agent: ReasoningAgent, parsed: ParsedQuestion) -> SolveResult
                 votes=vote.votes,
             )
 
+        if route == "reading" and _is_reason_purpose_question(parsed.query):
+            vote = self_consistency(agent, parsed, route, first, n=3)
+            return SolveResult(
+                qid=parsed.qid,
+                answer=vote.letter,
+                route=route,
+                margin=first.margin,
+                path="reading_reason_self_consistency",
+                first_answer=first.letter,
+                votes=vote.votes,
+            )
+
         if route == "knowledge" and first.margin < MARGIN_LOW:
             vote = self_consistency(agent, parsed, route, first)
             return SolveResult(
@@ -193,6 +205,24 @@ def _highest_average_logprob(choices: list[ChoiceResult], labels: list[str]) -> 
     return max(labels, key=lambda label: averages.get(label, float("-inf")))
 
 
+def _is_reason_purpose_question(query: str) -> bool:
+    lowered = query.lower()
+    return any(
+        marker in lowered
+        for marker in (
+            "lý do",
+            "lí do",
+            "mục đích",
+            "nguyên nhân",
+            "vì sao",
+            "tại sao",
+            "do đâu",
+            "nhằm mục đích",
+            "để làm gì",
+        )
+    )
+
+
 def _route_tokens(route: Route) -> int:
     return TOK[route.upper()]
 
@@ -202,7 +232,11 @@ def _build_reasoning_prompt(parsed: ParsedQuestion, route: Route) -> str:
         f"{label}) {parsed.options[label]}" for label in sorted(parsed.options)
     )
     route_instruction = {
-        "reading": "Chỉ dựa vào đoạn thông tin trong câu hỏi.",
+        "reading": (
+            "Chỉ dựa vào đoạn thông tin trong câu hỏi. "
+            "Nếu câu hỏi hỏi lý do, mục đích hoặc nguyên nhân, hãy tìm câu nêu trực tiếp quan hệ đó "
+            "và loại chi tiết chỉ được nhắc đến nhưng không trả lời đúng quan hệ."
+        ),
         "stem": "Giải từng bước, kiểm tra phép tính hoặc lập luận định lượng.",
         "knowledge": "Suy luận cẩn thận bằng kiến thức chung.",
         "safety": "Đánh giá ranh giới an toàn và từ chối nếu yêu cầu gây hại.",
