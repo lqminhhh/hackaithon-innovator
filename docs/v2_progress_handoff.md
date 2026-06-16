@@ -24,12 +24,13 @@ question
   -> Layer-1 router
   -> route-specific prompt
   -> guided-choice extraction with logprob margin
-  -> escalation when confidence is low
+  -> route-specific escalation / self-consistency when needed
   -> complete submission CSV
 ```
 
 The router decides how much effort a question deserves. The escalation layer
-decides whether the first answer is trustworthy enough.
+decides whether the first answer is trustworthy enough, or whether the model
+should reason multiple times and vote.
 
 Important routing rule:
 
@@ -74,7 +75,7 @@ Be careful with:
 | S1 vLLM + model wrapper | Done structurally | `src/llm.py`, `src/models.py`, configs | Defaults to `Qwen/Qwen3.5-4B`; supports think/no-think; fake-engine tests pass |
 | S2 guided choice + margin | Done | `src/extract.py`, `src/reasoning_agent.py` | Returns `ChoiceResult(letter, margin, per_letter_logprob)`; no regex fallback in v2 extraction |
 | S3 Layer-1 router + prompts | Done | `src/parser.py`, `src/router.py`, `configs/prompts.yaml` | `route_l1()` can abstain; `route_question()` defaults to knowledge; refusal-trap line added to all route prompts |
-| S4 escalation + self-consistency | Implemented, needs scoring | `src/solve.py`, `src/v02_alpha.py` | STEM always self-consistency votes; low-margin knowledge votes; no RAG yet |
+| S4 escalation + self-consistency | Done and scored | `src/solve.py`, `src/v02_alpha.py` | `v02_gamma` reached 79.91%; STEM always self-consistency votes; low-margin knowledge votes; reading reason/purpose questions use targeted `n=3` self-consistency; no RAG yet |
 | S7 never-crash runner + checkpoint | Not done | TBD `run.py` | Current `solve_question()` catches per-question errors, but no checkpoint/resume runner yet |
 | S5 semantic router | Scaffold exists | `src/semantic_router.py`, `configs/semantic_router_config.yaml`, `data/route_prototypes.yaml` | Not integrated into main v2 runner |
 | S6 RAG | Older implementation exists | `src/retrieval_agent.py`, `scripts/build_index.py` | Not integrated into v2 route policy yet; also `retrieve()` has a known `score_map` bug in sequential path |
@@ -89,14 +90,25 @@ Known measured v2 results:
 ```text
 v02_alpha: 54.43%
 v02_beta:  60.48%
+v02_gamma: 79.91%
 ```
 
 `v02_beta` corresponds roughly to S0-S3 plus S2 margin extraction, before S4
 self-consistency was run/scored.
 
-S4 has been implemented after `v02_beta`, but it has not yet been scored. It may
-improve STEM accuracy but will be slower because the current runner is still
-per-question.
+`v02_gamma` corresponds to S4 route-specific escalation. It is the current best
+accuracy result, but it is much slower:
+
+```text
+total runtime:   5412.9s
+inference loop:  4987.0s
+per question:    10.77s/question
+output:          data/submission_v02_gamma.csv
+```
+
+The big lesson from `v02_gamma`: self-consistency works, especially for STEM and
+reading distractors, but the current per-question runner is too expensive for
+comfortable iteration.
 
 ## Current Route Counts
 
@@ -119,6 +131,16 @@ route_l1:
 `None` from `route_l1()` means "use knowledge default, or let a later semantic
 router review it."
 
+`v02_gamma` path counts:
+
+```text
+direct                           = 212
+stem_self_consistency            = 216
+reading_reason_self_consistency = 15
+low_margin_self_consistency      = 16
+forced_safety                    = 4
+```
+
 ## What Each Route Means
 
 `reading`
@@ -127,12 +149,19 @@ router review it."
 - Use the passage only.
 - Do not retrieve.
 - Current path: direct guided choice.
+- Exception: questions asking reason/purpose/cause, such as "lý do", "tại sao",
+  "vì sao", or "mục đích", use `reading_reason_self_consistency` with `n=3`.
+- This targeted exception fixed `test_0005`, where direct scoring confidently
+  picked the Pechenegs distractor (`A`) before self-consistency changed it to
+  the correct slave-trade answer (`C`).
 
 `stem`
 
 - Calculation, formulas, quantitative reasoning, or 8+ choices.
 - Do not retrieve.
 - Current S4 path: first direct answer, then think-mode self-consistency vote.
+- This is the main runtime bottleneck because all 216 public-test STEM
+  questions currently run `stem_self_consistency` with `n=5`.
 
 `knowledge`
 
@@ -205,6 +234,17 @@ Most recent result after S4 implementation:
 75 passed
 ```
 
+Recent focused tests after the `reading_reason_self_consistency` change:
+
+```bash
+pytest -q tests/test_solve_s4.py
+pytest -q tests/test_route_prompts.py tests/test_parser.py tests/test_extract.py
+```
+
+```text
+34 passed
+```
+
 Full `pytest` may still fail in some local environments if `faiss` is not
 installed, because `tests/test_retrieval.py` imports it at module load time.
 
@@ -232,6 +272,24 @@ python src/v02_alpha.py \
   --limit 50
 ```
 
+Run the current full-scoring path:
+
+```bash
+python src/v02_alpha.py \
+  --input data/public-test_1780368312.json \
+  --output data/submission_v02_gamma.csv
+```
+
+Inspect only the `test_0005` parser/router regression locally:
+
+```text
+notebooks/test_parser_router.ipynb
+```
+
+Run the focused "Focused regression: `test_0005` Yaroslav reading distractor"
+section. The no-model cell verifies route/gate behavior; the optional solver
+cell requires a loaded model.
+
 Run S0 fallback only:
 
 ```bash
@@ -251,3 +309,24 @@ python main.py \
   unless asked.
 - The current code favors correctness experiments over speed. Wave batching is
   still needed if S4 proves accurate but too slow.
+
+## Recommended Next Step
+
+Optimize speed while protecting the `v02_gamma` accuracy.
+
+Do not remove the reading reason/purpose gate yet; it is cheap and fixed a real
+high-confidence reading error. The highest-leverage experiment is to reduce
+STEM self-consistency cost:
+
+```text
+v02_delta_speed idea:
+  STEM direct margin >= 0.90 -> accept direct
+  STEM direct margin <  0.90 -> run self-consistency
+```
+
+Use a 50-question slice first and compare accuracy, path counts, and runtime.
+If that is stable, run the full public test and log it as `v02_delta`.
+
+RAG should remain deferred until after speed tuning. The current bottleneck is
+not missing knowledge; it is that `stem_self_consistency` ran on 216 questions
+in `v02_gamma`.
