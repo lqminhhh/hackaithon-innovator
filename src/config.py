@@ -5,7 +5,7 @@ YAML files can still hold experiment-specific settings, but core invariants
 live here so every runner can share the same defaults.
 """
 
-LLM_MODEL = "Qwen/Qwen3-8B-AWQ"
+LLM_MODEL = "Qwen/Qwen3.5-4B"
 EMBED_MODEL = "BAAI/bge-m3"
 RERANK_MODEL = "BAAI/bge-reranker-v2-m3"
 

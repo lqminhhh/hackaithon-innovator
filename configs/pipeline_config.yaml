@@ -1,5 +1,5 @@
 models:
-  primary: "Qwen/Qwen2.5-7B-Instruct"
+  primary: "Qwen/Qwen3.5-4B"
   secondary: "google/gemma-2-9b-it"
   embedder: "keepitreal/vietnamese-sbert"
 
@@ -29,5 +29,6 @@ quantisation:
   compute_dtype: "float16"
 
 vllm:
-  gpu_memory_utilization: 0.9
+  gpu_memory_utilization: 0.85
   max_model_len: 8192
+  enable_prefix_caching: true

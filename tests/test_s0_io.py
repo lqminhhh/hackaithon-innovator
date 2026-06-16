@@ -18,7 +18,7 @@ from src.data_loader import letters, load_questions, write_submission
 
 
 def test_config_exposes_planned_defaults():
-    assert LLM_MODEL == "Qwen/Qwen3-8B-AWQ"
+    assert LLM_MODEL == "Qwen/Qwen3.5-4B"
     assert FALLBACK == "A"
 
 
