@@ -107,6 +107,46 @@ def test_stem_always_runs_self_consistency():
     assert agent.generated[0]["kwargs"]["mode"] == "think"
 
 
+def test_reason_purpose_reading_runs_small_self_consistency():
+    agent = _FakeAgent(
+        direct=_choice("A", margin=1.0),
+        sc_scores=[
+            {"A": -2.0, "B": -3.0, "C": -0.1},
+            {"A": -2.0, "B": -3.0, "C": -0.1},
+            {"A": -0.1, "B": -3.0, "C": -2.0},
+        ],
+    )
+    parsed = _parsed(
+        query="Theo ngữ cảnh, lý do chính nhân vật xây pháo đài là gì?",
+        has_context=True,
+    )
+
+    solved = solve_question(agent, parsed)
+
+    assert solved.route == "reading"
+    assert solved.path == "reading_reason_self_consistency"
+    assert solved.first_answer == "A"
+    assert solved.answer == "C"
+    assert solved.votes == ["C", "C", "A"]
+    assert len(agent.generated[0]["prompts"]) == 3
+    assert agent.generated[0]["kwargs"]["mode"] == "think"
+
+
+def test_plain_reading_still_accepts_direct_answer():
+    agent = _FakeAgent(direct=_choice("B", margin=0.7))
+    parsed = _parsed(
+        query="Theo đoạn thông tin, nhân vật chính là ai?",
+        has_context=True,
+    )
+
+    solved = solve_question(agent, parsed)
+
+    assert solved.route == "reading"
+    assert solved.path == "direct"
+    assert solved.answer == "B"
+    assert agent.generated == []
+
+
 def test_low_margin_knowledge_runs_self_consistency():
     agent = _FakeAgent(
         direct=_choice("A", margin=0.01),
