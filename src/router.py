@@ -7,13 +7,14 @@ from typing import Literal
 from src.parser import ParsedQuestion
 
 Route = Literal["reading", "stem", "safety", "knowledge"]
+Layer1Route = Literal["reading", "stem", "safety"]
 
 
-def route_question(parsed: ParsedQuestion) -> Route:
-    """Assign a first-pass route from parsed metadata.
+def route_l1(parsed: ParsedQuestion) -> Layer1Route | None:
+    """Assign the S3 Layer-1 rule route, abstaining on plain knowledge.
 
-    The route only chooses the prompt/reasoning path. It does not decide
-    correctness and can be overruled by later confidence gating.
+    Layer 1 only decides cheap special paths. Returning ``None`` means the
+    caller should use the full KNOWLEDGE default or pass the item to Layer 2.
     """
     if parsed.has_refusal_choice and parsed.is_harmful:
         return "safety"
@@ -21,6 +22,14 @@ def route_question(parsed: ParsedQuestion) -> Route:
         return "reading"
     if parsed.is_quantitative:
         return "stem"
+    return None
+
+
+def route_question(parsed: ParsedQuestion) -> Route:
+    """Return the final first-pass route, defaulting L1 abstentions to knowledge."""
+    route = route_l1(parsed)
+    if route is not None:
+        return route
     return "knowledge"
 
 

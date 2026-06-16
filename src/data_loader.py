@@ -26,6 +26,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.config import MAX_CHOICES
+
 ALL_LABELS = list(string.ascii_uppercase)  # A-Z
 
 _LABEL_PREFIX_RE = re.compile(r"^[A-Z][:\.\)]\s*")
@@ -39,6 +41,17 @@ _INLINE_CHOICES_RE = re.compile(
 _SINGLE_INLINE_CHOICE_RE = re.compile(
     r"([A-Z])\s*[.\):\s]\s*(.+?)(?=\s+[A-Z][.\):\s]|$)",
 )
+
+
+def letters(n: int) -> list[str]:
+    """Return the first ``n`` multiple-choice labels.
+
+    The v2 plan calls out 10 choices (A-J), while the loader stays tolerant up
+    to Z so malformed or expanded public files do not crash at S0.
+    """
+    if n < 1 or n > MAX_CHOICES:
+        raise ValueError(f"choice count must be between 1 and {MAX_CHOICES}, got {n}")
+    return ALL_LABELS[:n]
 
 
 def _strip_label_prefix(text: str) -> str:
@@ -100,9 +113,10 @@ def _load_json(path: Path) -> list[dict]:
         has_prefixes = _choices_have_positional_prefixes(choices)
 
         options = {}
-        for i, c in enumerate(choices):
+        labels = letters(len(choices)) if choices else []
+        for label, c in zip(labels, choices):
             text = _strip_label_prefix(c) if has_prefixes else c.strip()
-            options[ALL_LABELS[i]] = text
+            options[label] = text
 
         questions.append({
             "qid": str(item.get("qid", item.get("id", ""))),
@@ -145,14 +159,28 @@ def _load_csv(path: Path) -> list[dict]:
 
 
 def write_submission(results: list[dict], output_path: str | Path):
-    """Write submission file matching the input format.
+    """Write a submission CSV with columns ``qid,answer``.
 
-    Always writes CSV with columns: id, answer
-    (competition standard format).
+    ``results`` may contain either ``qid`` or legacy ``id`` keys; output is
+    normalised to the S0 contract from ``planning_v2.md``.
     """
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if not results:
+        pd.DataFrame(columns=["qid", "answer"]).to_csv(
+            output_path, index=False, encoding="utf-8"
+        )
+        return
+
     df = pd.DataFrame(results)
-    if "qid" in df.columns:
-        df = df.rename(columns={"qid": "id"})
-    df.to_csv(output_path, index=False)
+    if "id" in df.columns:
+        if "qid" in df.columns:
+            df["qid"] = df["qid"].fillna(df["id"])
+        else:
+            df = df.rename(columns={"id": "qid"})
+    if "qid" not in df.columns:
+        raise ValueError("submission rows must contain a 'qid' key")
+    if "answer" not in df.columns:
+        raise ValueError("submission rows must contain an 'answer' key")
+    df = df[["qid", "answer"]]
+    df.to_csv(output_path, index=False, encoding="utf-8")

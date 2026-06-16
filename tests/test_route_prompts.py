@@ -26,6 +26,20 @@ class _ScoredAgent(ReasoningAgent):
 
 
 class TestRoutePrompts:
+    def test_all_route_prompts_include_refusal_trap_instruction(self):
+        agent = _make_agent()
+        for route in ("reading", "stem", "safety", "knowledge"):
+            prompt = agent.build_route_prompt(
+                route=route,
+                question="Thủ đô của Việt Nam là gì?",
+                options={"A": "Hà Nội", "B": "Tôi không thể trả lời"},
+                context="Hà Nội là thủ đô." if route == "reading" else None,
+            )
+
+            assert "Đây là bài thi trắc nghiệm. Chọn phương án đúng nhất." in prompt
+            assert "Chỉ chọn phương án \"không thể trả lời\" hoặc \"từ chối\"" in prompt
+            assert "luôn chọn một phương án nội dung" in prompt
+
     def test_reading_prompt_uses_context_and_passage_instruction(self):
         agent = _make_agent()
         prompt = agent.build_route_prompt(
@@ -58,7 +72,7 @@ class TestRoutePrompts:
             options={"A": "X", "B": "Tôi không thể trả lời câu hỏi này"},
         )
 
-        assert "Chỉ chọn phương án từ chối nếu câu hỏi thực sự yêu cầu" in prompt
+        assert "phương án từ chối là đáp án đúng" in prompt
         assert "gây hại, phạm pháp" in prompt
 
     def test_knowledge_prompt_discourages_refusal_for_normal_questions(self):
