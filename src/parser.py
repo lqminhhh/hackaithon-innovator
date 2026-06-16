@@ -13,7 +13,8 @@ import re
 
 _PASSAGE_START_PATTERNS = (
     "đoạn thông tin",
-    "nội dung",
+    "đoạn văn",
+    "nội dung:",
     "title:",
     "content:",
     "tiêu đề",
@@ -62,6 +63,8 @@ _HARMFUL_TERMS = (
     "phá hoại",
 )
 
+_LONG_CONTEXT_CHARS = 600
+
 _QUANT_TERMS = (
     "tính",
     "xác suất",
@@ -80,6 +83,11 @@ _QUANT_TERMS = (
     "hằng số",
     "phản ứng",
     "vận tốc",
+    "bao nhiêu",
+    "lãi suất",
+    "ma trận",
+    "giá trị",
+    "latex",
 )
 
 _QUANT_SYMBOL_RE = re.compile(r"[\d=+\-*/%^√π∞$<>]|\\frac|\\int|\\sum|ax|bx|dx|dt")
@@ -153,6 +161,19 @@ def _split_context_and_query(text: str) -> tuple[str | None, str]:
         if context and query:
             return context, query
 
+    if has_passage_marker:
+        return text, text
+
+    lowered_options_free = lowered
+    has_non_reading_signals = (
+        any(term in lowered_options_free for term in _LEGAL_TERMS)
+        or any(term in lowered_options_free for term in _HARMFUL_TERMS)
+        or any(term in lowered_options_free for term in _QUANT_TERMS)
+        or bool(_QUANT_SYMBOL_RE.search(text))
+    )
+    if len(text) > _LONG_CONTEXT_CHARS and not has_non_reading_signals:
+        return text, text
+
     return None, text
 
 
@@ -165,8 +186,9 @@ def _looks_quantitative(text: str, options: dict[str, str]) -> bool:
     digit_count = sum(ch.isdigit() for ch in body)
     n_choices = len(options)
 
-    # 10-option questions in this set are overwhelmingly STEM-like; use that as a hint.
-    if n_choices >= 8 and (keyword_hits >= 1 or digit_count >= 3):
+    # 8+ option questions in this set are overwhelmingly STEM-like; S3 uses
+    # this as a cheap route hint unless reading has already taken priority.
+    if n_choices >= 8:
         return True
 
     return keyword_hits >= 2 or symbol_hits >= 3 or digit_count >= 8

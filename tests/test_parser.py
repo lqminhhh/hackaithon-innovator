@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.data_loader import load_questions
 from src.parser import parse_question
-from src.router import get_forced_answer, route_question
+from src.router import get_forced_answer, route_l1, route_question
 
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "public-test_1780368312.json"
@@ -77,7 +77,7 @@ class TestParseQuestion:
         assert counts == Counter(
             {
                 "has_context": 100,
-                "is_quantitative": 248,
+                "is_quantitative": 263,
                 "is_legal": 157,
                 "has_refusal_choice": 18,
                 "is_harmful": 10,
@@ -92,22 +92,49 @@ class TestRouteQuestion:
 
     def test_reading_route_priority(self):
         parsed = parse_question(self.question_map["test_0001"])
+        assert route_l1(parsed) == "reading"
         assert route_question(parsed) == "reading"
 
     def test_stem_route(self):
         parsed = parse_question(self.question_map["test_0002"])
+        assert route_l1(parsed) == "stem"
         assert route_question(parsed) == "stem"
 
     def test_knowledge_route_for_normal_recall(self):
         parsed = parse_question(self.question_map["test_0041"])
+        assert route_l1(parsed) is None
         assert route_question(parsed) == "knowledge"
 
     def test_safety_route_requires_refusal_and_harm(self):
         parsed = parse_question(self.question_map["test_0294"])
+        assert route_l1(parsed) == "safety"
         assert route_question(parsed) == "safety"
         assert get_forced_answer(parsed, "safety") == "C"
 
     def test_refusal_without_harm_stays_out_of_safety(self):
         parsed = parse_question(self.question_map["test_0024"])
+        assert route_l1(parsed) is None
         assert route_question(parsed) == "knowledge"
         assert get_forced_answer(parsed, "knowledge") is None
+
+    def test_layer1_stem_fires_on_many_choices(self):
+        parsed = parse_question(
+            {
+                "qid": "many_choices",
+                "question": "Chọn phương án đúng nhất.",
+                "options": {chr(65 + i): f"option {i}" for i in range(8)},
+            }
+        )
+
+        assert route_l1(parsed) == "stem"
+
+    def test_layer1_reading_fires_on_long_context(self):
+        parsed = parse_question(
+            {
+                "qid": "long_context",
+                "question": "A" * 650,
+                "options": {"A": "Đúng", "B": "Sai"},
+            }
+        )
+
+        assert route_l1(parsed) == "reading"
