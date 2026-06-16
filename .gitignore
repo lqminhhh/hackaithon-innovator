@@ -13,6 +13,7 @@ data/wiki_text/
 data/faiss.index
 data/chunks.jsonl
 data/cot_chains.jsonl
+data/vmlu_mqa_v1.5/
 
 # Wiki dump files
 *.bz2
