@@ -25,7 +25,7 @@ from src.data_loader import load_questions, write_submission
 from src.models import load_primary_model, load_vllm_primary
 from src.parser import parse_question
 from src.reasoning_agent import ReasoningAgent
-from src.router import get_forced_answer, route_question
+from src.solve import solve_question
 
 _CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "v02_alpha_config.yaml"
 
@@ -72,35 +72,28 @@ def run_v02_alpha(
 
     results = []
     route_counts: Counter[str] = Counter()
-    forced_count = 0
+    path_counts: Counter[str] = Counter()
     run_start = time.time()
 
     for i, q in enumerate(questions):
         q_start = time.time()
         parsed = parse_question(q)
-        route = route_question(parsed)
-        route_counts[route] += 1
+        solved = solve_question(agent, parsed)
+        route_counts[solved.route] += 1
+        path_counts[solved.path] += 1
 
-        forced = get_forced_answer(parsed, route)
-        if forced is not None:
-            answer = forced
-            forced_count += 1
-        else:
-            answer, _ = agent.predict_route_choice(
-                route=route,
-                question=parsed.query,
-                options=parsed.options,
-                context=parsed.context if route == "reading" else None,
-            )
-
-        results.append({"qid": parsed.qid, "answer": answer})
+        results.append({"qid": solved.qid, "answer": solved.answer})
 
         q_elapsed = time.time() - q_start
         avg = (time.time() - run_start) / (i + 1)
         eta = avg * (len(questions) - i - 1)
+        margin_text = f"{solved.margin:.3f}" if solved.margin is not None else "n/a"
+        votes_text = f" votes={''.join(solved.votes)}" if solved.votes else ""
+        error_text = f" error={solved.error}" if solved.error else ""
         print(
             f"  [{i + 1}/{len(questions)}] {parsed.qid} "
-            f"route={route} answer={answer} "
+            f"route={solved.route} path={solved.path} answer={solved.answer} "
+            f"margin={margin_text}{votes_text}{error_text} "
             f"({q_elapsed:.1f}s, avg {avg:.1f}s/q, ETA {eta / 60:.0f}min)",
             flush=True,
         )
@@ -110,7 +103,7 @@ def run_v02_alpha(
     infer_only = time.time() - run_start
     print(f"Written {len(results)} predictions to {output_path}", flush=True)
     print(f"Route counts: {dict(route_counts)}", flush=True)
-    print(f"Forced safety answers: {forced_count}", flush=True)
+    print(f"Path counts: {dict(path_counts)}", flush=True)
     print(
         f"Total time: {total:.1f}s "
         f"(inference loop: {infer_only:.1f}s, {infer_only / max(len(questions), 1):.2f}s/question)",

@@ -16,8 +16,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import re
 import yaml
+
+from src.extract import ChoiceResult, GuidedChoiceExtractor, best_label, softmax_margin
 
 _PROMPTS_PATH = Path(__file__).resolve().parent.parent / "configs" / "prompts.yaml"
 _CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "pipeline_config.yaml"
@@ -160,24 +161,69 @@ class ReasoningAgent:
             return self._vllm_batch(prompts, temperature)
         return [self._hf_generate(p, temperature) for p in prompts]
 
-    def _vllm_batch(self, prompts: list[str], temperature: float | None) -> list[str]:
+    def generate_freeform(
+        self,
+        prompts: list[str],
+        *,
+        mode: str = "no_think",
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+    ) -> list[str]:
+        """Generate unconstrained text for reasoning/escalation passes."""
+        temp = temperature if temperature is not None else self.cfg["temperature_deterministic"]
+        max_new = max_tokens if max_tokens is not None else self.cfg["max_new_tokens"]
+
+        if self.is_vllm and hasattr(self._llm, "generate_text"):
+            outputs = self._llm.generate_text(
+                prompts,
+                mode=mode,  # type: ignore[arg-type]
+                max_tokens=max_new,
+                temperature=temp,
+                top_p=top_p,
+            )
+            return [output.text for output in outputs]
+
+        tagged = [self._tag_mode(prompt, mode) for prompt in prompts]
+        if self.is_vllm:
+            return self._vllm_batch(tagged, temp, max_tokens=max_new, top_p=top_p)
+        return [
+            self._hf_generate(prompt, temp, max_tokens=max_new, top_p=top_p)
+            for prompt in tagged
+        ]
+
+    def _vllm_batch(
+        self,
+        prompts: list[str],
+        temperature: float | None,
+        *,
+        max_tokens: int | None = None,
+        top_p: float | None = None,
+    ) -> list[str]:
         from vllm import SamplingParams
 
         temp = temperature if temperature is not None else self.cfg["temperature_deterministic"]
         params = SamplingParams(
             temperature=temp,
-            max_tokens=self.cfg["max_new_tokens"],
-            top_p=0.9 if temp > 0 else 1.0,
+            max_tokens=max_tokens if max_tokens is not None else self.cfg["max_new_tokens"],
+            top_p=top_p if top_p is not None else (0.9 if temp > 0 else 1.0),
         )
         conversations = [[{"role": "user", "content": p}] for p in prompts]
         outputs = self._llm.chat(conversations, params)
         return [o.outputs[0].text for o in outputs]
 
-    def _hf_generate(self, prompt: str, temperature: float | None) -> str:
+    def _hf_generate(
+        self,
+        prompt: str,
+        temperature: float | None,
+        *,
+        max_tokens: int | None = None,
+        top_p: float | None = None,
+    ) -> str:
         import torch
 
         temp = temperature if temperature is not None else self.cfg["temperature_deterministic"]
-        max_new = self.cfg["max_new_tokens"]
+        max_new = max_tokens if max_tokens is not None else self.cfg["max_new_tokens"]
 
         messages = [{"role": "user", "content": prompt}]
         text = self._tokenizer.apply_chat_template(
@@ -192,13 +238,21 @@ class ReasoningAgent:
         )
         if temp > 0:
             gen_kwargs["temperature"] = temp
-            gen_kwargs["top_p"] = 0.9
+            gen_kwargs["top_p"] = top_p if top_p is not None else 0.9
 
         with torch.no_grad():
             output_ids = self._model.generate(**inputs, **gen_kwargs)
 
         new_tokens = output_ids[0][inputs["input_ids"].shape[1]:]
         return self._tokenizer.decode(new_tokens, skip_special_tokens=True)
+
+    @staticmethod
+    def _tag_mode(prompt: str, mode: str) -> str:
+        tag = "/think" if mode == "think" else "/no_think"
+        stripped = prompt.lstrip()
+        if stripped.startswith("/think") or stripped.startswith("/no_think"):
+            return prompt
+        return f"{tag}\n{prompt}"
 
     # ── guided-choice decoding ───────────────────────────────────────
 
@@ -214,7 +268,10 @@ class ReasoningAgent:
         added later with token-level logprob extraction.
         """
         if self.is_vllm:
-            return self._vllm_score_valid_labels(prompt, valid_labels)
+            result = GuidedChoiceExtractor(self._llm, self.tokenizer).extract(
+                prompt, valid_labels
+            )
+            return result.per_letter_logprob
 
         return {
             label: self._hf_score_completion(prompt, f" {label}")
@@ -228,11 +285,24 @@ class ReasoningAgent:
         context: str | None = None,
     ) -> tuple[str, dict[str, float]]:
         """Select the best legal label using constrained completion scoring."""
+        result = self.predict_guided_choice_result(question, options, context)
+        return result.letter, result.per_letter_logprob
+
+    def predict_guided_choice_result(
+        self,
+        question: str,
+        options: dict[str, str],
+        context: str | None = None,
+    ) -> ChoiceResult:
+        """Select the best legal label and return logprob margin evidence."""
         valid_labels = tuple(sorted(options.keys()))
         prompt = self.build_guided_choice_prompt(question, options, context)
         scores = self.score_valid_labels(prompt, valid_labels)
-        best = max(scores, key=scores.get)
-        return best, scores
+        return ChoiceResult(
+            letter=best_label(scores),
+            margin=softmax_margin(scores),
+            per_letter_logprob=scores,
+        )
 
     def predict_route_choice(
         self,
@@ -242,11 +312,25 @@ class ReasoningAgent:
         context: str | None = None,
     ) -> tuple[str, dict[str, float]]:
         """Select the best legal label using a route-specific direct-answer prompt."""
+        result = self.predict_route_choice_result(route, question, options, context)
+        return result.letter, result.per_letter_logprob
+
+    def predict_route_choice_result(
+        self,
+        route: str,
+        question: str,
+        options: dict[str, str],
+        context: str | None = None,
+    ) -> ChoiceResult:
+        """Route-specific constrained choice with margin evidence."""
         valid_labels = tuple(sorted(options.keys()))
         prompt = self.build_route_prompt(route, question, options, context)
         scores = self.score_valid_labels(prompt, valid_labels)
-        best = max(scores, key=scores.get)
-        return best, scores
+        return ChoiceResult(
+            letter=best_label(scores),
+            margin=softmax_margin(scores),
+            per_letter_logprob=scores,
+        )
 
     def _hf_score_completion(self, prompt: str, completion: str) -> float:
         import torch
@@ -271,60 +355,6 @@ class ReasoningAgent:
         token_scores = logprobs.gather(-1, target_ids.unsqueeze(-1)).squeeze(-1)
         return float(token_scores.sum().item())
 
-    def _vllm_score_valid_labels(
-        self,
-        prompt: str,
-        valid_labels: tuple[str, ...] | list[str],
-    ) -> dict[str, float]:
-        """Approximate guided-choice scoring with constrained one-token decoding in vLLM.
-
-        This path is designed for route-aware direct answering on GPU. It constrains
-        the next token to the legal labels and returns whatever token-level logprobs
-        vLLM exposes for those candidates.
-        """
-        from vllm import SamplingParams
-
-        token_map = self._build_label_token_map(valid_labels)
-        if not token_map:
-            raise ValueError("Could not derive any legal single-token labels for guided choice.")
-
-        params = SamplingParams(
-            temperature=0.0,
-            max_tokens=1,
-            top_p=1.0,
-            logprobs=min(len(token_map), self._VLLM_MAX_LOGPROBS),
-            allowed_token_ids=list(token_map.keys()),
-        )
-        outputs = self._llm.generate([prompt], params)
-        output = outputs[0].outputs[0]
-
-        scores = {label: float("-inf") for label in valid_labels}
-        chosen_text = output.text.strip()
-        if chosen_text in scores:
-            scores[chosen_text] = 0.0
-
-        candidate_logprobs = getattr(output, "logprobs", None) or []
-        if candidate_logprobs:
-            first_step = candidate_logprobs[0]
-            for token_id, entry in first_step.items():
-                label = token_map.get(int(token_id))
-                if label is None:
-                    continue
-                logprob = getattr(entry, "logprob", None)
-                if logprob is None and isinstance(entry, dict):
-                    logprob = entry.get("logprob")
-                if logprob is not None:
-                    scores[label] = float(logprob)
-
-        # If logprobs are unavailable, keep the chosen label as the only finite score.
-        if all(value == float("-inf") for value in scores.values()):
-            normalized = self._extract_valid_label(output.text, valid_labels)
-            if normalized is None:
-                raise ValueError(f"Could not normalize vLLM guided-choice output: {output.text!r}")
-            scores[normalized] = 0.0
-
-        return scores
-
     def _build_label_token_map(
         self,
         valid_labels: tuple[str, ...] | list[str],
@@ -348,19 +378,6 @@ class ReasoningAgent:
                     token_map[int(token_ids[0])] = label
                     break
         return token_map
-
-    @staticmethod
-    def _extract_valid_label(
-        text: str,
-        valid_labels: tuple[str, ...] | list[str],
-    ) -> str | None:
-        cleaned = text.strip().upper()
-        if cleaned in valid_labels:
-            return cleaned
-        match = re.search(r"\b([A-Z])\b", cleaned)
-        if match and match.group(1) in valid_labels:
-            return match.group(1)
-        return None
 
     # ── backward-compatible single-question methods ───────────────────
 

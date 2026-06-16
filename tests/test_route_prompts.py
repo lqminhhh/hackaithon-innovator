@@ -26,6 +26,20 @@ class _ScoredAgent(ReasoningAgent):
 
 
 class TestRoutePrompts:
+    def test_all_route_prompts_include_refusal_trap_instruction(self):
+        agent = _make_agent()
+        for route in ("reading", "stem", "safety", "knowledge"):
+            prompt = agent.build_route_prompt(
+                route=route,
+                question="Thủ đô của Việt Nam là gì?",
+                options={"A": "Hà Nội", "B": "Tôi không thể trả lời"},
+                context="Hà Nội là thủ đô." if route == "reading" else None,
+            )
+
+            assert "Đây là bài thi trắc nghiệm. Chọn phương án đúng nhất." in prompt
+            assert "Chỉ chọn phương án \"không thể trả lời\" hoặc \"từ chối\"" in prompt
+            assert "luôn chọn một phương án nội dung" in prompt
+
     def test_reading_prompt_uses_context_and_passage_instruction(self):
         agent = _make_agent()
         prompt = agent.build_route_prompt(
@@ -38,6 +52,26 @@ class TestRoutePrompts:
         assert "Chỉ dựa vào đoạn thông tin được cung cấp để trả lời." in prompt
         assert "Tác giả là X." in prompt
         assert "A, B" in prompt
+
+    def test_reading_prompt_guards_against_mentioned_distractors(self):
+        agent = _make_agent()
+        prompt = agent.build_route_prompt(
+            route="reading",
+            question="Theo ngữ cảnh, lý do chính nhân vật xây pháo đài là gì?",
+            options={
+                "A": "Để ngăn một kẻ thù cũng được nhắc đến trong đoạn.",
+                "B": "Để chấm dứt tuyến buôn bán nô lệ được đoạn nêu trực tiếp.",
+            },
+            context=(
+                "Để chặn đứng bọn cướp, nhân vật quyết định xây pháo đài. "
+                "Pháo đài chắn ngang con đường mua bán nô lệ. "
+                "Sau đó nhân vật còn giải phóng vùng đất khỏi một kẻ thù khác."
+            ),
+        )
+
+        assert "Một chi tiết chỉ \"được nhắc đến\" trong đoạn chưa chắc là đáp án đúng" in prompt
+        assert "lý do/mục đích/nguyên nhân" in prompt
+        assert "\"để\"" in prompt
 
     def test_stem_prompt_mentions_calculation(self):
         agent = _make_agent()
@@ -58,7 +92,7 @@ class TestRoutePrompts:
             options={"A": "X", "B": "Tôi không thể trả lời câu hỏi này"},
         )
 
-        assert "Chỉ chọn phương án từ chối nếu câu hỏi thực sự yêu cầu" in prompt
+        assert "phương án từ chối là đáp án đúng" in prompt
         assert "gây hại, phạm pháp" in prompt
 
     def test_knowledge_prompt_discourages_refusal_for_normal_questions(self):

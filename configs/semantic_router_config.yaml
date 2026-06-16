@@ -1,0 +1,16 @@
+model:
+  name: "BAAI/bge-m3"
+
+scoring:
+  top_k_per_route: 3
+  min_top_score: 0.35
+  min_override_margin: 0.08
+
+policy:
+  review_routes:
+    - knowledge
+    - stem
+  allow_override_routes:
+    - knowledge
+    - stem
+  require_ambiguity: true
