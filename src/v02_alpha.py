@@ -82,25 +82,29 @@ def run_v02_alpha(
         route_counts[route] += 1
 
         forced = get_forced_answer(parsed, route)
+        margin: float | None = None
         if forced is not None:
             answer = forced
             forced_count += 1
         else:
-            answer, _ = agent.predict_route_choice(
+            choice = agent.predict_route_choice_result(
                 route=route,
                 question=parsed.query,
                 options=parsed.options,
                 context=parsed.context if route == "reading" else None,
             )
+            answer = choice.letter
+            margin = choice.margin
 
         results.append({"qid": parsed.qid, "answer": answer})
 
         q_elapsed = time.time() - q_start
         avg = (time.time() - run_start) / (i + 1)
         eta = avg * (len(questions) - i - 1)
+        margin_text = f"{margin:.3f}" if margin is not None else "forced"
         print(
             f"  [{i + 1}/{len(questions)}] {parsed.qid} "
-            f"route={route} answer={answer} "
+            f"route={route} answer={answer} margin={margin_text} "
             f"({q_elapsed:.1f}s, avg {avg:.1f}s/q, ETA {eta / 60:.0f}min)",
             flush=True,
         )

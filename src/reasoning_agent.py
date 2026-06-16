@@ -16,8 +16,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import re
 import yaml
+
+from src.extract import ChoiceResult, GuidedChoiceExtractor, best_label, softmax_margin
 
 _PROMPTS_PATH = Path(__file__).resolve().parent.parent / "configs" / "prompts.yaml"
 _CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "pipeline_config.yaml"
@@ -214,7 +215,10 @@ class ReasoningAgent:
         added later with token-level logprob extraction.
         """
         if self.is_vllm:
-            return self._vllm_score_valid_labels(prompt, valid_labels)
+            result = GuidedChoiceExtractor(self._llm, self.tokenizer).extract(
+                prompt, valid_labels
+            )
+            return result.per_letter_logprob
 
         return {
             label: self._hf_score_completion(prompt, f" {label}")
@@ -228,11 +232,24 @@ class ReasoningAgent:
         context: str | None = None,
     ) -> tuple[str, dict[str, float]]:
         """Select the best legal label using constrained completion scoring."""
+        result = self.predict_guided_choice_result(question, options, context)
+        return result.letter, result.per_letter_logprob
+
+    def predict_guided_choice_result(
+        self,
+        question: str,
+        options: dict[str, str],
+        context: str | None = None,
+    ) -> ChoiceResult:
+        """Select the best legal label and return logprob margin evidence."""
         valid_labels = tuple(sorted(options.keys()))
         prompt = self.build_guided_choice_prompt(question, options, context)
         scores = self.score_valid_labels(prompt, valid_labels)
-        best = max(scores, key=scores.get)
-        return best, scores
+        return ChoiceResult(
+            letter=best_label(scores),
+            margin=softmax_margin(scores),
+            per_letter_logprob=scores,
+        )
 
     def predict_route_choice(
         self,
@@ -242,11 +259,25 @@ class ReasoningAgent:
         context: str | None = None,
     ) -> tuple[str, dict[str, float]]:
         """Select the best legal label using a route-specific direct-answer prompt."""
+        result = self.predict_route_choice_result(route, question, options, context)
+        return result.letter, result.per_letter_logprob
+
+    def predict_route_choice_result(
+        self,
+        route: str,
+        question: str,
+        options: dict[str, str],
+        context: str | None = None,
+    ) -> ChoiceResult:
+        """Route-specific constrained choice with margin evidence."""
         valid_labels = tuple(sorted(options.keys()))
         prompt = self.build_route_prompt(route, question, options, context)
         scores = self.score_valid_labels(prompt, valid_labels)
-        best = max(scores, key=scores.get)
-        return best, scores
+        return ChoiceResult(
+            letter=best_label(scores),
+            margin=softmax_margin(scores),
+            per_letter_logprob=scores,
+        )
 
     def _hf_score_completion(self, prompt: str, completion: str) -> float:
         import torch
@@ -271,60 +302,6 @@ class ReasoningAgent:
         token_scores = logprobs.gather(-1, target_ids.unsqueeze(-1)).squeeze(-1)
         return float(token_scores.sum().item())
 
-    def _vllm_score_valid_labels(
-        self,
-        prompt: str,
-        valid_labels: tuple[str, ...] | list[str],
-    ) -> dict[str, float]:
-        """Approximate guided-choice scoring with constrained one-token decoding in vLLM.
-
-        This path is designed for route-aware direct answering on GPU. It constrains
-        the next token to the legal labels and returns whatever token-level logprobs
-        vLLM exposes for those candidates.
-        """
-        from vllm import SamplingParams
-
-        token_map = self._build_label_token_map(valid_labels)
-        if not token_map:
-            raise ValueError("Could not derive any legal single-token labels for guided choice.")
-
-        params = SamplingParams(
-            temperature=0.0,
-            max_tokens=1,
-            top_p=1.0,
-            logprobs=min(len(token_map), self._VLLM_MAX_LOGPROBS),
-            allowed_token_ids=list(token_map.keys()),
-        )
-        outputs = self._llm.generate([prompt], params)
-        output = outputs[0].outputs[0]
-
-        scores = {label: float("-inf") for label in valid_labels}
-        chosen_text = output.text.strip()
-        if chosen_text in scores:
-            scores[chosen_text] = 0.0
-
-        candidate_logprobs = getattr(output, "logprobs", None) or []
-        if candidate_logprobs:
-            first_step = candidate_logprobs[0]
-            for token_id, entry in first_step.items():
-                label = token_map.get(int(token_id))
-                if label is None:
-                    continue
-                logprob = getattr(entry, "logprob", None)
-                if logprob is None and isinstance(entry, dict):
-                    logprob = entry.get("logprob")
-                if logprob is not None:
-                    scores[label] = float(logprob)
-
-        # If logprobs are unavailable, keep the chosen label as the only finite score.
-        if all(value == float("-inf") for value in scores.values()):
-            normalized = self._extract_valid_label(output.text, valid_labels)
-            if normalized is None:
-                raise ValueError(f"Could not normalize vLLM guided-choice output: {output.text!r}")
-            scores[normalized] = 0.0
-
-        return scores
-
     def _build_label_token_map(
         self,
         valid_labels: tuple[str, ...] | list[str],
@@ -348,19 +325,6 @@ class ReasoningAgent:
                     token_map[int(token_ids[0])] = label
                     break
         return token_map
-
-    @staticmethod
-    def _extract_valid_label(
-        text: str,
-        valid_labels: tuple[str, ...] | list[str],
-    ) -> str | None:
-        cleaned = text.strip().upper()
-        if cleaned in valid_labels:
-            return cleaned
-        match = re.search(r"\b([A-Z])\b", cleaned)
-        if match and match.group(1) in valid_labels:
-            return match.group(1)
-        return None
 
     # ── backward-compatible single-question methods ───────────────────
 
