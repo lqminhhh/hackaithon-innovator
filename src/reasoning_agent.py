@@ -161,24 +161,69 @@ class ReasoningAgent:
             return self._vllm_batch(prompts, temperature)
         return [self._hf_generate(p, temperature) for p in prompts]
 
-    def _vllm_batch(self, prompts: list[str], temperature: float | None) -> list[str]:
+    def generate_freeform(
+        self,
+        prompts: list[str],
+        *,
+        mode: str = "no_think",
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        top_p: float | None = None,
+    ) -> list[str]:
+        """Generate unconstrained text for reasoning/escalation passes."""
+        temp = temperature if temperature is not None else self.cfg["temperature_deterministic"]
+        max_new = max_tokens if max_tokens is not None else self.cfg["max_new_tokens"]
+
+        if self.is_vllm and hasattr(self._llm, "generate_text"):
+            outputs = self._llm.generate_text(
+                prompts,
+                mode=mode,  # type: ignore[arg-type]
+                max_tokens=max_new,
+                temperature=temp,
+                top_p=top_p,
+            )
+            return [output.text for output in outputs]
+
+        tagged = [self._tag_mode(prompt, mode) for prompt in prompts]
+        if self.is_vllm:
+            return self._vllm_batch(tagged, temp, max_tokens=max_new, top_p=top_p)
+        return [
+            self._hf_generate(prompt, temp, max_tokens=max_new, top_p=top_p)
+            for prompt in tagged
+        ]
+
+    def _vllm_batch(
+        self,
+        prompts: list[str],
+        temperature: float | None,
+        *,
+        max_tokens: int | None = None,
+        top_p: float | None = None,
+    ) -> list[str]:
         from vllm import SamplingParams
 
         temp = temperature if temperature is not None else self.cfg["temperature_deterministic"]
         params = SamplingParams(
             temperature=temp,
-            max_tokens=self.cfg["max_new_tokens"],
-            top_p=0.9 if temp > 0 else 1.0,
+            max_tokens=max_tokens if max_tokens is not None else self.cfg["max_new_tokens"],
+            top_p=top_p if top_p is not None else (0.9 if temp > 0 else 1.0),
         )
         conversations = [[{"role": "user", "content": p}] for p in prompts]
         outputs = self._llm.chat(conversations, params)
         return [o.outputs[0].text for o in outputs]
 
-    def _hf_generate(self, prompt: str, temperature: float | None) -> str:
+    def _hf_generate(
+        self,
+        prompt: str,
+        temperature: float | None,
+        *,
+        max_tokens: int | None = None,
+        top_p: float | None = None,
+    ) -> str:
         import torch
 
         temp = temperature if temperature is not None else self.cfg["temperature_deterministic"]
-        max_new = self.cfg["max_new_tokens"]
+        max_new = max_tokens if max_tokens is not None else self.cfg["max_new_tokens"]
 
         messages = [{"role": "user", "content": prompt}]
         text = self._tokenizer.apply_chat_template(
@@ -193,13 +238,21 @@ class ReasoningAgent:
         )
         if temp > 0:
             gen_kwargs["temperature"] = temp
-            gen_kwargs["top_p"] = 0.9
+            gen_kwargs["top_p"] = top_p if top_p is not None else 0.9
 
         with torch.no_grad():
             output_ids = self._model.generate(**inputs, **gen_kwargs)
 
         new_tokens = output_ids[0][inputs["input_ids"].shape[1]:]
         return self._tokenizer.decode(new_tokens, skip_special_tokens=True)
+
+    @staticmethod
+    def _tag_mode(prompt: str, mode: str) -> str:
+        tag = "/think" if mode == "think" else "/no_think"
+        stripped = prompt.lstrip()
+        if stripped.startswith("/think") or stripped.startswith("/no_think"):
+            return prompt
+        return f"{tag}\n{prompt}"
 
     # ── guided-choice decoding ───────────────────────────────────────
 
