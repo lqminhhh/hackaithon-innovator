@@ -1,7 +1,8 @@
 models:
   primary: "Qwen/Qwen3.5-4B"
   secondary: "google/gemma-2-9b-it"
-  embedder: "keepitreal/vietnamese-sbert"
+  embedder: "BAAI/bge-m3"
+  reranker: "Qwen/Qwen3-Reranker-0.6B"
 
 retrieval:
   chunk_size: 300
@@ -10,6 +11,16 @@ retrieval:
   relevance_threshold: 0.65
   use_bm25: true
   bm25_max_corpus: 50000
+
+rag:
+  index_path: "data/vmlu_faiss.index"
+  chunks_path: "data/vmlu_chunks.jsonl"
+  top_k: 20
+  top_n: 3
+  rerank_min: 0.5
+  timeout: 5.0
+  use_reranker: true
+
 inference:
   max_new_tokens: 512
   temperature_deterministic: 0.1

@@ -122,7 +122,12 @@ class ReasoningAgent:
         options: dict[str, str],
         context: str | None = None,
     ) -> str:
-        """Build a route-specific direct-answer prompt."""
+        """Build a route-specific direct-answer prompt.
+
+        For the knowledge route, passing ``context`` switches to the
+        ``knowledge_rag`` template which frames the context as reference Q&A
+        pairs rather than a definitive passage.
+        """
         route_to_template = {
             "reading": "reading_direct",
             "stem": "stem_direct",
@@ -142,6 +147,10 @@ class ReasoningAgent:
         if route == "reading":
             return self.prompts[template_name].format(
                 retrieved_context=context or "", **kwargs
+            )
+        if route == "knowledge" and context is not None:
+            return self.prompts["knowledge_rag"].format(
+                retrieved_context=context, **kwargs
             )
         return self.prompts[template_name].format(**kwargs)
 

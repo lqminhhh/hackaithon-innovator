@@ -1,11 +1,14 @@
-"""Minimal v02 alpha pipeline.
+"""v02 alpha pipeline with optional S6 RAG.
 
 Architecture:
     questions -> parser -> router -> forced safety override OR
-    route-specific prompt -> guided-choice scoring -> CSV output
+    route-specific prompt -> guided-choice scoring ->
+    (knowledge, low-margin) -> RAG retrieval + re-answer OR self-consistency
+    -> CSV output
 
-This is the first runnable version of the route-aware design. It keeps the
-system intentionally small: no retrieval, no confidence gating, no voting.
+RAG is enabled with ``--use-rag``. It requires a pre-built FAISS index
+(run ``python scripts/build_vmlu_index.py`` first). Pass ``--no-reranker``
+to skip the cross-encoder and use cosine-only scoring (saves ~1-2 GB VRAM).
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ import sys
 import time
 from collections import Counter
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 import yaml
@@ -27,6 +31,9 @@ from src.parser import parse_question
 from src.reasoning_agent import ReasoningAgent
 from src.solve import solve_question
 
+if TYPE_CHECKING:
+    from src.rag import RAGEngine
+
 _CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "v02_alpha_config.yaml"
 
 
@@ -35,12 +42,41 @@ def _load_config() -> dict:
         return yaml.safe_load(f)
 
 
+def _load_rag(use_reranker: bool) -> "RAGEngine | None":
+    """Load RAGEngine, returning None on any error so the run is never blocked."""
+    try:
+        from src.rag import RAGEngine
+        from src.config import VMLU_INDEX_PATH, VMLU_CHUNKS_PATH
+
+        if not Path(VMLU_INDEX_PATH).exists():
+            print(
+                f"  [RAG] Index not found at {VMLU_INDEX_PATH}. "
+                "Run: python scripts/build_vmlu_index.py",
+                flush=True,
+            )
+            return None
+        if not Path(VMLU_CHUNKS_PATH).exists():
+            print(
+                f"  [RAG] Chunks file not found at {VMLU_CHUNKS_PATH}. "
+                "Run: python scripts/build_vmlu_index.py",
+                flush=True,
+            )
+            return None
+
+        return RAGEngine(use_reranker=use_reranker)
+    except Exception as exc:
+        print(f"  [RAG] Failed to load RAGEngine ({exc}), running without RAG", flush=True)
+        return None
+
+
 def run_v02_alpha(
     input_path: str,
     output_path: str,
     model_id: str | None = None,
     limit: int | None = None,
-):
+    use_rag: bool = False,
+    use_reranker: bool = True,
+) -> None:
     cfg = _load_config()
     t_start = time.time()
 
@@ -62,6 +98,18 @@ def run_v02_alpha(
         agent = ReasoningAgent(model=model, tokenizer=tokenizer)
         print(f"Primary model loaded in {time.time() - t_start:.1f}s", flush=True)
 
+    rag: RAGEngine | None = None
+    if use_rag:
+        print(
+            f"Loading RAG engine (reranker={'enabled' if use_reranker else 'disabled'})...",
+            flush=True,
+        )
+        rag = _load_rag(use_reranker=use_reranker)
+        if rag is not None:
+            print("RAG engine ready.", flush=True)
+        else:
+            print("RAG unavailable; continuing without retrieval.", flush=True)
+
     questions = load_questions(input_path)
     if limit is None:
         limit = cfg.get("inference", {}).get("max_questions")
@@ -78,7 +126,7 @@ def run_v02_alpha(
     for i, q in enumerate(questions):
         q_start = time.time()
         parsed = parse_question(q)
-        solved = solve_question(agent, parsed)
+        solved = solve_question(agent, parsed, rag=rag)
         route_counts[solved.route] += 1
         path_counts[solved.path] += 1
 
@@ -111,8 +159,8 @@ def run_v02_alpha(
     )
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Minimal route-aware v02 alpha pipeline")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Route-aware v02 alpha pipeline with optional S6 RAG")
     parser.add_argument("--input", required=True, help="Path to input file (JSON or CSV)")
     parser.add_argument("--output", required=True, help="Path to output submission CSV")
     parser.add_argument(
@@ -126,9 +174,34 @@ def main():
         default=None,
         help="Optional cap on number of questions to process",
     )
+    parser.add_argument(
+        "--use-rag",
+        action="store_true",
+        default=False,
+        help=(
+            "Enable S6 RAG for low-margin knowledge questions. "
+            "Requires a pre-built index (run scripts/build_vmlu_index.py first)."
+        ),
+    )
+    parser.add_argument(
+        "--no-reranker",
+        action="store_true",
+        default=False,
+        help=(
+            "When --use-rag is set, skip the cross-encoder reranker and use "
+            "cosine similarity scores only. Saves ~1-2 GB VRAM."
+        ),
+    )
     args = parser.parse_args()
 
-    run_v02_alpha(args.input, args.output, args.model_id, args.limit)
+    run_v02_alpha(
+        args.input,
+        args.output,
+        args.model_id,
+        args.limit,
+        use_rag=args.use_rag,
+        use_reranker=not args.no_reranker,
+    )
 
 
 if __name__ == "__main__":
