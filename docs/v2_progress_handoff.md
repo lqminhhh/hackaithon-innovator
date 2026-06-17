@@ -75,10 +75,10 @@ Be careful with:
 | S1 vLLM + model wrapper | Done structurally | `src/llm.py`, `src/models.py`, configs | Defaults to `Qwen/Qwen3.5-4B`; supports think/no-think; fake-engine tests pass |
 | S2 guided choice + margin | Done | `src/extract.py`, `src/reasoning_agent.py` | Returns `ChoiceResult(letter, margin, per_letter_logprob)`; no regex fallback in v2 extraction |
 | S3 Layer-1 router + prompts | Done | `src/parser.py`, `src/router.py`, `configs/prompts.yaml` | `route_l1()` can abstain; `route_question()` defaults to knowledge; refusal-trap line added to all route prompts |
-| S4 escalation + self-consistency | Done and scored | `src/solve.py`, `src/v02_alpha.py` | `v02_gamma` reached 79.91%; STEM always self-consistency votes; low-margin knowledge votes; reading reason/purpose questions use targeted `n=3` self-consistency; no RAG yet |
+| S4 escalation + self-consistency | Done and scored | `src/solve.py`, `src/v02_alpha.py` | `v02_gamma` reached 79.91%; STEM always self-consistency votes; low-margin knowledge votes; reading reason/purpose questions use targeted `n=3` self-consistency |
+| S6 RAG | Done and scored | `src/rag.py`, `scripts/build_vmlu_index.py`, `src/solve.py`, `src/v02_alpha.py` | `v02_gamma_rag` scored 78.83% (-1.08 pts vs gamma); BGE-m3 + Qwen3-Reranker-0.6B; 606-chunk VMLU dev/valid index (34 knowledge-gap subjects); reranker OOM'd on 24 GB GPU (cosine-only fallback); `--use-rag` / `--no-reranker` CLI flags added |
 | S7 never-crash runner + checkpoint | Not done | TBD `run.py` | Current `solve_question()` catches per-question errors, but no checkpoint/resume runner yet |
 | S5 semantic router | Scaffold exists | `src/semantic_router.py`, `configs/semantic_router_config.yaml`, `data/route_prototypes.yaml` | Not integrated into main v2 runner |
-| S6 RAG | Older implementation exists | `src/retrieval_agent.py`, `scripts/build_index.py` | Not integrated into v2 route policy yet; also `retrieve()` has a known `score_map` bug in sequential path |
 | S8 dev set + ablation | Not done | TBD | Needed for principled threshold tuning and creativity story |
 
 ## Current Measured Results
@@ -88,9 +88,10 @@ See [version_results.md](/Users/minhle/Documents/hackaithon-innovator/docs/versi
 Known measured v2 results:
 
 ```text
-v02_alpha: 54.43%
-v02_beta:  60.48%
-v02_gamma: 79.91%
+v02_alpha:     54.43%
+v02_beta:      60.48%
+v02_gamma:     79.91%   ← current best accuracy
+v02_gamma_rag: 78.83%   ← S6 RAG run (degraded due to VRAM OOM on reranker)
 ```
 
 `v02_beta` corresponds roughly to S0-S3 plus S2 margin extraction, before S4
@@ -105,6 +106,27 @@ inference loop:  4987.0s
 per question:    10.77s/question
 output:          data/submission_v02_gamma.csv
 ```
+
+`v02_gamma_rag` added S6 RAG on top of gamma (same S4 policy). It was slower
+and slightly less accurate due to VRAM pressure on the 24 GB RunPod GPU:
+
+```text
+total runtime:   8788.7s
+inference loop:  8352.0s
+per question:    18.04s/question
+output:          data/submission_v02_gamma_rag.csv (or submission_v02_rag.csv)
+accuracy:        78.83%   (-1.08 pts vs gamma)
+```
+
+Root cause of regression:
+- Qwen3-Reranker-0.6B OOM'd on every call (vLLM held ~20 GB; RAG added ~4 GB on same card).
+- Fell back to cosine-only gating, which is weaker than cross-encoder scoring.
+- STEM self-consistency slowed from ~20 s/q to ~25-45 s/q due to GPU contention.
+
+To fix for the next RAG run:
+- Lower `gpu_memory_utilization` to 0.70 in `configs/pipeline_config.yaml`, OR
+- Offload BGE-m3 / reranker to CPU via `--no-reranker` + CPU embedder device, OR
+- Use `max_model_len: 4096` to shrink the KV cache and free ~3 GB.
 
 The big lesson from `v02_gamma`: self-consistency works, especially for STEM and
 reading distractors, but the current per-question runner is too expensive for
@@ -167,8 +189,9 @@ forced_safety                    = 4
 
 - General fact/concept/recall question.
 - This is the only route that should eventually use RAG.
-- Current S4 path: direct answer; if margin is below `MARGIN_LOW`, run
-  self-consistency. RAG is deferred to S6.
+- Current S4+S6 path: direct answer; if margin is below `MARGIN_LOW`, attempt
+  RAG retrieval first (if `--use-rag`); if RAG context improves margin, return
+  the RAG answer; otherwise fall back to self-consistency.
 
 `safety`
 
@@ -204,9 +227,11 @@ Answer extraction and escalation:
 
 Semantic/RAG work:
 
+- [src/rag.py](/Users/minhle/Documents/hackaithon-innovator/src/rag.py) — S6 RAGEngine (BGE-m3 + Qwen reranker, integrated into solve.py)
+- [scripts/build_vmlu_index.py](/Users/minhle/Documents/hackaithon-innovator/scripts/build_vmlu_index.py) — offline index builder (VMLU dev+valid, 606 chunks)
 - [src/semantic_router.py](/Users/minhle/Documents/hackaithon-innovator/src/semantic_router.py)
 - [data/route_prototypes.yaml](/Users/minhle/Documents/hackaithon-innovator/data/route_prototypes.yaml)
-- [src/retrieval_agent.py](/Users/minhle/Documents/hackaithon-innovator/src/retrieval_agent.py)
+- [src/retrieval_agent.py](/Users/minhle/Documents/hackaithon-innovator/src/retrieval_agent.py) — older retrieval implementation, not the current S6 path
 
 ## Verification Commands
 
@@ -228,21 +253,42 @@ pytest -q \
   tests/test_pipeline_smoke.py
 ```
 
-Most recent result after S4 implementation:
+Most recent result after S6 RAG implementation:
 
 ```text
-75 passed
+164 passed   (all tests including tests/test_rag_s6.py)
+86 passed    (S6 tests only: pytest tests/test_rag_s6.py -v)
 ```
 
-Recent focused tests after the `reading_reason_self_consistency` change:
+Run S6 tests only:
 
 ```bash
-pytest -q tests/test_solve_s4.py
-pytest -q tests/test_route_prompts.py tests/test_parser.py tests/test_extract.py
+pytest tests/test_rag_s6.py -v
 ```
 
-```text
-34 passed
+Run all tests excluding legacy retrieval (needs faiss at import time):
+
+```bash
+pytest -q --ignore=tests/test_retrieval.py
+```
+
+Run the v2 pipeline with S6 RAG:
+
+```bash
+# Build the VMLU index first (run once on the GPU machine)
+python scripts/build_vmlu_index.py
+
+# Full run with RAG + reranker
+python src/v02_alpha.py \
+  --input data/public-test_1780368312.json \
+  --output data/submission_v02_rag.csv \
+  --use-rag
+
+# Full run with RAG, cosine-only (no reranker, saves ~1-2 GB VRAM)
+python src/v02_alpha.py \
+  --input data/public-test_1780368312.json \
+  --output data/submission_v02_rag_norerank.csv \
+  --use-rag --no-reranker
 ```
 
 Full `pytest` may still fail in some local environments if `faiss` is not
@@ -309,24 +355,50 @@ python main.py \
   unless asked.
 - The current code favors correctness experiments over speed. Wave batching is
   still needed if S4 proves accurate but too slow.
+- S6 RAG is wired in via `src/rag.py` + `scripts/build_vmlu_index.py`. The
+  index (`data/vmlu_faiss.index`) and chunks (`data/vmlu_chunks.jsonl`) are
+  gitignored; rebuild with `python scripts/build_vmlu_index.py` on the GPU machine.
+- `HF_HUB_ENABLE_HF_TRANSFER=1` on RunPod breaks model downloads unless
+  `pip install hf_transfer` is done first — or set the env var to `0`.
+- Qwen3.5 requires `transformers>=5.2.0` and `vllm>=0.17.0`; older versions
+  raise `KeyError: 'qwen3_5'`.
 
-## Recommended Next Step
+## Recommended Next Steps
 
-Optimize speed while protecting the `v02_gamma` accuracy.
+**Priority 1 — Fix RAG VRAM pressure (quick win)**
 
-Do not remove the reading reason/purpose gate yet; it is cheap and fixed a real
-high-confidence reading error. The highest-leverage experiment is to reduce
-STEM self-consistency cost:
+The reranker OOM'd in `v02_gamma_rag` because vLLM + RAG exceeded 24 GB.
+Try one of:
+```bash
+# Option A: lower vLLM reservation in configs/pipeline_config.yaml
+#   gpu_memory_utilization: 0.70   (frees ~3-4 GB)
+#   max_model_len: 4096             (shrinks KV cache)
+
+# Option B: run without reranker (cosine-only, ~1-2 GB less)
+python src/v02_alpha.py --input ... --output ... --use-rag --no-reranker
+
+# Option C: load RAG models on CPU (add device="cpu" in src/rag.py)
+```
+A clean reranker run is expected to recover the ~1 pt regression and possibly
+add +1 to +2 pts over gamma.
+
+**Priority 2 — Speed: v02_delta STEM gating**
+
+STEM self-consistency is the main runtime bottleneck (216 questions × ~30 s/q
+≈ 90 min). Add a high-margin early exit:
 
 ```text
 v02_delta_speed idea:
-  STEM direct margin >= 0.90 -> accept direct
+  STEM direct margin >= 0.90 -> accept direct (skip SC)
   STEM direct margin <  0.90 -> run self-consistency
 ```
 
 Use a 50-question slice first and compare accuracy, path counts, and runtime.
 If that is stable, run the full public test and log it as `v02_delta`.
 
-RAG should remain deferred until after speed tuning. The current bottleneck is
-not missing knowledge; it is that `stem_self_consistency` ran on 216 questions
-in `v02_gamma`.
+**Priority 3 — Expand RAG corpus**
+
+The current 606-chunk VMLU corpus is narrow (dev+valid only, 34 subjects).
+To improve recall, add Vietnamese Wikipedia excerpts or the VMLU test set
+Q&As (without answers) as retrieval candidates. Use `--append` in
+`scripts/build_vmlu_index.py` to incrementally extend the index.
