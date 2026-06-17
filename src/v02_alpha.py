@@ -33,6 +33,7 @@ from src.solve import solve_question
 
 if TYPE_CHECKING:
     from src.rag import RAGEngine
+    from src.semantic_router import SemanticRouter
 
 _CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "v02_alpha_config.yaml"
 
@@ -69,6 +70,22 @@ def _load_rag(use_reranker: bool) -> "RAGEngine | None":
         return None
 
 
+def _load_semantic_router() -> "SemanticRouter | None":
+    """Load S5 semantic router, returning None on error so inference can continue."""
+    try:
+        from src.semantic_router import SemanticRouter
+
+        router = SemanticRouter()
+        router.warmup()
+        return router
+    except Exception as exc:
+        print(
+            f"  [S5] Failed to load semantic router ({exc}), running without S5",
+            flush=True,
+        )
+        return None
+
+
 def run_v02_alpha(
     input_path: str,
     output_path: str,
@@ -76,6 +93,7 @@ def run_v02_alpha(
     limit: int | None = None,
     use_rag: bool = False,
     use_reranker: bool = True,
+    use_semantic_router: bool = False,
 ) -> None:
     cfg = _load_config()
     t_start = time.time()
@@ -110,6 +128,15 @@ def run_v02_alpha(
         else:
             print("RAG unavailable; continuing without retrieval.", flush=True)
 
+    semantic_router: SemanticRouter | None = None
+    if use_semantic_router:
+        print("Loading S5 semantic router...", flush=True)
+        semantic_router = _load_semantic_router()
+        if semantic_router is not None:
+            print("S5 semantic router ready.", flush=True)
+        else:
+            print("S5 unavailable; continuing with Layer-1 routes only.", flush=True)
+
     questions = load_questions(input_path)
     if limit is None:
         limit = cfg.get("inference", {}).get("max_questions")
@@ -126,7 +153,7 @@ def run_v02_alpha(
     for i, q in enumerate(questions):
         q_start = time.time()
         parsed = parse_question(q)
-        solved = solve_question(agent, parsed, rag=rag)
+        solved = solve_question(agent, parsed, rag=rag, semantic_router=semantic_router)
         route_counts[solved.route] += 1
         path_counts[solved.path] += 1
 
@@ -137,11 +164,12 @@ def run_v02_alpha(
         eta = avg * (len(questions) - i - 1)
         margin_text = f"{solved.margin:.3f}" if solved.margin is not None else "n/a"
         votes_text = f" votes={''.join(solved.votes)}" if solved.votes else ""
+        s5_text = _format_s5_log(solved)
         error_text = f" error={solved.error}" if solved.error else ""
         print(
             f"  [{i + 1}/{len(questions)}] {parsed.qid} "
             f"route={solved.route} path={solved.path} answer={solved.answer} "
-            f"margin={margin_text}{votes_text}{error_text} "
+            f"margin={margin_text}{votes_text}{s5_text}{error_text} "
             f"({q_elapsed:.1f}s, avg {avg:.1f}s/q, ETA {eta / 60:.0f}min)",
             flush=True,
         )
@@ -157,6 +185,17 @@ def run_v02_alpha(
         f"(inference loop: {infer_only:.1f}s, {infer_only / max(len(questions), 1):.2f}s/question)",
         flush=True,
     )
+
+
+def _format_s5_log(solved) -> str:
+    if solved.semantic_error:
+        return f" s5_error={solved.semantic_error}"
+    if solved.semantic_route is None:
+        return ""
+
+    marker = "->" if solved.route_override else "~"
+    source = solved.layer1_route or "?"
+    return f" s5={source}{marker}{solved.semantic_route}"
 
 
 def main() -> None:
@@ -192,6 +231,15 @@ def main() -> None:
             "cosine similarity scores only. Saves ~1-2 GB VRAM."
         ),
     )
+    parser.add_argument(
+        "--use-semantic-router",
+        action="store_true",
+        default=False,
+        help=(
+            "Enable S5 Layer-2 semantic route overrides. This is opt-in so "
+            "baseline v02_alpha runs remain reproducible."
+        ),
+    )
     args = parser.parse_args()
 
     run_v02_alpha(
@@ -201,6 +249,7 @@ def main() -> None:
         args.limit,
         use_rag=args.use_rag,
         use_reranker=not args.no_reranker,
+        use_semantic_router=args.use_semantic_router,
     )
 
 
