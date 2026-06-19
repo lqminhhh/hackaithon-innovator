@@ -93,26 +93,6 @@ def load_primary_model(
     return _load_model(model_id or cfg["models"]["primary"], device_map)
 
 
-def load_secondary_model(device_map: str | None = None):
-    """Load Gemma-2-9B-IT."""
-    cfg = _load_config()
-    return _load_model(cfg["models"]["secondary"], device_map)
-
-
-def load_embedder(device: str | None = None):
-    """Load the Vietnamese-tuned sentence embedding model.
-
-    Pass device="cpu" to keep GPU free for vLLM.
-    """
-    from sentence_transformers import SentenceTransformer
-
-    cfg = _load_config()
-    kwargs = {}
-    if device is not None:
-        kwargs["device"] = device
-    return SentenceTransformer(cfg["models"]["embedder"], **kwargs)
-
-
 def load_vllm_primary(model_id: str | None = None):
     """Load primary model via vLLM for fast batched inference (CUDA only)."""
     from src.llm import LLM
