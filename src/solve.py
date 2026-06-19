@@ -53,6 +53,7 @@ def solve_question(
     parsed: ParsedQuestion,
     rag: "RAGEngine | None" = None,
     semantic_router: "SemanticRouter | None" = None,
+    sc_batch_size: int | None = None,
 ) -> SolveResult:
     """Solve one parsed question using the S4 policy with optional S6 RAG.
 
@@ -69,6 +70,9 @@ def solve_question(
     semantic_router:
         Optional S5 Layer-2 router. When provided, it may override the Layer-1
         route before route-specific answering begins.
+    sc_batch_size:
+        Optional maximum batch size for self-consistency generations. Use a
+        small value for 16GB VRAM-safe runs.
     """
     route, route_meta = _route_with_semantics(parsed, semantic_router)
     try:
@@ -87,7 +91,7 @@ def solve_question(
         first = _direct_choice(agent, parsed, route)
 
         if route == "stem":
-            vote = self_consistency(agent, parsed, route, first)
+            vote = self_consistency(agent, parsed, route, first, batch_size=sc_batch_size)
             return SolveResult(
                 qid=parsed.qid,
                 answer=vote.letter,
@@ -100,7 +104,14 @@ def solve_question(
             )
 
         if route == "reading" and _is_reason_purpose_question(parsed.query):
-            vote = self_consistency(agent, parsed, route, first, n=3)
+            vote = self_consistency(
+                agent,
+                parsed,
+                route,
+                first,
+                n=3,
+                batch_size=sc_batch_size,
+            )
             return SolveResult(
                 qid=parsed.qid,
                 answer=vote.letter,
@@ -119,7 +130,7 @@ def solve_question(
                 if rag_result is not None:
                     return rag_result
 
-            vote = self_consistency(agent, parsed, route, first)
+            vote = self_consistency(agent, parsed, route, first, batch_size=sc_batch_size)
             return SolveResult(
                 qid=parsed.qid,
                 answer=vote.letter,
@@ -229,19 +240,25 @@ def self_consistency(
     first: ChoiceResult | None = None,
     *,
     n: int = SC_N,
+    batch_size: int | None = None,
 ) -> VoteResult:
     """Run n free-reasoning samples and majority vote over constrained letters."""
     options = parsed.options
     valid_labels = tuple(sorted(options.keys()))
     reasoning_prompt = _build_reasoning_prompt(parsed, route)
     prompts = [reasoning_prompt] * n
-    reasonings = agent.generate_freeform(
-        prompts,
-        mode="think",
-        max_tokens=_route_tokens(route),
-        temperature=SC_TEMP,
-        top_p=0.95,
-    )
+    reasonings: list[str] = []
+    chunk_size = batch_size if batch_size is not None and batch_size > 0 else len(prompts)
+    for start in range(0, len(prompts), chunk_size):
+        reasonings.extend(
+            agent.generate_freeform(
+                prompts[start : start + chunk_size],
+                mode="think",
+                max_tokens=_route_tokens(route),
+                temperature=SC_TEMP,
+                top_p=0.95,
+            )
+        )
 
     choices: list[ChoiceResult] = []
     for reasoning in reasonings:

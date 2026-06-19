@@ -1,10 +1,7 @@
-"""v02 alpha: route-aware guided-choice baseline.
+"""v01 baseline: simplest one-model LLM pipeline.
 
-New naming after the refactor:
-    v02_alpha = old v02_beta
-
-Final-inference compliant:
-    one primary LLM only, no S5 embedder, no RAG, no reranker.
+This preserves the baseline architecture but uses the same configured primary
+model as the v02 runners instead of the old Qwen2.5 instruct model.
 """
 
 from __future__ import annotations
@@ -15,19 +12,19 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.version_runner import add_common_args, run_v02_alpha
+from src.version_runner import add_common_args, run_v01_baseline
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run v02_alpha route-aware guided choice")
+    parser = argparse.ArgumentParser(description="Run v01_baseline LLM-only pipeline")
     add_common_args(
         parser,
-        default_output="data/submissions/submission_v02_alpha.csv",
-        default_trace="data/traces/trace_v02_alpha.jsonl",
+        default_output="data/submissions/submission_v01_baseline.csv",
+        default_trace="data/traces/trace_v01_baseline.jsonl",
     )
     args = parser.parse_args()
 
-    run_v02_alpha(
+    run_v01_baseline(
         input_path=args.input,
         output_path=args.output,
         trace_output=args.trace_output,
