@@ -49,6 +49,15 @@ class Wave1Result:
     per_letter_logprob: dict[str, float] = field(default_factory=dict)
 
 
+@dataclass
+class Wave2Result:
+    """Per-question result from Wave 2 (SC escalation)."""
+
+    answer: str
+    votes: list[str] = field(default_factory=list)
+    escalation_reason: str = ""
+
+
 def run_wave1(
     agent: ReasoningAgent,
     parsed_list: list[ParsedQuestion],
@@ -141,9 +150,9 @@ def run_wave2(
     wave1: dict[str, Wave1Result],
     *,
     adaptive_sc: bool = True,
-) -> dict[str, str]:
+) -> dict[str, Wave2Result]:
     """Batch all self-consistency escalations and return final SC answers."""
-    escalated: list[tuple[ParsedQuestion, str, Wave1Result, int]] = []
+    escalated: list[tuple[ParsedQuestion, str, Wave1Result, int, str]] = []
     for parsed in parsed_list:
         w1 = wave1.get(parsed.qid)
         if w1 is None or w1.forced or w1.error:
@@ -152,21 +161,23 @@ def run_wave2(
         margin = w1.margin
 
         if route_upper == "STEM":
-            escalated.append((parsed, w1.route, w1, stem_sc_n(margin, adaptive_sc)))
+            sc_n = stem_sc_n(margin, adaptive_sc)
+            reason = f"stem_sc_adaptive_n{sc_n}" if adaptive_sc else f"stem_sc_fixed_n{sc_n}"
+            escalated.append((parsed, w1.route, w1, sc_n, reason))
         elif route_upper == "READING" and _is_reason_purpose_question(parsed.query):
-            escalated.append((parsed, w1.route, w1, 3))
+            escalated.append((parsed, w1.route, w1, 3, "reading_reason_purpose_sc"))
         elif (
             route_upper == "KNOWLEDGE"
             and margin is not None
             and margin < MARGIN_LOW_BY_ROUTE["KNOWLEDGE"]
         ):
-            escalated.append((parsed, w1.route, w1, SC_N_DEFAULT))
+            escalated.append((parsed, w1.route, w1, SC_N_DEFAULT, f"knowledge_low_margin_{margin:.3f}"))
 
     if not escalated:
         return {}
 
     flat_sc: list[tuple[str, str, dict[str, str], dict[str, str], bool]] = []
-    for parsed, route, _w1, sc_n in escalated:
+    for parsed, route, _w1, sc_n, _reason in escalated:
         is_stem = route == "stem"
         for sample_idx in range(sc_n):
             shuffled_options, reverse_map = shuffle_options(parsed.options, sample_idx)
@@ -231,11 +242,15 @@ def run_wave2(
         except Exception:
             pass
 
-    wave2: dict[str, str] = {}
-    for parsed, _route, w1, _sc_n in escalated:
+    wave2: dict[str, Wave2Result] = {}
+    for parsed, _route, w1, _sc_n, esc_reason in escalated:
         choices = qid_choices.get(parsed.qid, [])
         if not choices:
-            wave2[parsed.qid] = w1.answer
+            wave2[parsed.qid] = Wave2Result(
+                answer=w1.answer,
+                votes=[],
+                escalation_reason=esc_reason,
+            )
             continue
         first_choice: ChoiceResult | None = None
         if w1.per_letter_logprob:
@@ -245,7 +260,11 @@ def run_wave2(
                 per_letter_logprob=w1.per_letter_logprob,
             )
         vote = _vote(choices, first_choice)
-        wave2[parsed.qid] = vote.letter
+        wave2[parsed.qid] = Wave2Result(
+            answer=vote.letter,
+            votes=vote.votes,
+            escalation_reason=esc_reason,
+        )
 
     return wave2
 
@@ -274,7 +293,7 @@ def batch_generate(
 def finalize_answers(
     parsed_list: list[ParsedQuestion],
     wave1: dict[str, Wave1Result],
-    wave2: dict[str, str],
+    wave2: dict[str, Wave2Result],
     ckpt_answers: dict[str, str],
 ) -> dict[str, str]:
     """Merge checkpoint, Wave 1, and Wave 2 answers into a complete answer map."""
@@ -282,7 +301,7 @@ def finalize_answers(
     for parsed in parsed_list:
         qid = parsed.qid
         if qid in wave2:
-            final[qid] = wave2[qid]
+            final[qid] = wave2[qid].answer
         elif qid in wave1:
             final[qid] = wave1[qid].answer
         else:
@@ -327,13 +346,14 @@ def write_traces(
     trace_output: str,
     parsed_list: list[ParsedQuestion],
     wave1: dict[str, Wave1Result],
-    wave2: dict[str, str],
+    wave2: dict[str, Wave2Result],
     final: dict[str, str],
 ) -> None:
     with _trace_writer(trace_output) as write_trace:
         for parsed in parsed_list:
             qid = parsed.qid
             w1 = wave1.get(qid)
+            w2 = wave2.get(qid)
             answer = final.get(qid, FALLBACK)
 
             if w1 is None:
@@ -351,7 +371,7 @@ def write_traces(
                 route = w1.route
                 margin = None
                 error = w1.error
-            elif qid in wave2:
+            elif w2 is not None:
                 path = f"wave_{w1.route}_sc"
                 route = w1.route
                 margin = w1.margin
@@ -370,7 +390,8 @@ def write_traces(
                     "path": path,
                     "margin": margin,
                     "first_answer": w1.answer if w1 else None,
-                    "votes": [],
+                    "votes": w2.votes if w2 else [],
+                    "escalation_reason": w2.escalation_reason if w2 else None,
                     "layer1_route": route,
                     "semantic_route": None,
                     "route_override": False,

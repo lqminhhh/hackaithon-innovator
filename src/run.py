@@ -37,7 +37,7 @@ from src.config import FALLBACK
 from src.data_loader import load_questions, write_submission
 
 # Default runner settings (overridable via CLI / config)
-DEFAULT_CHECKPOINT_EVERY = 30
+DEFAULT_CHECKPOINT_EVERY = 25
 DEFAULT_CHECKPOINT_NAME = "checkpoint.json"
 
 SolveFn = Callable[[dict], Any]
@@ -217,8 +217,10 @@ def _extract_answer(result: Any) -> str:
 def _build_default_solve_fn(model_id: str | None = None) -> SolveFn:
     """Load the primary model once and return a per-question solve closure.
 
-    Uses the v3 path: rule router + two-pass guided choice + escalation, no RAG
-    and no semantic router (both removed in v3).
+    Uses the sequential per-question path from src.solve (rule router + two-pass
+    guided choice + self-consistency escalation). No RAG, no semantic router.
+    This is the S7 sequential MVP (5a); phased-batch via wave_solver is not wired
+    here so the safety guarantees (G1–G4) are never at risk.
     """
     import torch  # heavy import; only needed for the real run
 

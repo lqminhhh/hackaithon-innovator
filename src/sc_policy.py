@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 
+from src.config import GPU_MEM_UTIL, SC_TEMP
 from src.parser import ParsedQuestion
 
 # Per-route low-margin thresholds. These differ significantly by route.
@@ -18,7 +19,6 @@ MARGIN_LOW_BY_ROUTE = {
 SC_N_STEM = {"high": 3, "low": 7}
 
 SC_N_DEFAULT = 5
-SC_TEMP = 0.6
 SC_TOP_P = 0.95
 SC_SEED = 1234
 SHUFFLE_OPTIONS = True
@@ -30,7 +30,7 @@ TOKENS_BY_ROUTE = {
     "SAFETY": 128,
 }
 
-GAMMA_GPU_MEM_UTIL = 0.85
+GAMMA_GPU_MEM_UTIL = GPU_MEM_UTIL
 GAMMA_MAX_MODEL_LEN = 4096
 
 

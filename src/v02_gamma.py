@@ -45,8 +45,7 @@ from src.wave_solver import (
 )
 from src.version_runner import add_common_args
 
-# 16 GB × 0.85 ≈ 13.6 GB — leaves 2.4 GB for OS/driver/fragmentation.
-# The spec says 0.90 but also says "target ≤14 GB"; 0.85 gives real headroom.
+# 16 GB × 0.85 ≈ 13.6 GB — leaves 2.4 GB for OS/driver/fragmentation on unknown judge cards.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_INPUT = PROJECT_ROOT / "data" / "public-test_1780368312.json"
 
@@ -173,7 +172,7 @@ def run_v02_gamma(
     # ── Wave 2: batch ALL escalations ─────────────────────────────────────────
     print("Wave 2: batching all escalations...", flush=True)
     wave2 = run_wave2(agent, parsed_list, wave1, adaptive_sc=adaptive_sc)
-    _state["answers"].update(wave2)
+    _state["answers"].update({qid: w2.answer for qid, w2 in wave2.items()})
     _save_ckpt(ckpt_path, _state["answers"])
     print(f"Wave 2 complete ({len(wave2)} escalated).", flush=True)
 

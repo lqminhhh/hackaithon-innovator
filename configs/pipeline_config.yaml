@@ -33,3 +33,9 @@ vllm:
   gpu_memory_utilization: 0.85
   max_model_len: 4096
   enable_prefix_caching: true
+
+runner:
+  checkpoint_path: checkpoint.json
+  checkpoint_every: 25
+  batch: false          # false = sequential MVP (5a); true = phased batch (5b, not yet wired)
+  group_by_route: true  # KV-cache-friendly grouping in future phased-batch mode

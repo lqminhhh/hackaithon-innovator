@@ -1,0 +1,5 @@
+version,n,agrees_reference,disagrees_reference,missing,invalid,agreement_rate
+v01_baseline,463,134,329,0,0,0.2894
+v02_alpha,463,294,169,0,0,0.635
+v02_beta,463,392,71,0,0,0.8467
+v02_gamma,463,419,44,0,0,0.905

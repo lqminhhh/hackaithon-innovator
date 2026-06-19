@@ -1,0 +1,356 @@
+qid,disagree_count,ref_answer,v01_baseline,v02_alpha,v02_beta,v02_gamma,route_predicted,question
+test_0311,4,B,A,A,C,C,stem,"Khi văn bản xác nhận thông báo hoạt động bưu chính cấp tỉnh bị mất hoặc hư hỏng không sử dụng được, người dân cần thực hiện bước nào để được hỗ trợ?"
+test_0074,4,B,A,A,A,A,knowledge,Thế gian trụ trì Phật bảo là chỉ cho gì?
+test_0030,4,B,A,A,A,A,knowledge,Người đầu tiên truyền thừa tại chùa An Phú là ai?
+test_0229,4,D,A,C,C,C,knowledge,Chủ Tịch Hồ Chí Minh xác định yếu tố nào là gốc của người cách mạng?
+test_0178,4,A,D,B,B,B,knowledge,Tri giác phản ánh điều gì?
+test_0168,4,D,A,C,C,C,knowledge,"Theo Chủ Tịch Hồ Chí Minh, học để làm gì?"
+test_0376,4,C,A,A,D,D,stem,Đối tượng nào sau đây không phải là 'Người sử dụng đất' theo quy định của Luật Đất đai năm 2024?
+test_0230,4,B,D,C,C,C,knowledge,"Học thuyết chính trị của Xê-nô-phôn, nhà chính trị học phương Tây cổ đại chủ yếu bàn đến vấn đề gì của chính trị?"
+test_0119,4,A,D,B,B,B,reading,"Đoạn thông tin:
+Title: Cổ Thiên Lạc
+Content: Cổ Thiên Lạc (sinh ngày 21 tháng 10 năm 1970) là một diễn viên và ca sĩ người Hồng Kông. Anh từng là gương mặt nổi bật và diễn viên chủ chốt của đài truyền hình trung ương TVB TV drama. Anh từng đoạt giải TVB cho nam diễn viên xuất sắc nhất (Best Actor) trong năm 1999 cho vai diễn Từ Phi trong loạt phim Hồ sơ trinh sát 4 . Năm 2001 sau khi hoàn thành vai diễn Hạng Thiếu Long trong phim Cỗ Máy Thời gian (phim giúp Cổ Thiên Lạc lần thứ hai thắng giải thị đế) anh rời TVB và chỉ tập trung vào phim điện ảnh. Cổ Thiên Lạc là một trong những diễn viên nổi tiếng và được yêu thích nhất của điện ảnh Hoa ngữ (Điện ảnh Hồng Kông), và là gương mặt đại diện cho các thương hiệu quảng cáo như: Pepsi, Osim, Tag Heuer, Lotte, Zero Eyewear, Lay's, và những sản phẩm nội địa khác.
+
+I. Thân thế và sự nghiệp
+
+Trước khi đến với điện ảnh, Cổ Thiên Lạc đã từng ngồi tù vì tội ăn cắp. Sau đó anh thay đổi và sống tích cực hơn. Anh làm nhiều công việc khác nhau như hầu bàn, bán đồ ăn nhanh, bảo vệ,... Sau này anh tâm sự rằng cuộc sống dễ đưa thanh niên trẻ lầm đường lạc bước, anh khuyên các bạn trẻ trước khi làm gì hãy nên nghĩ tới người thân và tương lai của mình. Anh cũng dành nhiều lời tâm sự rất chân tình về những tháng ngày tuổi trẻ phải cực khổ kiếm ăn, cho đến khoảng thời gian anh lầm đường lạc bước, vào trại cải tạo vì nhận tội giùm anh em. Cổ Thiên Lạc siêng năng làm nhiều công việc lao động chân tay khác nhau, cho đến khi anh tình cờ được phát hiện và mời làm người mẫu cho những cuốn băng karaoke MTV nhờ đẹp trai (trường hợp tương tự xảy ra với Takeshi Kaneshiro). Cho đến năm 1993 thì TVB ký hợp đồng với Cổ Thiên Lạc, từ đó anh phấn đấu không ngừng để trở thành một trong những nam diễn viên chính xuất sắc và có số lượng fan hâm mộ đông đảo nhất. Nhất là từ khi anh đi tập tạ, nhuộm da cho rám nắng, cắt tóc ngắn, giữ vẻ mặt phong cách lạnh lùng trong những bộ phim anh đóng thì số fan nữ càng tăng lên đáng kể. Hình ảnh nam tính của Cổ Thiên Lạc sau khi nhuộm da khác hẳn vẻ thư sinh yếu đuối trong những ngày đầu tiên. Fan hâm mộ khen ngợi nhiệt liệt. Có thời gian anh được xếp số một trong danh sách những nam diễn viên đẹp trai nhất trên cả Lưu Đức Hoa, Takeshi Kaneshiro, Tạ Đình Phong,...
+Cổ Thiên Lạc là một trong những diễn viên siêng năng nhất. Cho dù thuộc hàng diễn viên ""top"" nhưng anh không hề chê kịch bản. Hễ có ai mời là anh tham gia, từ phim ma, phim xã hội đen, phim tình cảm, phim trinh thám, phim hài, phim kiếm hiệp,... như có lần anh đã nói: ""Có vai diễn tại sao không tham gia? Tôi lao động quen rồi nên thích kiếm tiền lắm và ít từ chối lời mời công việc lắm. Hơn nữa đây cũng là dịp cho tôi thử nhiều loại vai khác nhau, hoàn thiện khả năng diễn xuất"".
+Sau giải thưởng năm 1999, đến năm 2001, Cổ Thiên Lạc một lần nữa được bầu làm nam diễn viên được yêu thích nhất cho vai Hạng Thiếu Long (項少龍) trong bộ phim truyền hình TVB ""Cỗ máy thời gian"" (尋秦記, A Step into the Past dựa trên tác phẩm Tầm Tần Ký của Huỳnh Dị), đồng thời kiêm luôn giải ""Nam nghệ sĩ có phong cách thời trang nhất"" (The Most Stylish Personality Award and Men of Power) cùng trong năm 2001.
+Những phim truyền hình Cổ Thiên Lạc để lại ấn tượng là vai Dương Quá (楊過) trong ""Thần điêu hiệp lữ 1995"" (神鵰俠侶) đóng cặp với Lý Nhược Đồng; vai trung sĩ cảnh sát Từ Phi trong phim ""Hồ Sơ Trinh Sát 4"" cùng với Tuyên Huyên, Trần Cẩm Hồng, Xa Thi Mạn, vai phản diện Trương Tự Lực trong ""Thử Thách Nghiệt Ngã "" (創世紀II天地有情), và Hạng Thiếu Long trong phim Cỗ máy thời gian cùng vô số các vai diễn khác trước đó trong ""Giáo sư ưu ái"", ""Liệt hỏa hùng tâm"", ""Lệnh truy nã"", ""Duyên tình đôi chủ""...
+Sau thời gian đóng phim lẻ xã hội đen, và một loại phim ma trong series ""Âm Dương Lộ"" (Troublesome Night) khoảng thời gian đầu những năm 2000 Cổ Thiên Lạc chuyển sang những vai hài, lãng mạn trong những cuốn phim tình cảm nhẹ nhàng. Và anh đã ngay lập tức tạo được hình tượng mới, phong độ, ga-lăng, vui tính, lãng mạn, hiền lành... khác hẳn hình ảnh giang hồ xã hội đen, lầm lì, ít nói, lạnh lùng,... mà anh đã tạo ra trước đó. Chỉ cần nghe tên Cổ Thiên Lạc thì khán giả đã hình dung ra nhân vật trong bộ phim rồi.
+Ngoài điện ảnh Cổ Thiên Lạc cũng làm một cuộc dạo chơi trong âm nhạc. Anh hát mấy bài nhạc chủ đề cho những phim truyền hình mình đóng. Ngoài ra còn vài ca khúc khác cũng khiến bạn trẻ thích thú trong những album của anh. Album được chú ý nhất của Cổ Thiên Lạc là ""Mr.Cool"". Từ đó fan hâm mộ kêu anh luôn bằng biệt danh này ""Mister Cool"" thì thấy hợp với tên của anh. Tên tiếng Anh của Cổ Thiên Lạc là Louis Koo, hay là Koo Louis. Viết tắt sẽ thành ""Koo L"". Viết gần nhau thì thành ""KooL"", đọc tương tự như ""cool"". Anh còn biết danh khác là Cool Jay.
+Vai phản diện gần đây nhất của Cổ Thiên Lạc là tay xã hội đen sát máu Jimmy trong ""Tranh giành quyền lực"" (Election phần 1 và 2). Anh nhận được những lời ngợi khen của nhiều chuyên gia quốc tế qua vai diễn xuất sắc này khi bộ phim Election 2 (còn gọi là Triad Election) được đem đi trình chiếu tại liên hoan phim Cannes năm 2006.
+
+II. Học vấn
+
+Cổ Thiên Lạc là cựu học sinh của trường trung học ""Thánh Teresa"" (St. Teresa's School Kowloon).
+
+III. Ca nhạc
+
+Ngoài diễn viên, Cổ Thiên Lạc còn làm ca sĩ và phát hành vài album:
+
+2000：男朋友: Bạn trai
+2000：今期流行
+2001：樂天: Lạc thiên
+2003：Mr. Cool
+2006：藍色的緣份Anh hát ca khúc chủ đề cho một số phim truyền hình TVB mình từng tham gia: Lệnh Truy Nã, Thời đại chiến quốc (Cỗ máy thời gian), Hồ sơ vụ án 4, Thời đại khủng hoảng (Thử thách nghiệt ngã).
+Năm 2004, anh đến Việt Nam giao lưu cùng fan hâm mộ tại sân khấu Lan Anh. Trong đêm diễn anh song ca bài ""Bạn trai"" cùng ca sĩ Phương Thanh.
+Câu hỏi: Biệt danh 'Mr. Cool' của Cổ Thiên Lạc có nguồn gốc từ yếu tố nào sau đây?"
+test_0240,4,B,A,A,A,A,stem,"Công ty Kennie bán một máy in với giá 31.000 đô la sau ba năm sở hữu. Máy in có chi phí ban đầu là 58.000 đô la và cơ sở khấu hao là 48.000 đô la. Giá trị sổ sách của máy in vào thời điểm bán là bao nhiêu, và lợi nhuận từ việc bán là bao nhiêu?"
+test_0109,4,C,A,A,A,B,knowledge,Việc tăng giá xăng ảnh hưởng đến cầu du lịch Highland thông qua cơ chế nào trước?
+test_0253,4,D,A,A,A,A,knowledge,Mô biểu bì có chức năng gì?
+test_0256,4,C,A,A,A,B,knowledge,"Giá cam tăng, tổng mức chi tiêu về cam vẫn còn không đổi, cam lúc này có cầu là:"
+test_0258,4,B,A,A,A,A,stem,"Theo phân loại của Morton Keller trong ""Ba chế độ của Mỹ,"" giai đoạn nào trong số các giai đoạn sau được đặc trưng bởi việc chính phủ trung ương có ít ảnh hưởng đến nền kinh tế và tập trung vào các đảng chính trị và tòa án?"
+test_0370,4,D,A,A,C,C,knowledge,Tại sao Nguyễn Ái Quốc (Chủ Tịch Hồ Chí Minh) ra đi tìm đường cứu nước mới vào đầu thế kỷ XX?
+test_0058,4,B,A,A,C,C,stem,"Thời hạn giải quyết thủ tục cấp giấy phép xây dựng (cải tạo, nâng cấp đường ngang) của Bộ Xây dựng là bao nhiêu ngày làm việc kể từ khi nhận đủ hồ sơ?"
+test_0271,4,D,C,A,A,A,knowledge,Máu di chuyển một chiều trong hệ mạch là do
+test_0454,4,B,D,A,A,D,knowledge,"Nếu một kỹ sư phát hiện ra việc tính phí quá mức bởi công ty của họ và được một chủ sở hữu (principal) khuyên rằng các khoản phí quá mức là cần thiết để bù đắp cho các chi phí được ước tính thấp, hành động nào trong số các hành động sau đây phù hợp với khái niệm bảo vệ người tố giác?"
+test_0070,4,B,A,A,C,C,stem,"Theo quy trình cấp Chứng nhận trường mầm non đạt kiểm định chất lượng giáo dục, thành phần hồ sơ bắt buộc gồm những tài liệu nào?"
+test_0451,4,B,A,A,A,A,knowledge,Tư tưởng chính trong học thuyết chính trị của Khổng tử là:
+test_0328,4,C,A,A,A,B,knowledge,Công việc nào không phải là nhiệm vụ của nhân viên marketing và bán hàng?
+test_0318,3,C,C,B,B,B,knowledge,Điều gì xảy ra khi tiết kiệm thực tế khác với tiết kiệm theo kế hoạch?
+test_0374,3,A,A,B,B,B,knowledge,Một công ty sản xuất sách giáo khoa được coi là đang sản xuất
+test_0452,3,B,A,B,G,G,stem,"Giả sử $ T: \mathbb{R}^3 \to \mathbb{R}^3 $ là một toán tử tuyến tính được biểu diễn bởi ma trận
+$$= \begin{pmatrix}& 1 & 0 \\& 2 & 1 \\& 0 & 2. Câu nào sau đây là đúng về các giá trị riêng của $ T $?"
+test_0432,3,C,A,A,C,D,stem,"Theo thông tin được cung cấp, sau ngày 1/7/2025, công dân cần liên hệ cấp hành chính nào để thực hiện thủ tục hành chính tại Thành phố Hải Phòng?"
+test_0224,3,B,A,A,B,A,stem,"Sau khi thực hiện sắp xếp và sáp nhập năm 2025, tỉnh Gia Lai có tổng cộng bao nhiêu đơn vị hành chính cấp xã (gồm cả xã và phường)?"
+test_0301,3,A,A,B,B,D,knowledge,"Theo thông tin được cung cấp, tỉnh nào sau đây đã được sáp nhập vào tỉnh Gia Lai để hình thành tỉnh Gia Lai hiện tại?"
+test_0384,3,A,A,B,B,C,knowledge,Cuộc thi người mẫu nào tổ chức quy mô toàn quốc phải có giấy phép của ai?
+test_0066,3,B,B,D,D,D,stem,Quan điểm về “Phổ cập kỹ năng số” được nêu trong Quyết định số 146/QĐ-TTg là?
+test_0222,3,C,E,A,C,J,stem,"Xét một hành tinh quay quanh một ngôi sao theo quỹ đạo tròn hoàn hảo. Nếu quỹ đạo của hành tinh có bán kính là 1 AU (Đơn vị thiên văn) và nó hoàn thành một quỹ đạo trong 1 năm Trái Đất, thì chu kỳ quỹ đạo của một hành tinh quay quanh cùng ngôi sao đó ở khoảng cách 4 AU sẽ là bao nhiêu?"
+test_0293,2,D,A,D,D,B,knowledge,"Theo Chủ Tịch Hồ Chí Minh, chủ nghĩa cộng sản thích ứng ở đâu dễ hơn?"
+test_0304,2,B,D,B,B,A,knowledge,"Nguyên lý về sự lựa chọn hợp lý phát biểu rằng, bạn sẽ lựa chọn việc sử dụng thu nhập tăng thêm của mình để cho:"
+test_0254,2,B,A,B,C,B,knowledge,"Theo thông tin được cập nhật, xã Nhơn Lộc sẽ được sáp nhập với xã nào để hình thành nên xã An Nhơn Tây?"
+test_0379,2,B,B,A,A,B,knowledge,Mô hình tài chính chính mà các Tổ chức Quản lý Sức khỏe (HMOs) sử dụng để nhận thanh toán cho việc cung cấp dịch vụ chăm sóc sức khỏe là gì?
+test_0199,2,B,A,B,B,A,knowledge,"Khi thực hiện thủ tục chứng thực di chúc, nếu di chúc có từ 02 trang trở lên, người lập di chúc cần thực hiện điều gì?"
+test_0186,2,C,C,A,A,C,knowledge,Hành chính công bao gồm những lĩnh vực nào?
+test_0128,2,A,A,B,B,A,knowledge,VNNIC là tên viết tắt của đơn vị nào?
+test_0113,2,C,C,A,A,C,reading,"Đoạn thông tin:
+Tuyên ngôn độc lập Estonia
+Tuyên ngôn độc lập của Estonia, còn được gọi là Tuyên ngôn cho dân của Estonia (Tiếng Estonia: Manifest Eestimaa rahvastele), là tuyên ngôn thành lập của Cộng hòa Estonia vào năm 1918. Nó được tuyên bố vào ngày 24 tháng Hai, ngày gọi là ngày Quốc khánh hoặc ngày Độc lập.
+Tuyên ngôn được soạn thảo bởi Ủy ban Cứu quốc Estonia được bầu bởi những người lớn tuổi của Hội đồng liên tỉnh Estonia. Ban đầu dự định sẽ được tuyên bố vào ngày 21 tháng 2 năm 1918, nhưng bị trì hoãn cho đến tối ngày 23 tháng 2, khi bản tuyên ngôn được in ra và đọc to công khai ở Pärnu. Vào ngày hôm sau, 24 tháng 2, bản tuyên ngôn đã được in và phân phát tại thủ đô Tallinn.
+
+I. Bối cảnh lịch sử
+
+Trong Thế chiến I, giữa việc rút lui quân Nga và tiến quân Đức, sự chiếm đóng Estonia của Đế quốc Đức gần kề, Ủy ban Cứu quốc của Hội đồng liên tỉnh Estonia, Maapäev, tuyên bố độc lập Estonia vào ngày 24 tháng 2 năm 1918. Đế quốc Đức không công nhận Cộng hòa Estonia mới tuyên bố. Tuy nhiên, sau thất bại của Liên minh Trung tâm trong Thế chiến I vào tháng 11 năm 1918, Đức đã rút quân khỏi Estonia và chính thức trao quyền lực ở Estonia cho Chính phủ lâm thời Estonia vào ngày 19 tháng 11. Cuộc xâm lược của Cộng hòa Xã hội chủ nghĩa Xô viết Liên bang Nga và Chiến tranh giành độc lập của Estonia bắt đầu nối tiếp. Vào ngày 2 tháng 2 năm 1920, Hiệp ước hòa bình Tartu được ký kết bởi Cộng hòa Estonia và Cộng hòa Xã hội chủ nghĩa Xô viết Liên bang Nga. Cộng hòa Estonia được quốc tế công nhận và trở thành thành viên của Hội Quốc Liên vào năm 1921.
+
+II. Tuyên bố
+
+TUYÊN BỐ cho tất cả các dân tộc Estonia
+Chưa bao giờ trong suốt hàng thế kỷ, người dân Estonia đánh mất khát vọng độc lập mãnh liệt. Từ thế hệ này sang thế hệ khác, người Estonia vẫn sống với hy vọng che giấu rằng bất chấp sự nô lệ và áp bức của các quốc gia khác, thời khắc sẽ đến ở Estonia ""khi tất cả các mảnh vụn, ở cả hai đầu, sẽ bùng cháy"" và khi ""Kalev sẽ về nhà mang lại cho anh ấy hạnh phúc.""
+Bây giờ thời khắc này đã đến.
+Một cuộc chiến tranh chưa từng có của các quốc gia đã phá hủy nền tảng mục nát của Đế chế Nga Sa hoàng. Khắp vùng đồng bằng Sarmatian tình trạng hỗn loạn tàn phá đang lan rộng, đe dọa áp đảo trong sự thức tỉnh của tất cả các dân tộc sống trong đường biên giới của Đế quốc Nga cũ kỹ. Từ phương Tây, các đội quân chiến thắng người Đức đang tiếp cận để giành lấy phần di sản của Nga và trên hết là chiếm lấy các vùng lãnh thổ ven biển của Biển Baltic.
+Trong giờ phút định mệnh này, Hội đồng liên tỉnh Estonia, với tư cách là đại diện hợp pháp của đất đai và nhân dân chúng ta, đã nhất trí với các đảng phái và tổ chức chính trị dân chủ Estonia, và nhờ quyền tự quyết của các dân tộc, nên cần phải có quyền tự quyết các bước quyết định sau đây để định hình vận mệnh của đất nước và người Estonia.
+ESTONIA,
+trong ranh giới lịch sử và dân tộc của Estonia, được tuyên bố vào ngày hôm nay
+CỘNG HÒA DÂN CHỦ ĐỘC LẬP.
+Cộng hòa Estonia độc lập sẽ bao gồm Harjumaa, Läänemaa, Järvamaa, Virumaa, với thành phố Narva và các khu vực xung quanh, Tartumaa, Võrumaa, Viljandimaa, và Pärnumaa với các đảo Baltic của Saaremaa, Hy Lạp cho thời đại trong hầu hết. Quyết định cuối cùng về ranh giới của Cộng hòa trong các khu vực giáp với Latvia và Nga sẽ được thực hiện bởi trưng cầu dân ý sau khi kết thúc Thế chiến hiện tại.
+Trong các khu vực nói trên, cơ quan tối cao và tổ chức duy nhất là Ủy ban Cứu quốc Estonia được hỗ trợ dân chủ do Hội đồng liên tỉnh Estonia thành lập.
+Cộng hòa Estonia mong muốn duy trì tính trung lập chính trị tuyệt đối đối với tất cả các quốc gia và dân tộc láng giềng và hy vọng rằng họ sẽ chuẩn thuận một cách trung lập hoàn toàn.
+Các lực lượng quân sự của Estonia sẽ được giảm đến mức cần thiết để duy trì trật tự nội bộ. Những người lính Estonia phục vụ trong lực lượng quân đội Nga sẽ được gọi quay trở về nhà và được xuất ngũ.
+Cho đến khi Quốc hội lập hiến Estonia được bầu bằng các cuộc bầu cử tổng quát, trực tiếp, bí mật và theo tỷ lệ, sẽ triệu tập và xác định cấu trúc hiến pháp của đất nước, tất cả các cơ quan hành pháp và lập pháp sẽ vẫn được trao cho Hội đồng liên tỉnh Estonia và Chính phủ lâm thời Estonia được tạo ra bởi nó, có hoạt động phải được hướng dẫn bởi các nguyên tắc sau:
+1. Tất cả công dân của Cộng hòa Estonia, bất kể tôn giáo, nguồn gốc dân tộc và quan điểm chính trị của họ, sẽ được hưởng sự bảo vệ bình đẳng theo luật pháp và tòa án công lý của Cộng hòa.
+2. Tất cả các dân tộc thiểu số, người Nga, người Đức, người Thụy Điển, người Do Thái và những người khác cư trú trong biên giới của nước cộng hòa, sẽ được đảm bảo quyền tự chủ về văn hóa của họ.
+3. Tất cả các quyền tự do công dân, như tự do ngôn luận, báo chí, tôn giáo, hội họp, và tự do hoạt động cũng như quyền bất khả xâm phạm của cá nhân và gia đình, sẽ có hiệu lực không thể chối cãi trong lãnh thổ của Cộng hòa Estonia và dựa trên luật pháp mà Chính phủ tức thì đưa ra.
+4. Chính phủ lâm thời sẽ tiến hành tổ chức ngay lập tức các tòa án công lý để bảo vệ an ninh của công dân. Tất cả các tù nhân chính trị sẽ được thả ra ngay lập tức.
+5. Chính quyền địa phương của thành phố, quận và thị trấn sẽ được kêu gọi tiếp tục công việc của họ, vốn đã bị gián đoạn dữ dội.
+6. Để duy trì trật tự công cộng, dân quân nhân dân, trực thuộc chính quyền địa phương, sẽ được tổ chức ngay lập tức và các tổ chức tự vệ của công dân được thành lập ở các thành phố và khu vực nông thôn.
+7. Chính phủ lâm thời đã chỉ đạo làm việc không chậm trễ, trên cơ sở dân chủ rộng rãi, các dự luật cho giải pháp về các vấn đề nông nghiệp, và các vấn đề về lao động, cung cấp thực phẩm và tài chính.
+Estonia! Bạn đứng trước ngưỡng cửa của một tương lai đầy hy vọng, trong đó bạn sẽ được tự do và độc lập trong việc xác định và định hướng vận mệnh của mình. Bắt đầu xây dựng một ngôi nhà của riêng bạn, được cai trị bởi pháp luật và trật tự để trở thành một thành viên xứng đáng trong gia đình của các quốc gia văn minh. Con trai và con gái của quê hương chúng ta, chúng ta hãy đoàn kết như một người đàn ông trong nhiệm vụ thiêng liêng là xây dựng quê hương. Mồ hôi và máu của tổ tiên chúng ta đổ ra cho đất nước này bắt buộc chúng ta phải làm điều đó, và chúng ta phải làm điều đó vì lợi ích của các thế hệ tương lai.
+Xin Chúa phù hộ cho Chúng con
+và ban phước lành cho
+quê hương thân yêu của chúng con!
+Cộng hòa dân chủ độc lập Estonia muôn năm!
+Hòa bình giữa các quốc gia muôn năm!
+Hội đồng liên tỉnh Estonia
+Ngày 24 tháng 2 năm 1918
+Câu hỏi: Theo Tuyên ngôn Độc lập Estonia năm 1918, điều nào sau đây KHÔNG phải là nguyên tắc được nêu rõ trong khung pháp lý của Cộng hòa Dân chủ Độc lập Estonia?"
+test_0090,2,A,D,A,A,B,reading,"Đoạn thông tin:
+[1] Tiêu đề: Chó ngao Anh
+Nội dung: Chó ngao Anh (English Mastiff) hay đôi khi gọi là chó ngao là một giống chó ngao có nguồn gốc từ nước Anh. Đây là giống chó lớn nhất thế giới về cân nặng, và đứng hàng thứ ba về chiều cao chỉ sau giống chó săn Ái Nhĩ Lan (Irish Wolfhound) và Great Dane. Nó còn có tên gọi Old English Mastif, English Mastif hay Mastiff. Trong tiếng Anh có rất nhiều giống chó của các nước khác có đi kèm theo chữ Mastiff tức chó ngao, nhưng nếu chỉ dùng chữ Mastiff không thì có nghĩa là English Mastiff. Trong tiếng Việt, chó ngao dùng để chỉ về những con chó cỡ lớn và dữ tợn.
+Đây cũng là loài chó được sử dụng làm chó nghiệp vụ, nhất là dùng trong chiến tranh như là đội quân động vật, khi người Tây Ban Nha chinh phạt châu Mỹ, họ cũng dùng những con chó ngao này để tấn công các chiến binh bản địa khiến người da đỏ rất hoang mang và hoảng sợ. Những kẻ xâm lược Tây Ban Nha cũng điều động các con chó chiến bọc giáp trong cuộc chinh phạt Nam Mỹ vào những năm 1500.
+
+I. Lịch sử
+
+Có nhiều giả thuyết nói về tổ tiên của giống chó này, giải thuyết thứ nhất cho rằng Chó Ngao Anh có tổ tiên là nhóm chó Molosser. Nhóm Molosser là tổ tiên Molosser là một giống chó khổng lồ to lớn như sư tử có nguồn gốc từ Tây Tạng, có mặt trên trái đất từ lâu nhưng đã tuyệt chủng, khi Marco Polo khi đến Tây Tạng đã mô tả có một giống chó to lớn như con lừa, tiếng sủa rền vang như sư tử (có nhiều liên hệ đến giống chó ngao Tây Tạng).
+Nhóm chó Molosser là tổ tiên của rất nhiều giống chó lớn hiện nay trên thế giới. Trải qua nhiều thế kỷ và sự khác biệt về sự phát triển ở những vùng địa lý khác nhau, nhóm chó Molosser được chia ra làm 2 nhóm chính:
+
+Nhóm có lông hơi dài, thân hình to lớn nhưng thon gọn và nhanh nhẹn, đầu thon và mõm dài, tổ tiên của một số giống chó ngày nay như: Saint Bernard, Chó ngao Tây Tạng (Tibetan Mastiff), Chó Komondor, Chó núi Pirene (Pyrenean Mountain Dog)
+Nhóm lông ngắn, mõm ngắn và vuông, đầu to, thân hình to lớn lực lưỡng, tổ tiên của một số giống chó ngày nay như: Chó ngao Pháp (Dogue de Bordeaux), chó ngao Anh (English Mastiff), chó ngao Neapolitan (Neapolitan Mastiff), chó ngao Ý, chó võ sĩ (Boxer) và chó Bun (Bulldog).Khi Molosser dog dến châu Âu đã phát triển rất mạnh dùng để săn bắn và đấu chó, nhưng phát triển mạnh nhất ở La Mã, người La Mã huấn luyện Molosser để dùng ra trận cùng quân lính tấn công quân thù, làm cận vệ riêng cho các tướng lảnh, và dùng trong việc giác đấu với thú dữ như sư tử, hổ, gấu, voi.... Vào thời đó rất nhiều chó to lớn, mạnh mẽ, gan dạ và dũng mãnh được săn lùng để nhập khẩu và La Mã. Ở Anh Molosser cũng được dùng trong quân đội, nhưng phát triển mạnh ở lĩnh vực săn bắn, đấu chó, đấu bò, và dùng để bảo vệ lâu đài các nhà quý tộc, thân vương, công hầu.
+Thuyết thứ nhất được rất nhiều người công nhận vì có rất nhiều bằng chứng cổ cho thấy nhóm chó Molosser có nguồn gốc từ Trung Đông, sau đó theo chân những thương gia đến châu Âu vào khoảng thế kỷ thứ tư đến thế kỷ thứ sáu trước công nguyên, và cũng phát tán sang phía bắc Trung Quốc và Ấn Độ. Có rất nhiều bằng chứng khảo cổ có niên đại cả ngàn năm trước công nguyên được tìm thấy ở Ba Tư và Iraq chứng minh. Trong 2 bức tượng đất nung có niên đại 2000 năm trước công nguyên được tìm thấy ở Iraq cho thấy giống chó thời xưa ở đó rất giống chó ngao Neapolitan (Neapolitan Mastiff) và English Mastiff ngày nay.
+Giả thuyết khác cho rằng chó Ngao Anh không phải có nguồn gốc từ nhóm Molosser, mà tổ tiên của nó là nhóm chó Alaunt đã bị tuyệt chủng, tổ tiên của giống chó chăn cừu Kavkav (Caucasian Shepherd Dog), nguồn gốc từ vùng Trung Á, có mặt rất lâu đời ở Anh, dùng để đấu chó, chăn gia súc… Sự hình thành giống chó Ngao Anh thì bắt đầu một sự kiện xảy ra cách đây hơn 500 năm. Vào ngày 25 tháng 10 năm 1415, trong trận chiến Agincourt giữa Anh và Pháp tại miền bắc nước Pháp, vị tướng của Anh là Sir Piers Legh bị thương rất nặng, con chó cái cận vệ của ông ta đã ở bên cạnh dũng mãnh chống trả không cho quân thù tới gần tướng Piers trong nhiều giờ để bảo vệ chủ mình.
+Sau đó không lâu Piers Legh qua đời tại Pháp vì thương tích quá nặng, thi hài của ông cùng với con chó được đưa về Anh quốc, con chó cái đó đã được gia đình ông nuôi và nhân giống tại lâu đài Lyme Hall của gia đình quý tộc Legh tại vùng Cheshire, nước Anh. Vào thời đó chưa có nhiều khái niệm thuần chủng, nhưng gia đình Legh đã chọn lựa nhân giống những con có hình dáng nhất định giống con chó đã cứu Legh và không lai tạp lung tung, từ đó giống chó Ngao được hình thành. Dòng họ Legh đã nuôi và nhân giống giống chó Mastiff hơn 500 năm, chỉ kết thúc vào đầu thế kỷ 20.
+Lâu đài Lyme Hall được coi là cái nôi phát sinh ra giống chó Mastiff, cũng là đại điểm lịch sử của những người yêu thích Mastiff, và họ gọi lâu đài đó là Lyme Hall Mastiff. Hiện nay Lyme Hall trở thành điểm tham quan lịch sử, nơi đó vẫn còn dãy chuồng nuôi Mastiff. Từ thế kỷ 19 trở về trước, chó ngao Mastiff cũng như tất cả các giống chó to lớn khác được nhân giống cho mục đích làm viện, săn bắn và bảo vệ lâu đài, nông trại, nên Mastiff ở Lyme Hall ngày đó nhỏ hơn và đầu không to như chó ngao ngày nay, nhưng cũng không khác xa. Ngày nay vẫn còn nhiều con Mastiff có gia phả tổ tiên từ Lyme Hall.
+
+II. Đặc điểm
+
+Chó Ngao Anh là một loại chó có kích thước khổng lồ. Con đực cao khoảng 30 inches (76 cm), con cái là 27 inches (69 cm), về cân nặng, Con đực nặng khoảng 160 pounds (72 kg), con cái là 150 pounds (68 kg). Đây là một giống chó nặng nhất thế giới, một con đực trưởng thành có thể nặng lên đến 200 pounds.
+
+Chúng có đầu rất to, vuông vức và một vết hằn rõ giữa hai mắt. Mõm có chiều dài bằng một nửa hộp sọ. Đôi mắt thường có màu nâu đen, nằm cách xa về hai phía và xung quanh mắt là những quầng đen. Mũi có màu đen. Đôi tai nhỏ hình chữ V, tỷ lệ thuận với kích thước hộp sọ và cũng thường mang màu đen. Hàm răng nhọn như những cây kéo sắt bén ghép lại. Đuôi to, bản rộng, thuôn nhọn và dài đến kheo chân sau. Màu lông thường là nâu vàng kim, nâu vàng nhạt, màu mơ, màu bạc, hoặc có những sọc vện.
+Chúng sống khoảng từ 10 đến 12 năm. Về sức khỏe, chúng dễ mắc bệnh dị sản xương hông. Giống chó này rất dẽ bị sưng phù, vì thế bnên chia khẩu phần ăn một ngày thành hai đến ba bữa nhỏ thay vì chỉ một bữa lớn. Đồng thời, chúng cũng dễ bị bệnh mạch vành (CHD), xoắn dạ dày, bệnh lộn mí dưới (Ectropion), màng tế bào che lấp đồng tử (PPM), tăng dịch âm hộ, dị sản xương khuỷu tay, bệnh teo võng mạc tiến triển (PRA). Thỉnh thoảng có bệnh về tim mạch.
+
+III. Tập tính
+
+Tuy có kích thước to lớn nhưng chó Ngao Anh đặc biệt có tính cách khá trầm tĩnh. Bản năng tự nhiên của chúng là loài chó canh gác, chúng rất ít khi sủa, cứ như một người bảo vệ thầm lặng giữ gìn lãnh thổ và gia đình. Vì thế, không cần huấn luyện chó Ngao kỹ năng này. Khi bắt được kẻ xâm nhập, chúng thường giữ kẻ xâm nhập lại, dồn vào một góc hoặc nằm đè lên trên hơn là tấn công toàn diện.
+Chó Ngao Anh vốn thông minh, bình tĩnh, ôn hoà và ngoan ngoãn. Có tính tự tin và thận trọng, loài chó này rất kiên nhẫn và được đánh giá là an toàn cho trẻ em ở gần. Chúng có thể hơi cứng đầu, người chủ cần có một chế độ huấn luyện nhẹ nhàng nhưng kiên trì. Chó Ngao Anh tốt nhất nên sống trong môi trường thoải mái, không gian rộng mở. Chúng cũng có thể sống được trong những căn hộ bình thường không có sân vườn nếu được cho ra ngoài vận động đầy đủ.
+Câu hỏi: Theo giả thuyết đầu tiên được đề cập trong ngữ cảnh, tổ tiên của chó Ngao Anh thuộc nhóm nào?"
+test_0418,2,D,D,A,A,D,reading,"Đoạn thông tin:
+Title: Thư viện quốc gia Ba Lan
+Content: Thư viện Quốc gia Ba Lan (tiếng Ba Lan: Biblioteka Narodowa) là thư viện trung tâm của Ba Lan, trực tiếp thuộc Bộ Văn hóa và Di sản Quốc gia Cộng hòa Ba Lan.
+Thư viện là nơi lưu trữ sách, tạp chí, ấn phẩm điện tử và nghe nhìn được xuất bản trên lãnh thổ Ba Lan, cũng như các ấn phẩm của Ba Lan xuất bản ở nước ngoài. Đây là thư viện nghiên cứu nhân văn quan trọng nhất, kho lưu trữ chính của các tài liệu văn bản Ba Lan và trung tâm thông tin tra cứu sách. Nó cũng đóng vai trò như một cơ sở nghiên cứu và một trung tâm phương pháp luận quan trọng cho các thư viện khác ở Ba Lan.
+Thư viện Quốc gia nhận được một bản sao của mỗi cuốn sách được xuất bản ở Ba Lan dưới dạng lưu chiểu. Thư viện Jagiellonia là thư viện khác duy nhất ở Ba Lan có tầm cỡ giống như thư viện quốc gia.
+
+I. Cơ cấu tổ chức
+
+Có ba bộ phận chung:
+
+Thư viện
+Viện thư mục của thư viện quốc gia
+Viện sách và độc giả
+
+II. Lịch sử
+
+Thư viện Quốc gia có nguồn gốc từ thế kỷ 18 (Thư viện Załuski) bao gồm các vật phẩm từ các bộ sưu tập của John III Sobieski lấy được từ cô cháu con gái của mình- Maria Karolina Sobieska, Nữ công tước Bouillon. Tuy nhiên, bộ sưu tập Załuski đã bị quân đội của Sa hoàng Nga Catherine II tịch thu sau Đệ nhị Cộng hòa Ba Lan và gửi đến Saint Petersburg, nơi các cuốn sách hình thành nên khối Thư viện Công cộng Hoàng gia khi nó được thành lập vào năm 1795. Một phần của bộ sưu tập đã bị hư hỏng trên đường vận chuyển từ thư viện đến Nga, và nhiều cuốn đã bị đánh cắp. Theo nhà sử học Joachim Lelewel, sách của Zaluskis, ""có thể được mua cả rổ tại Grodno"".Do đó, khi Ba Lan giành lại độc lập vào năm 1918, không có tổ chức hay trung tâm nào có đủ khả năng hoạt động như chức năng của một thư viện quốc gia. Vào ngày 24 tháng 2 năm 1928, theo sắc lệnh của tổng thống Ignacy Mościcki, Thư viện Quốc gia đã được tạo ra dưới hình thức hiện đại. Nó được mở vào năm 1930 và ban đầu có 200 nghìn tập. Tổng giám đốc đầu tiên của nó là Stefan Demby, kế hoạch phát triển thư viện đã thành công vào năm 1934 bởi giáo sư- cán bộ thư viện Stefan Vrtel-Wierczyński. Quy mô bộ sưu tập của thư viện đã nhanh chóng được mở rộng. Ví dụ, vào năm 1932, chủ tịch Mościcki đã tặng tất cả sách và bản thảo từ Bảo tàng Cung điện Wilanów cho thư viện, khoảng 40 nghìn tập và 20 nghìn bức ảnh từ bộ sưu tập của Stanisław Kostka Potocki.
+Ban đầu Thư viện Quốc gia chưa có cơ sở riêng. Do đó, các bộ sưu tập được đặt rải rác ở một số nơi. Phòng đọc chính nằm trong tòa nhà thư viện mới được xây dựng của Trường Kinh tế Vác-sa-va. Năm 1935, Cung điện Potocki ở Vác-sa-va đã trở thành nhà cho các bộ sưu tập đặc biệt. Dự án về một tòa nhà mới tại Cực Mokotowskie, trong một ""Khu chính phủ"" hoành tráng, được xây dựng để làm nơi đặt thư viện. Tuy nhiên, việc xây dựng bị cản trở bởi sự bùng nổ của Thế chiến II.
+Trước Thế chiến II, các bộ sưu tập có trong thư viện bao gồm:
+
+6,5 triệu cuốn sách và tạp chí từ thế kỷ 19 và 20
+3.000 bản in sơ khai
+2.200 sách in cổ
+52.000 bản thảo
+bản đồ, biểu tượng và bản nhạcNăm 1940, Đức Quốc xã đã chiếm đóng, thay đổi Thư viện Quốc gia thành Thư viện Thành phố Vác-sa-va và chia nó như sau:
+
+Khoa Sách dành cho người Đức (nằm trong tòa nhà Đại học Vác-sa-va)
+Khoa Sách bị hạn chế, chứa những cuốn sách hạn chế độc giả đọc (nằm ở vị trí chính của thư viện - Trường Kinh tế)
+Tất cả các bộ sưu tập đặc biệt từ các văn phòng và tổ chức Vác-sa-va khác nhau (nằm trong Cung điện Cộng hòa)Năm 1944, các bộ sưu tập đặc biệt đã bị Đức Quốc xã đốt cháy như một phần của sự đàn áp sau cuộc nổi dậy Vác-sa-va. 80.000 cuốn sách được in sơ khai, bao gồm các cuốn sách Ba Lan vô giá của thế kỷ 16-18, 26.000 bản thảo, 2.500 bản in, 100.000 bản vẽ và bản khắc, 50.000 bản nhạc và tài liệu sân khấu đã bị hủy hoại. Người ta ước tính rằng trong số hơn 6 triệu tập trong các thư viện lớn của Vác-sa-va vào năm 1939, 3,6 triệu tập đã bị mất trong Thế chiến II, một phần lớn trong số đó thuộc về Thư viện Quốc gia.
+
+III. Bộ sưu tập
+
+Ngày nay, các bộ sưu tập của Thư viện Quốc gia là một trong những bộ sưu tập lớn nhất cả nước. Trong số 7.900.000 tập (2004) được lưu trữ trong thư viện có 160.000 tập được in trước năm 1801, hơn 26.000 bản thảo (bao gồm 6.887 bản thảo âm nhạc), hơn 114.000 bản in nhạc và 400.000 bản vẽ. Các bộ sưu tập thư viện cũng bao gồm các bức ảnh và các tài liệu mang tính biểu tượng khác, hơn 101.000 tập atlas và bản đồ, hơn 2.000.000 bản in tạm thời, cũng như hơn 2.000.000 cuốn sách và khoảng 800.000 bản tạp chí từ thế kỷ 19 đến 21. Các vật phẩm đáng chú ý trong bộ sưu tập bao gồm 151 bản in cổ Codex Suprasliensis, được ghi vào danh sách Chương trình Thế giới của UNESCO năm 2007 để ghi nhận tầm quan trọng siêu khu vực và siêu quốc gia của nó.Năm 2012, thư viện đã ký một thỏa thuận để thêm 1,3 triệu bản ghi của thư viện Ba Lan vào danh mục liên hợp trực tuyến WorldCat.
+Câu hỏi: Theo ngữ cảnh, điều gì KHÔNG phải là một trong ba bộ phận chính của Cơ cấu tổ chức Thư viện Quốc gia Ba Lan?"
+test_0079,2,B,A,B,B,A,stem,"Đối với chương trình đào tạo chuyên sâu đặc thù trình độ bậc 7, yêu cầu số lượng giảng viên cơ hữu là bao nhiêu?"
+test_0435,2,A,C,A,A,D,knowledge,"Khi muốn cấp Giấy chứng nhận đủ điều kiện trạm nạp LPG vào xe bồn, người nộp đơn cần thực hiện bước nào đầu tiên?"
+test_0065,2,D,D,A,B,D,knowledge,"Trong kỹ thuật phân trang bộ nhớ, địa chỉ Hệ điều hành cấp cho CPU truy cập tiến trình trong bộ nhớ (gọi là địa chỉ luận lý) có dạng nào?"
+test_0049,2,B,B,A,A,B,reading,"Đoạn thông tin:
+Title: Vũ khí hủy diệt hàng loạt
+Content: Vũ khí hủy diệt hàng loạt (tiếng Anh: weapon of mass destruction, gọi tắt là WMD) là loại vũ khí có khả năng gây cho đối phương tổn thất rất lớn về sinh lực, phương tiện kỹ thuật, cơ sở kinh tế, quốc phòng, môi trường sinh thái, có tác động mạnh đến tâm lý-tinh thần. Nhìn chung đó là thuật ngữ để chỉ các vũ khí hạt nhân, vũ khí sinh học, vũ khí hóa học và phóng xạ. Thuật ngữ này nảy sinh từ năm 1937 khi báo chí đề cập đến vụ ném bom thảm sát tại Guernica, Tây Ban Nha. Sau Vụ ném bom nguyên tử xuống Hiroshima và Nagasaki tại Nhật Bản, cũng như những diễn tiến suốt thời kỳ Chiến tranh Lạnh, nó ngày càng được dùng phổ biến để chỉ những thứ vũ khí phi quy ước. Đồng nghĩa với thuật ngữ WMD, người ta còn sử dụng các thuật ngữ như ""Vũ khí nguyên tử, sinh học và hóa học"" (ABC), ""Vũ khí hạt nhân, sinh học và hóa học"" (NBC) và ""Vũ khí hóa học, sinh học, phóng xạ và hạt nhân"" (CBRN) mặc dù trong số này vũ khí hạt nhân vẫn được coi là có tiềm năng lớn nhất trong hủy diệt hàng loạt. Lối nói này được sử dụng rộng rãi trong mối liên quan tới chiến tranh Iraq năm 2003 do Mỹ đứng đầu.
+Có thể nói vũ khí hạt nhân cũng như vũ khí phóng xạ là hệ quả trực tiếp của cuộc Cách mạng khoa học-kỹ thuật, cái đã giúp loài người chinh phục được nguồn năng lượng lớn chưa từng có. Vì thế chúng được xếp vào thế hệ vũ khí thứ 5, tức là còn hiện đại hơn những vũ khí tự động (liên thanh) ra đời cuối thế kỷ XIX.
+Nhìn chung các vũ khí hủy diệt hàng loạt đều mang đặc tính hủy diệt lớn không lựa chọn. Do tác động hủy diệt không lựa chọn nên chính mối lo sợ vũ khí WMD đã có tác động định hình các chính sách và các hoạt động chính trị, thúc đẩy các phong trào xã hội. Thái độ ủng hộ hoạt động phát triển, hoặc ngược lại, kiểm soát vũ khí WMD là khác biệt nhau trên bình diện quốc gia cũng như quốc tế. Song nhìn chung người ta chưa hiểu rõ bản chất của những mối đe dọa này, một phần bởi vì thuật ngữ bị chính giới và giới truyền thông trên thế giới sử dụng một cách không chính xác.
+Phòng chống vũ khí hủy diệt hàng loạt là 1 nội dung được chú ý trong lĩnh vực quân sự hiện nay khi mà trình độ khoa học-công nghệ về vũ khí đã đạt đến trình độ cao.
+
+I. Lịch sử sử dụng thuật ngữ ""Vũ khí hủy diệt hàng loạt""
+1. Nguồn gốc
+
+Trên tờ TIME (thời báo) số ra ngày 28/12/1937 lần đầu tiên thuật ngữ ""vũ khí hủy diệt hàng loạt"" được đưa ra trong các bài báo nói về vụ ném bom tại Guernica của không quân Đức:
+
+Điều này nói về vụ ném bom san phẳng Guernica mà trong đó tới 70% thị trấn bị thiêu hủy. Lúc đó vũ khí hạt nhân chưa hề tồn tại, song vũ khí sinh học đã được nghiên cứu, còn vũ khí hóa học đã được sử dụng rỗng rãi. Năm 1946, ngay sau các vụ Hiroshima và Nagasaki, Liên Hợp Quốc đã đưa ra nghị quyết đầu tiên về vấn đề này. Đó là nghị quyết thành lập Ủy ban Năng lượng nguyên tử (tiền thân của Cơ quan Năng lượng nguyên tử Quốc tế IAEA) và dùng các từ ngữ: ""...vũ khí nguyên tử và mọi vũ khí khác có thể gây hủy diệt hàng loạt"".
+Từ đó, thuật ngữ ""vũ khí WMD"" được sử dụng rộng rãi trong cộng đồng kiểm soát vũ khí. Các thuật ngữ bộ 3 vũ khí nguyên tử, sinh học và hóa học (ABC) và sau đó là bộ 3 vũ khí hạt nhân, sinh học và hóa học (NBC) dần dần được đưa ra. Công ước về vũ khí sinh học và độc tố năm 1972 đã dứt khoát đưa các vũ khí sinh học và vũ khí hóa học vào hàng vũ khí WMD: ""Tin chắc tầm quan trọng và tính cấp bách của việc loại trừ khỏi kho vũ khí của các quốc gia, thông qua những biện pháp hữu hiệu, những vũ khí hủy diệt hàng loạt nguy hiểm như những vũ khí sử dụng các tác nhân hóa học và vi trùng"".
+
+2. Thời Chiến tranh lạnh
+
+Thuật ngữ WMD đã bị sử dụng lệch lạc từ đầu Chiến tranh Lạnh (chủ yếu để chỉ vũ khí hạt nhân) cho đến tận năm 1990. Sau đó, trong Chiến tranh Vùng Vịnh 1991, nó đã được chính giới và giới truyền thông đại chúng cải tử hoàn sinh và sử dụng phổ biến, mặc dù có hơi hướng khá lỗi thời. Nó được sử dụng suốt những năm 90 khi đề cập tới yêu cầu tiếp tục trừng phạt và ngăn chặn Iraq bằng quân sự. Thuật ngữ vũ khí WMD, gộp vũ khí thuộc những phạm trù rất khác nhau thành 1 nắm (vũ khí hóa học và vũ khí sinh học khác hẳn vũ khí hạt nhân) về cơ bản là 1 cách dùng từ mang tính chính trị chứ không phải là quân sự, và có thể nhất trí rằng việc sử dụng thuật ngữ WMD trong giai đoạn 1990-2003 rõ ràng là nhằm vào các mục đích chính trị. Cách dùng từ này đạt đến đỉnh cao với cuộc khủng hoảng giải trừ vũ khí Iraq năm 2002 về sự tồn tại của vũ khí hủy diệt hàng loạt tại Iraq, cái đã trở thành lý lẽ chính của Mỹ trong cuộc chiến tranh Iraq 2003. Do sử dụng quá nhiều, hội phương ngữ Hoa Kỳ đã bầu chọn WMD là từ của năm vào năm 2002. Và trong năm 2003, đại học bang Lake Superior đã bổ sung thuật ngữ WMD vào danh mục các thuật ngữ bị tẩy chay do ""sử dụng sai, lạm dụng và nói chung là vô dụng"".
+
+II. Các loại vũ khí hủy diệt hàng loạt
+1. Vũ khí hạt nhân (tiếng Anh: nuclear weapon)
+
+Vũ khí hạt nhân là loại vũ khí mà năng lượng của nó do các phản ứng phân hạch hoặc/và nhiệt hạch gây ra. 1 vũ khí hạt nhân nhỏ nhất cũng có sức công phá lớn hơn bất kỳ vũ khí thông thường nào. Loại vũ khí này có sức công phá tương đương với 10 triệu tấn thuốc nổ có thể phá hủy hoàn toàn 1 thành phố. Trong lịch sử chiến tranh có 2 quả bom hạt nhân được dùng trong Chiến tranh thế giới thứ hai: quả bom thứ nhất được ném xuống Hiroshima (Nhật Bản) vào ngày 6/8/1945 có tên là Little Boy và được làm từ urani; quả sau có tên là Fat Man và được ném xuống Nagasaki, cũng ở Nhật Bản 3 ngày sau đó, được làm từ plutoni gây ra hậu quả hủy diệt vô cùng lớn.
+
+2. Vũ khí hóa học (tiếng Anh: chemical weapon)
+
+Vũ khí hóa học là loại vũ khí sử dụng hóa chất (thường là chất độc quân sự) gây tổn thương, nguy hại trực tiếp cho người, động vật và cây cỏ. Vũ khí hóa học là một trong những loại vũ khí hủy diệt lớn gây chết người hàng loạt. Vũ khí hóa học dựa trên đặc điểm độc tính cao và gây tác dụng nhanh của chất độc quân sự để gây tổn thất lớn cho đối phương.
+
+3. Vũ khí sinh học (tiếng Anh: biological weapon)
+
+Vũ khí sinh học là loại vũ khí hủy diệt lớn dựa vào đặc tính gây bệnh hay truyền bệnh của các vi sinh vật như vi trùng, vi khuẩn; hoặc các độc tố do một số vi trùng tiết ra để giết hại hàng loạt.
+
+4. Vũ khí phóng xạ (tiếng Anh: radioative weapon)
+
+5. Vũ khí xung điện từ (tiếng Anh: electromagnetic pulse weapon)
+
+Vũ khí xung điện từ là loại vũ khí hủy diệt, phóng xung điện từ ngắn đôi khi còn được gọi là nhiễu điện từ quá độ do con người chủ động tạo ra. Tùy thuộc vào nguồn phát mà nó có thể như là 1 bức xạ điện hoặc từ trường. Ảnh hưởng của vũ khí xung điện từ lên các thiết bị điện tử sẽ gây rối loạn và tổn hại, nếu ở mức năng lượng cao (như sét đánh) thậm chí có thể làm hư hại các công trình kiến trúc.
+
+6. Vũ khí trọng lực (tiếng Anh: Gravity weapon)
+
+Vũ khí trọng lực là loại vũ khí hủy diệt có thể phát ra các sóng hấp dẫn, nếu được đặt ở trong quỹ đạo gần Trái Đất.
+Câu hỏi: Thuật ngữ 'vũ khí hủy diệt hàng loạt' lần đầu tiên được sử dụng trong bối cảnh nào?"
+test_0045,2,B,B,A,A,B,reading,"Đoạn thông tin:
+Nguyễn Bảo Trị
+Nguyễn Bảo Trị (sinh năm 1929) nguyên là tướng lĩnh bộ binh của Quân lực Việt Nam Cộng hòa, cấp bậc Trung tướng. Ông xuất thân từ khóa đầu tiên và cũng là khóa duy nhất ở trường sĩ quan trừ bị do Quốc gia Việt Nam mở ra tại miền bắc Việt Nam. Tốt nghiệp được chọn về đơn vị bộ binh. Khởi đầu với chức vụ Đại đội trưởng của một đơn vị bộ binh tác chiến. Tuần tự theo hệ thống chỉ huy lên đến chức vụ chỉ huy cấp Sư đoàn, Quân đoàn trước khi được chuyển sang làm Chỉ huy trưởng các đơn vị yểm trợ và đào tạo trực thuộc Bộ Tổng tham mưu. Là một sĩ quan được thăng cấp khá nhanh, mang quân hàm Chuẩn tướng khi mới có 35 tuổi.
+
+I. Tiểu sử và Binh nghiệp
+
+Ông sinh ngày 26 tháng 1 năm 1929 trong một gia đình nền nếp khá giả, thân phụ là giáo chức tại Hà Nội. Ông là học sinh ở các trường tại Hà Nội. Khi lên trung học, ông được nhận vào trường Chu Văn An. Năm 1950, ông tốt nghiệp với văn bằng Tú tài bán phần (Part I).
+1. Quân đội Quốc gia Việt Nam
+
+Tháng 9 năm 1951, thi hành lệnh động viên của Quốc gia Việt Nam, ông nhập ngũ vào Quân đội Quốc gia, mang số quân: 49/300.471. Theo học khóa 1 Lê Lợi tại trường sĩ quan trừ bị Nam Định, khai giảng ngày 1 tháng 10 năm 1951. Ngày 1 tháng 6 năm 1952 mãn khóa tốt nghiệp với cấp bậc Thiếu úy. Ra trường, ông được làm Đại đội trưởng đại đội 1 thuộc tiểu đoàn 18 Việt Nam. Đầu năm 1953, ông được thăng cấp Trung úy làm Tiểu đoàn trưởng tiểu đoàn khinh chiến 703.
+Tháng 1 năm 1954, ông được thăng cấp Đại úy, chuyển đến tiểu đoàn 75 Việt Nam giữ chức vụ Tiểu đoàn trưởng. Cùng năm, chuyển đi làm Trung đoàn trưởng trung đoàn 154 bộ binh đồn trú ở miền bắc. Sau ngày ký hiệp định Genève 20 tháng 7 năm 1954, ông cùng đơn vị di chuyển vào nam.
+
+2. Quân đội Việt Nam Cộng hòa
+
+Tháng 8 năm 1955, ông được thăng cấp Thiếu tá và được cử đi du học lớp tham mưu cao cấp tại Học viện chỉ huy và tham mưu Fort Leavenworth, Kansas, Hoa Kỳ. Tháng 4 năm 1956, tốt nghiệp trở về nước, ông được bổ nhiệm làm Giám đốc khối huấn luyện tại trường Đại học Quân sự.
+Tháng 10 năm 1957, ông được thăng cấp Trung tá Tư lệnh sư đoàn khinh chiến số 11 thay thế Trung tá Lê Quang Trọng. Ngày 1 tháng 6 năm 1959, ông chuyển đi làm Tư lệnh sư đoàn 21 bộ binh tân lập. Ba tháng sau, ông chuyển ra Vùng 2 chiến thuật giữ chức vụ Tư lệnh sư đoàn 22 bộ binh thay thế Trung tá Trần Thanh Chiêu.
+Tháng 11 năm 1963, sau cuộc đảo chính Tổng thống Ngô Đình Diệm, ngày 5 tháng 11, ông được thăng cấp Đại tá và nhận lệnh bàn giao Sư đoàn 22 lại cho Đại tá Nguyễn Thanh Sằng, ông được điều về trung ương phục vụ tại Bộ Tổng tham mưu chờ nhận nhiệm vụ mới. Ngày 16 tháng 9 cùng năm chuyển về Vùng 4 chiến thuật, ông được cử làm Tư lệnh sư đoàn 7 bộ binh thay thế Đại tá Huỳnh Văn Tồn. Ngày 31 tháng 10 năm 1964, ông được thăng cấp Chuẩn tướng tại nhiệm. Ngày 1 tháng 10 năm 1965, ông được thăng cấp Thiếu tướng, mười ngày sau bàn giao sư đoàn 7 bộ binh lại cho Đại tá Nguyễn Viết Thanh. Ngay sau đó, ông được bổ nhiệm chức vụ Tư lệnh Quân đoàn III & Vùng 3 chiến thuật thay thế Trung tướng Cao Văn Viên. Thời điểm này ông trở thành một trong mười Ủy viên của Ủy ban Lãnh đạo Quốc gia.
+Tháng 6 năm 1966, bàn giao Quân đoàn III lại cho Thiếu tướng Lê Nguyên Khang Tư lệnh sư đoàn Thủy quân Lục chiến kiêm nhiệm. Đồng thời ông được chỉ định giữ chức vụ Phụ tá chiến tranh chính trị cho Tổng Tham mưu trưởng kiêm Tổng cục trưởng Tổng cục chiến tranh chính trị thay thế Thiếu tướng Huỳnh Văn Cao. Tháng 7 cùng năm, ông được kiêm chức vụ Tổng uỷ viên Thông tin Chiêu hồi thay thế Luật sư Trịnh Đình Chính trong Nội các Chính phủ Thủ tướng Nguyễn Cao Kỳ. Cuối năm, ông bàn giao chức vụ Phụ tá kiêm Tổng cục trưởng chiến tranh chính trị lại cho Chuẩn tướng Trần Văn Trung. Ông vẫn giữ chức vụ Tổng ủy viên Thông tin Chiêu hồi,
+Ngày Quốc khánh đệ nhị Cộng hòa 1 tháng 11 năm 1967, ông được thăng cấp Trung tướng. Đầu năm 1968, ông tham chính trong Nội các Thủ tướng Nguyễn văn Lộc làm Tổng trưởng Xây dựng Nông thôn trong Nội các Thủ tướng thay thế Thiếu tướng Nguyễn Đức Thắng. Tháng 8 năm 1969, ông được cử giữ chức vụ Chỉ huy trưởng trường Chỉ huy và Tham mưu tại Đà Lạt thay thế Đề đốc Thiếu tướng Chung Tấn Cang.
+Đầu năm 1974, ông chuyển về lại trung ương đảm trách chức vụ Phụ tá Quân huấn Tổng tham mưu trưởng kiêm Tổng cục trưởng Tổng cục Quân huấn hoán chuyển nhiệm vụ với Trung tướng Phan Trong Chinh
+Tổng cục Quân huấn, vào thời tháng 4/1975, nhân sự ở Bộ chỉ huy Tổng cục được phân bổ trách nhiệm như sau:-Tổng cục trưởng - Trung tướng Nguyễn Bảo Trị-Tổng cục phó - Đại tá Đặng Đình Thụy-Phụ tá Tổng cục trưởng - Đại tá Võ Đại Khôi-Tham mưu trưởng - Đại tá Phạm Tất Thông
+Chỉ huy trưởng các Trường đào tạo và Trung tâm Huấn luyện quân sự trực thuộc Tổng cục:-Trường Chỉ huy & Tham mưu - Trung tướng Phan Trọng Chinh-Trường Võ bị Quốc gia Đà Lạt - Thiếu tướng Lâm Quang Thơ-Trường Bộ binh Thủ Đức - Đại tá Trần Đức Minh-Trường Thiếu sinh quân - Trung tá Ngô Văn Doanh-Trường Hạ sĩ quan Đồng Đế - Trung tướng Phạm Quốc Thuần-Trường Quân y - Đại tá Hoàng Cơ Lân-Trường Tổng quản trị - Đại tá Nguyễn Sĩ Túc-Trường Thiết giáp - Đại tá Huỳnh Văn Tám-Trường Truyền tin - Đại tá Cao Mạnh Thắng-Trường Pháo binh - Đại tá Hồ Sĩ Khải-Trường Tiếp vận - Đại tá Trần Văn Lễ-Trường Công binh - Đại tá Nguyễn Văn Tám-Trường Sinh ngữ Quân đội - Đại tá Trịnh Đình Phi-Trường Nữ quân nhân - Trung tá Hồ Thị Vẻ-Trung tâm Huấn luyện Hải quân - Phó Đề đốc Nguyễn Thanh Châu-Trung tâm Huấn luyện Không quân - Chuẩn tướng Nguyễn Ngọc Oánh-Trung tâm Huấn luyện Quang Trung - Thiếu tướng Trần Bá Di-Trung tâm Huấn luyện Đống Đa - Đại tá Đỗ Trọng Thuần-Trung tâm Huấn luyện Lam Sơn - Đại tá Nguyễn Hữu Toán-Trung tâm Huấn luyện Vạn Kiếp - Đại tá Nguyễn Bá Thịnh-Trung tâm Huấn luyện Chi Lăng - Đại tá Mã Sanh Nhơn-Trung tâm Huấn luyện Biệt động quân - Đại tá Nguyễn Văn Đại-Trung tâm Huấn luyện Hòa Cầm - Đại tá Trương Như Phùng
+
+II. 1975
+
+Ngày 30 tháng 4, ông cùng gia đình di tản khỏi Việt Nam. Sau đó được sang định cư ở Huntington Beach, California, Hoa Kỳ.
+
+III. Huy chương
+
+-Bảo quốc Huân chương đệ nhị đẳng (ân thưởng)-Nhiều Huy chương quân sự, dân sự và đồng minh
+
+IV. Tác phẩm
+
+1/ Khảo luận: Vai trò của người Trí thức mang Quân phục.
+2/ Tuyển tập Việt Nam Chí lược gồm có:- Người Việt đất Việt.- Miền Bắc Khai nguyên.- Cao nguyên miền Thượng.- Miền Trung Kiên dũng.- Miền Nam phú cường.
+
+V. Gia đình
+
+Thân phụ: Cụ Nguyễn Bảo Nghi (nguyên Hiệu trưởng trường Tiểu học Hàng Than, Hà Nội).
+Thân mẫu: Cụ Nguyễn Thị Nhung
+Nhạc phụ: Cụ Nguyễn Đức Nhuận (1903-2004)
+Bào đệ:-Ông Nguyễn Bảo Thuỳ (sinh năm 1932 tại Hà Nội, tốt nghiệp khóa 9 Võ bị Đà Lạt. Nguyên là Thiếu tá Chánh Sở An ninh Đô thành Sài Gòn. Ngày 2 tháng 6 năm 1968 tử trận tại quận 5, Sài Gòn trong mặt trận tết Mậu Thân, được truy thăng Trung tá).-Ông Nguyễn Bảo Tín (sinh năm 1938, tốt nghiệp khóa 17 Võ bị Đà Lạt. Nguyên là Thiếu tá thuộc Binh chủng Thủy quân Lục chiến).-Ông Nguyễn Bảo Tính (sinh năm 1940, tốt nghiệp khóa 17 Võ khoa Thủ Đức. Nguyên là Đại úy thuộc Binh chủng Lực lượng Đặc biệt).
+Phu nhân: Bà Nguyễn Minh TâmÔng bà có 5 người con (1 trai, 4 gái)
+Câu hỏi: Nguyễn Bảo Trị đã đảm nhiệm chức vụ nào sau đây trong chính phủ của Tổng thống Nguyễn Cao Kỳ?"
+test_0397,1,E,E,A,E,E,stem,"Trong một thị trường có năm doanh nghiệp, các tỷ lệ thị phần như sau: Doanh nghiệp A chiếm 50%, Doanh nghiệp B chiếm 25%, Doanh nghiệp C chiếm 15%, Doanh nghiệp D chiếm 7%, và Doanh nghiệp E chiếm 3%. Tính Chỉ số Herfindahl-Hirschman (HHI) cho thị trường này. Dựa trên HHI, câu nào trong các câu sau mô tả chính xác nhất mức độ tập trung thị trường?"
+test_0422,1,A,A,B,A,A,knowledge,Hệ điều hành sử dụng kỹ thuật cấp phát bộ nhớ liên tục sẽ đễ xảy ra hiện tượng phân mảnh trong bộ nhớ. Nguyên nhân là do đâu?
+test_0368,1,A,A,A,A,B,reading,"Đoạn thông tin:
+[1] Tiêu đề: Cuba
+Nội dung: II. Chính trị
+2. Liên đoàn thương mại
+
+Có các liên đoàn kinh tế tại Cuba, với số thành viên lên tới 98% nhân lực hòn đảo này. Các liên đoàn không đăng ký với bất kỳ một cơ quan nhà nước nào, và tự lấy kinh phí hoạt động từ nguồn đóng góp thành viên hàng tháng. Những người ủng hộ họ cho rằng các viên chức liên đoàn được bầu lên trên cơ sở tự do, và có nhiều quan điểm chính trị bên trong mỗi liên đoàn. Tuy nhiên, tất cả các liên đoàn đều là một phần của một tổ chức được gọi là Confederación de Trabajadores Cubanos (Hiệp hội Công nhân Cuba, CTC), hội này thực sự có những mối quan hệ mật thiết với nhà nước và Đảng Cộng sản. Những người ủng hộ cho rằng CTC cho phép công nhân chuyển ý kiến lên chính phủ; những người đối lập lại cho rằng chính phủ sử dụng nó để kiểm soát các công đoàn thương mại và chỉ định các thành viên lãnh đạo công đoàn. Quyền tự do bày tỏ ý kiến của công nhân cũng là một vấn đề được tranh luận. Những người ủng hộ hệ thống cho rằng những ý kiến của công nhân trên thực tế đã hình thành nên chính sách của chính phủ trong nhiều hoàn cảnh, như đề xuất cải cách thuế năm 1993, trong khi phe đối lập, đưa ra những nghiên cứu của các tổ chức lao động quốc tế cho thấy công nhân bị buộc phải thề nguyền trung thành với các lý tưởng của Đảng Cộng sản, và cho rằng chính phủ chi phối một cách có hệ thống và cản trở các nhà hoạt động công đoàn, trong khi vẫn ngăn cấm việc thành lập các liên đoàn thương mại độc lập (không thuộc CTC), rằng các lãnh đạo các liên đoàn độc lập đã bị bỏ tù, và rằng quyền đình công của công nhân không được ghi nhận trong luật.
+
+3. Quan hệ đối ngoại
+
+3.1. Việt Nam
+
+Quan hệ ngoại giao giữa hai nước vô cùng đặc biệt. Ngày 12 tháng 9 năm 1973, Fidel Castro là vị nguyên thủ nước ngoài đầu tiên và duy nhất thăm vùng giải phóng miền Nam khi chiến tranh chưa kết thúc. Cũng trong chuyến thăm lần đầu tiên này, Cuba đã tặng Việt Nam 5 công trình kinh tế - xã hội với tổng trị giá khoảng 80 triệu USD bao gồm: khách sạn Thắng Lợi (Hồ Tây, Hà Nội), Bệnh viện Việt Nam - Cuba (Đồng Hới, Quảng Bình), đường Xuân Mai, trại bò giống Ba Vì, Xí nghiệp gà Lương Mỹ; tặng bò giống, gà giống và chi hơn 6 triệu USD để mua thiết bị hiện đại, đồng thời cử chuyên gia về cầu đường sang Việt Nam tham gia cùng bộ đội Trường Sơn mở rộng Đường Trường Sơn, và giúp đào tạo trên 1.000 sinh viên Việt Nam ở trình độ đại học và cao học...Cuba là nước Mỹ Latinh đầu tiên và cũng là một trong những nước sớm nhất trên thế giới công nhận chính thức Mặt trận Dân tộc Giải phóng miền Nam Việt Nam. Cơ quan đại diện thường trú của Mặt trận Dân tộc Giải phóng miền Nam Việt Nam tại La Habana (Ban đầu tòa đại sứ này đặt tạm tại một biệt thự ở khu phố lao động Kohly, nhưng sau được Chính phủ Cuba cấp thêm một biệt thự sân vườn rất lớn tại Quinta Avenida, đại lộ số 5 dài nhất và đẹp nhất thủ đô La Habana) được hưởng đầy đủ quy chế ngoại giao. Sau khi Chính phủ Cách mạng lâm thời Cộng hòa Miền Nam Việt Nam thành lập, cơ quan này nhanh chóng được chuyển thành đại sứ quán miền Nam Việt Nam. Thời chiến khốc liệt, thông cảm hoàn cảnh khó khăn của nước bạn, Thủ tướng Fidel Castro bao cấp toàn phần. Tất cả từ nhà cửa, xe cộ, trang thiết bị làm việc, ăn ở, chi phí ngoại giao, kể cả lương bổng, phụ cấp của cán bộ, nhân viên sứ quán đều được Cuba bảo đảm chu đáo.Sau Sự kiện 30 tháng 4 năm 1975, hầu hết các nước đều dừng viện trợ không hoàn lại cho Việt Nam, riêng Cuba là một trong số ít các nước tiếp tục viện trợ cho Việt Nam 10 năm tiếp theo từ 1975-1985.
+
+3.2. Mỹ
+
+Ngày 17 tháng 12 năm 2014, qua vai trò trung gian của Tòa Thánh Vatican, Chủ tịch Cuba Raul Castro và Tổng thống Hoa Kỳ Barack Obama tuyên bố đã đạt được một thỏa thuận về việc bình thường hóa quan hệ ngoại giao giữa hai nước sau hơn 50 năm gián đoạn. Tuy nhiên, việc bình thường hóa quan hệ còn phải trải qua một giai đoạn dài phía trước vì nó phải nhận được sự phê chuẩn từ lưỡng viện Quốc hội Hoa Kỳ. Tuy nhiên, tổng thống kế nhiệm ông Obama là Donald Trump vào năm 2016 đã hủy bỏ chính sách thân thiện của người tiền nhiệm, và tiếp tục duy trì cấm vận đối với Cuba.
+
+III. Phân chia hành chính
+
+Cuba có ba cấp hành chính là trung ương, tỉnh (provincias) và hạt (municipios). Cấp tỉnh có 14 đơn vị, cấp hạt có 169 đơn vị. Có một hạt đặc biệt, được xếp ngang với cấp tỉnh, đó là Isla de la Juventud. Trước kia Cuba chỉ có sáu tỉnh: Pinar del Río, Habana, Matanzas, Las Villas, Camagüey và Oriente. Cách phân chia hành chính hiện nay rất giống với kiểu tỉnh quân sự Tây Ban Nha trong những cuộc chiến tranh giành độc lập của Cuba, khi hầu hết những vùng có nhiều rắc rối đều được chia nhỏ.
+
+IV. Địa lý
+
+Cuba là một quần đảo nằm tại Biển Caribbean, với tọa độ địa lý 21°3N, 80°00W. Cuba là hòn đảo chính, được bao quanh bởi bốn nhóm đảo lớn. Chúng gồm Colorados, Camagüey, Jardines de la Reina và Canarreos. Hòn đảo chính Cuba chiếm hầu hết diện tích đất nước (105.006 km² hay 40.543 dặm vuông) và là hòn đảo lớn thứ 17 trên thế giới theo diện tích. Hòn đảo lớn thứ hai tại Cuba là Đảo Thanh niên (Isla de la Juventud), tên cũ là Đảo Thông (Isla de la Pinos) ở phía đông nam, với diện tích 3056 km² (1180 dặm vuông). Cuba có tổng diện tích đất liền 110.860 km².
+Hòn đảo chính gồm chủ yếu các đồng bằng phẳng tới hơi dốc. Ở cực phía đông nam Sierra Maestra, một rặng núi dốc đứng với điểm cao nhất là Pico Real del Turquino 2.005 mét (6.578 ft). Khí hậu địa phương là nhiệt đới, dù được điều tiết ôn hòa bởi gió mậu dịch. Nói chúng (với biến thiên theo địa phương), có một mùa khô từ tháng 11 tới tháng 4, và một mùa mưa từ tháng 5 tới tháng 10. Nhiệt độ trung bình 21 °C vào tháng 1 và 27 °C vào tháng 7. Cuba nằm trên đường đi của các cơn bão và chúng thường xảy ra nhất trong khoảng từ tháng 9 tới tháng 10. La Habana là thành phố lớn nhất và thủ đô Cuba; các thành phố lớn khác gồm Santiago de Cuba và Camagüey. Những thị trấn khác gồm Baracoa từng là khu định cư đầu tiên của người Tây Ban Nha tại Cuba, Trinidad, và một di sản thế giới của UNESCO, and Bayamo.
+
+V. Xã hội
+1. Giáo dục
+
+Về lịch sử, Cuba luôn có tỷ lệ giáo dục và biết chữ cao nhất Mỹ Latinh, cả trước và sau thời kỳ cách mạng. Giáo dục là miễn phí đối với mọi công dân Cuba gồm cả giáo dục đại học. Các định chế giáo dục tư nhân không được phép hoạt động. Phổ cập giáo dục áp dụng với mọi đứa trẻ từ sáu tuổi tới hết mức giáo dục cấp hai căn bản (thường là 15 tuổi) và tất cả học sinh, không cần biết giới tính và sắc tộc, đều mặc đồng phục của trường với màu sắc thể hiện cấp học. Trong suốt quá trình học, học sinh không phải trả một khoản phí nào, từ tiền may đồng phục, tiền mua sắm sách vở, giấy bút và còn được nuôi ăn một bữa hoặc cả ngày (tùy theo từng trường). Do vậy, gần như không có một trẻ em Cuba nào bị thất học, dù đó là ở nơi nông thôn xa xôi.
+Giáo dục tiểu học kéo dài sáu năm, giáo dục trung học cơ sở được chia thành mức căn bản và tiền đại học. Giáo dục cao học được tiến hành tại các trường đại học, các viện, các viện sư phạm và các viện bách khoa. Đại học La Habana được thành lập năm 1728 và có một số trường cao đẳng cũng như đại học khác. Bộ Giáo dục Cao học Cuba cũng điều hành chương trình Giáo dục Từ xa mở các lớp buổi chiều và buổi tối tại các vùng nông thôn cho các lao động nông nghiệp. Giáo dục được đề cao cả về mặt chính trị và ý thức hệ, và sinh viên bậc cao học được chờ đợi sẽ là người thực hiện các mục tiêu do chính phủ Cuba đề ra.
+Câu hỏi: Theo ngữ cảnh, nhận định nào sau đây chính xác về vai trò của Confederación de Trabajadores Cubanos (CTC) trong chính trị Cuba?"
+test_0440,1,A,A,A,A,D,reading,"Đoạn thông tin:
+Lean On
+""Lean On"" là một bài hát của nhóm nhạc người Mỹ Major Lazer và nhà sản xuất âm nhạc người Pháp DJ Snake hợp tác với nghệ sĩ thu âm người Đan Mạch MØ nằm trong album phòng thu thứ ba của Major Lazer, ""Peace Is the Mission"" (2015). Nó được phát hành vào ngày 2 tháng 3 năm 2015 như là đĩa đơn đầu tiên trích từ album bởi Mad Decent, Because Music và Warner Music Group. Bài hát được đồng viết lời bởi thành viên của nhóm Diplo với DJ Snake, MØ và Jr Blender, trong khi phần sản xuất được đảm nhiệm bởi DJ Snake và toàn bộ những thành viên của Major Lazer (Diplo, Jillionaire và Walshy Fire). Ban đầu được sáng tác như là một bản reggae mang giai điệu chậm thông qua một đoạn giai điệu không lời từ Blender, ""Lean On"" đã được đề nghị cho Rihanna hoặc Nicki Minaj để thể hiện nó nhưng đều bị từ chối, trước khi đi đến quyết định sẽ được thể hiện bởi MØ. Đây là một bản EDM và electronic kết hợp với những yếu tố từ moombahton mang nội dung đề cập đến việc một cô gái luôn cần một người đàn ông bên cạnh để dựa vào trong cuộc sống.
+
+Lean On
+Video ca nhạc cho ""Lean On"" được đạo diễn bởi Tim Erem với bối cảnh ở Ấn Độ, trong đó bao gồm những cảnh Major Lazer, DJ Snake và MØ hát với những vũ đạo được lấy cảm hứng từ Bollywood. Để quảng bá bài hát, ba nghệ sĩ đã trình diễn nó trên nhiều chương trình truyền hình và lễ trao giải lớn, bao gồm ""Good Morning America"", ""The Tonight Show Starring Jimmy Fallon"", Buổi hòa nhạc giải Nobel Hòa bình năm 2015, giải thưởng âm nhạc NRJ năm 2015 và giải Grammy Latin lần thứ 16, cũng như trong nhiều chuyến lưu diễn của họ. Kể từ khi phát hành, ""Lean On"" đã được hát lại và sử dụng làm nhạc mẫu bởi nhiều nghệ sĩ, như Pentatonix, Christina Grimmie, Sam Tsui và R. City, cũng như xuất hiện trong nhiều tác phẩm điện ảnh và truyền hình, bao gồm ""Ballers"", ""How to Be Single"", ""The Leftovers"" và ""Power"". Tính đến nay, nó đã bán được hơn 13 triệu bản trên toàn cầu, trở thành đĩa đơn bán chạy thứ năm của năm 2015 cũng như là một trong những đĩa đơn bán chạy nhất mọi thời đại. Một phiên bản phối lại chính thức của bài hát với sự tham gia góp giọng từ rapper Ty Dolla Sign, cũng được phát hành.
+
+Lean On
+Sau khi phát hành, ""Lean On"" nhận được những phản ứng tích cực từ các nhà phê bình âm nhạc, trong đó họ đánh giá cao giai điệu hấp dẫn và thích hợp với những câu lạc bộ, quá trình sản xuất cũng như chất giọng của MØ. Ngoài ra, bài hát còn gặt hái nhiều giải thưởng và đề cử tại những lễ trao giải lớn, bao gồm đề cử tại giải Âm nhạc châu Âu của MTV năm 2015 cho Bài hát xuất sắc nhất và chiến thắng tại giải thưởng âm nhạc ""Billboard"" năm 2016 cho Top Bài hát Dance/Electronic. ""Lean On"" cũng tiếp nhận những thành công ngoài sức tưởng tượng về mặt thương mại với việc đứng đầu các bảng xếp hạng ở hơn 20 quốc gia, bao gồm những thị trường lớn như Úc, Đan Mạch, Phần Lan, Ireland, Hà Lan, New Zealand và Thụy Sĩ, đồng thời lọt vào top 10 ở hầu hết những quốc gia nó xuất hiện, bao gồm vươn đến top 5 ở Áo, Bỉ, Canada, Pháp, Đức, Ý, Na Uy, Tây Ban Nha, Thụy Điển và Vương quốc Anh. Tại Hoa Kỳ, nó đạt vị trí thứ tư trên bảng xếp hạng ""Billboard"" Hot 100, trở thành đĩa đơn đầu tiên của Major Lazer và MØ cũng như thứ hai của DJ Snake vươn đến top 5 tại đây.
+
+Mesto - Sự nghiệp âm nhạc. 2014 - 2015.
+Mesto bắt đầu vào việc sản xuất âm nhạc vào năm 2014, khi anh chỉ mới 15 với bài hát ""GO!"", một sự hợp tác với Alex Ranzino được đăng vào ngày 10 tháng 11 năm 2014. Không lâu sao đó, anh cùng với Benfield cho ra bản phối lại của ""Rude"", một bài hát của Magic!. Sau đó, Mesto đã cùng với Mike Williams đã phát bản phối lại của ""Raise Your Hands"" của Ummet Ozcan. Anh bắt đầu năm 2015 bằng một sản phẩm đơn với tựa đề ""New York"". Kế tiếp là sản phẩm ""Tokyo"" vào tháng 2. Vào tháng 4, Mesto tiếp tục phát hành sản phẩm tiếp theo với bản phối lại không chính thức ""Lean On"" của Major Lazer, DJ Snake và MØ. ""Rio"" được ra mắt vào tháng 5 cùng với bản phối lại không chính thức ""Satisfied"" của Showtek và Vassy vào tháng 10 là những sản phẩm tiếp theo cùng năm 2015. Ngày 9 tháng 12 năm 2015, Tetris (Truffle Butter Mashup) được ra mắt, có thể tải miễn phí. Mesto cùng với Justin Mylo hợp tác cùng với Martin Garrix với tựa đề ""Bouncybob"", được ra mắt vào ngày 31 tháng 12 năm 2015.
+
+Danh sách những bài hát được nghe nhiều nhất Spotify
+Trước tháng 10 năm 2013, bài hát nhiều stream nhất là ""Radioactive"" của Imagine Dragons; bài hát này đã vượt qua ""Wake Me Up"" của Avicii và trở thành bài hát đầu tiên đạt 200 triệu streams vào ngày 27 tháng 10, 2013. ""Wake Me Up"" đứng đầu bảng xếp hạng trong hơn một năm trước khi bị vượt kỉ lục ngày 22 tháng hai năm 2015 bởi ""Thinking Out Loud"" của Ed Sheeran, mà trở thành bài hát đầu tiên đạt 500 triệu streams vào ngày 12 tháng 7, năm 2015. Một tháng sau đó, ""Thinking Out Loud"" đã bị ""Lean On"" của Major Lazer, DJ Snake feat. MØ soán ngôi cho đến khi ""One Dance"" của Drake feat. Wizkid và Kyla, đã vượt qua vào ngày 18 tháng 10 năm 2016. ""One Dance"" đã đứng đầu bảng xếp hạng gần một năm trước khi bị vượt qua bởi ""Shape of You"" vào ngày 21 tháng 9, 2017.
+
+Lean On - Danh sách bài hát.
+- Tải kĩ thuật số - EP phối lại 1. ""Lean On"" (hợp tác với MØ) (Dillon Francis & Jauz phối lại) – 4:38 2. ""Lean On"" (hợp tác với MØ) (CRNKN phối lại) – 3:24 3. ""Lean On"" (hợp tác với MØ) (Ephwurd & ETC!ETC! phối lại) – 3:18 4. ""Lean On"" (hợp tác với MØ) (Fono phối lại) – 5:09 5. ""Lean On"" (hợp tác với MØ) (Malaa phối lại) – 6:17 6. ""Lean On"" (hợp tác với MØ) (Moska phối lại) – 4:07
+Câu hỏi: Bài hát 'Lean On' đã vượt qua 'Thinking Out Loud' để trở thành bài hát đầu tiên đạt 500 triệu streams trên Spotify vào thời điểm nào?"
+test_0008,1,B,B,A,B,B,stem,"Trong một năm nhất định, GDP danh nghĩa của một quốc gia là 500 tỷ USD và GDP thực tế là 400 tỷ USD. Nếu chỉ số giá GDP của năm trước là 100, thì tỷ lệ lạm phát cho năm hiện tại là bao nhiêu?"
+test_0227,1,A,A,A,A,D,stem,"Trong một phân tích tài chính, Emily nhận thấy rằng một công ty có tỷ số hiện hành là 1,5. Cô cũng nhận thấy rằng các khoản nợ ngắn hạn của công ty là 30.000 đô la. Để đánh giá thêm về tính thanh khoản của công ty, cô muốn tính toán vốn lưu động. Vốn lưu động của công ty là bao nhiêu?"
+test_0313,1,A,A,A,A,C,knowledge,"Thiên nhiên nước ta có sự khác nhau giữa Nam và Bắc (ranh giới là dãy Bạch Mã), không phải do sự khác nhau về:"
+test_0303,1,A,A,B,A,A,stem,"Một công ty có một khoản nợ phải trả với số tiền gốc là 80.000 đô la và lãi suất hàng năm là 6%. Nếu lãi suất được tính theo kỳ hạn hàng năm, số tiền phải trả tổng cộng vào cuối 2 năm là bao nhiêu?"
+test_0043,1,E,E,A,E,E,stem,"Một nhà nghiên cứu đang kiểm định giả thuyết không $ H_0: \mu = 50 $ đối với giả thuyết thay thế $ H_1: \mu > 50 $ bằng cách sử dụng một mẫu có kích thước $ n = 36 $ từ một quần thể có phân phối chuẩn với phương sai chưa biết. Giá trị trung bình mẫu là $ \bar{x} = 53 $ và độ lệch chuẩn mẫu là $ s = 6 $. Trong số các phát biểu sau, phát biểu nào là đúng về giá trị thống kê t?"
+test_0047,1,A,A,A,A,B,reading,"Đoạn thông tin:
+Granny Smith
+Granny Smith hay còn được gọi là táo xanh hay táo chua, là một giống táo có nguồn gốc từ Úc xuất hiện vào năm 1868. Nó được đặt tên sau khi nhà nhân giống cây trồng Maria Ann Smith tình cờ phát hiện trong một quá trình lai tạo không chủ ý.
+Quả táo cứng, chắc, có vỏ màu xanh nhạt, thịt giòn và chứa nhiều nước. Hương vị chua và có tính axit. Nó vẫn cứng khi nướng, khiến nó trở thành một loại táo nấu ăn rất phổ biến, chẳng hạn như được sử dụng trong bánh nướng để làm ngọt. Quả táo chuyển từ màu xanh sang màu vàng khi quá chín. Vào năm 2019, Hiệp hội Táo Mỹ báo cáo Granny Smith là giống táo phổ biến thứ ba tại Hoa Kỳ.
+
+I. Lịch sử
+
+Giống táo Granny Smith có nguồn gốc ở Eastwood, New South Wales, Úc (nay là vùng ngoại ô của Sydney) vào năm 1868. Người khám phá ra nó là Maria Ann Smith (nhũ danh Sherwood), bà đã di cư đến quận từ Beckley, East Sussex vào năm 1839 theo chồng của bà là Thomas. Họ mua một vườn cây ăn quả nhỏ trong vùng vào những năm 1855–1856 và bắt đầu trồng trọt trái cây, đưa tên tuổi vùng này lên khắp thuộc địa Úc. Smith có tám người con, bà là một nhân vật nổi bật trong quận, trong những năm bà cao tuổi bà có biệt danh là ""Granny"" Smith.
+
+Lịch sử nguồn gốc của táo Granny Smith đã không được công bố cho đến năm 1924. Trong năm đó, theo một sử gia địa phương trong Farmer and Settler ông đã phỏng vấn hai người đàn ông quen biết Smith. Một trong hai người được phỏng vấn kể lại rằng, vào năm 1868, ông ta (khi đó 12 tuổi) và cha ông ta đã được mời đến trang trại của Smith để kiểm tra một cây con lai tạo không chủ ý nảy mầm gần một con lạch. Smith đã vứt hạt ở đó giữa những cây dương xỉ phần còn lại của quả táo dại Pháp được trồng ở Tasmania. Một câu chuyện khác kể lại rằng Smith đã thử nghiệm táo dại Pháp để nấu ăn, và ném lõi táo ra ngoài cửa sổ, khi bà ấy làm việc đã phát hiện ra rằng giống táo mới đã mọc lên bên dưới bệ cửa sổ nhà bếp của mình. Dù là gì đi nữa, Smith đã tự mình nhân giống giống cây trồng mới trong khu đất của mình khi khám phá rằng những quả táo có thể dùng tốt để nấu ăn và để bán. Chúng có ""đầy đủ hình dạng của một quả táo nấu ăn"", chúng không có vị chua mà thay vào đó là ""ngọt và giòn để ăn."" Bà đến một gian hàng tại chợ George Street ở Sydney, tại đó những quả táo được bảo quản ""đặc biệt tốt và trở nên phổ biến"" và ""mỗi tuần một lần bà bán sản phẩm ở đó.""Smith qua đời chỉ vài năm sau phát hiện của bà (năm 1870), nhưng công việc canh tác của bà đã được những người trồng rừng ở địa phương khác chú ý. Edward Gallard là một trong những người trong đó, ông đã trồng rộng rãi táo Granny Smith trong đất canh tác của ông và sau đó ông mua lại trang trại Smith khi Thomas qua đời vào năm 1876. Gallard đã thành công trong việc tiếp thị loại táo này tại địa phương, nhưng nó không nhận được sự chú ý rộng rãi cho đến năm 1890. Trong năm đó, nó được trưng bày với cái tên ""Cây giống của Smith"" tại Triển lãm Nông nghiệp và Làm vườn Castle Hill, năm sau nó đã giành được giải thưởng nấu táo với tên gọi ""Granny Smith's Seedling."" (""Cây giống của bà Smith""). Giống táo thành công rực rỡ đến nỗi vào năm sau nhiều người đã trưng bày táo Granny Smith tại các buổi triển lãm trồng trọt.Vào năm 1895, Cơ quan Nông nghiệp New South Wales đã công nhận giống táo này và bắt đầu cho trồng tại Khu thí nghiệm của Chính phủ ở Bathurst, New South Wales, giới thiệu trên công báo về đặc tính của nó như một loại táo nấu ăn có tiềm năng để xuất khẩu. Trong những năm sau đó, chính phủ đã tích cực quảng bá giống táo, dẫn đến việc nó được áp dụng trồng rộng rãi. Sự nổi tiếng trên toàn thế giới của nó đã tăng lên, táo có thể được thu hoạch từ tháng 3 và lưu trữ cho đến tháng 11. Vào những năm 1890 và những năm 1900, những nhà buôn trái cây tiên phong đã thử nghiệm các phương pháp vận chuyển táo ra nước ngoài trong kho đông lạnh. Vì thời hạn sử dụng tuyệt vời của nó, Granny Smith có thể được xuất khẩu xa và xuất khẩu hầu hết các thời điểm trong năm, vào thời điểm xuất khẩu thực phẩm của Úc đang tăng mạnh do nhu cầu của quốc tế. Granny Smith đã được xuất khẩu với số lượng lớn sau Chiến tranh thế giới thứ nhất và đến năm 1975, 40% sản lượng táo của Úc là Granny Smith. Vào thời điểm này, nó đã được trồng phổ biến mạnh tại những nơi khác ở Nam Bán cầu, cũng như ở Pháp và Hoa Kỳ. Sự ra đời của quả táo Granny Smith đến nay được tổ chức kỷ niệm hàng năm ở Eastwood với Lễ hội Granny Smith.
+
+II. Thuộc tính
+
+Cây non có thể biến đổi về mặt di truyền. Chúng thường kém chất lượng khi trồng từ hạt giống. Để giữ được các biến dị di truyền chính xác, phương pháp nhân giống thông thường là chiết ghép cây trồng (giâm cành đôi khi được sử dụng). Tất cả những cây táo Granny Smith được trồng hiện nay đều là những cây vô tính từ cây táo Smith ban đầu ở Sydney.Táo Granny Smith có màu xanh lục nhạt. Chúng được sử dụng phổ biến trong nhiều món ăn có táo, chẳng hạn như bánh táo, cobbler,... Chúng cũng thường được ăn sống, hoặc sản xuất rượu táo, như công ty Woodchuck Hard Cider có sản phẩm rượu táo Granny Smith.
+Giống táo này khá nhạy cảm với bệnh cháy lá và rất dễ bị bệnh vảy, bệnh phấn trắng và bệnh gỉ sắt táo.
+Táo Granny Smith dễ bảo quản trong kho bảo quản hơn nhiều so với các loại táo khác, yếu tố này đã góp phần rất lớn vào sự thành công của nó trên thị trường xuất khẩu. Thời hạn lưu trữ lâu dài của nó là do ở mức độ sản sinh ethylene khá thấp, và trong điều kiện bảo quản thích hợp, Granny Smiths không bị giảm chất lượng trong vòng một năm. Giống cây này cần ít số giờ lạnh hơn trong mùa đông và mùa quả dài hơn để trưởng thành, vì vậy nó được ưa chuộng đối với những vùng trồng táo có khí hậu ôn đới. Tuy nhiên, chúng dễ bị bỏng bề mặt và có vị đắng. Bỏng vỏ bề mặt có thể được kiểm soát bằng cách điều trị với diphenylamine trước khi bảo quản. Nó cũng có thể được kiểm soát bằng cách lưu trữ oxy thấp. Có thể kiểm soát bệnh đắng ở quả táo bằng thuốc xịt canxi trong mùa sinh trưởng và bằng thuốc xịt canxi sau thu hoạch.Theo trang web của Hiệp hội Táo Hoa Kỳ, nó là một trong mười lăm giống táo phổ biến nhất ở Hoa Kỳ.
+
+III. Tài liệu tham khảo về văn hóa
+
+Năm 1968, ban nhạc rock The Beatles sử dụng hình ảnh quả táo Granny Smith làm biểu tượng cho công ty của họ, Apple Corps Limited. Đối với hãng thu âm của họ, Apple Records, một mặt của album vinyl có hình bên ngoài của quả táo trong khi mặt còn lại có hình cắt ngang của quả táo.Tác phẩm nghệ thuật năm 1966 của Yoko Ono là Apple đã sử dụng một quả táo Granny Smith trong lần tái hiện năm 2015 tại Bảo tàng Nghệ thuật Hiện đại Thành phố New York. John Lennon đã cắn một miếng trong quả táo được trưng bày năm 1966 này tại Phòng trưng bày Indica ở London.Granny Smith là một trong bốn quả táo được Bưu điện Hoa Kỳ vinh danh trong con tem 4 hình 33 ¢ năm 2013 kỷ niệm các giống táo lịch sử, cùng với giống táo Northern Spy, Baldwin và Golden Delicious.
+Câu hỏi: Theo ngữ cảnh, điều gì đã xảy ra trong quá trình Maria Ann Smith phát hiện ra giống táo Granny Smith?"
+test_0048,1,A,A,A,A,B,knowledge,"Nguồn gốc nào sau đây đã ảnh hưởng sâu sắc đến tư tưởng Chủ Tịch Hồ Chí Minh, góp phần hình thành con người cách mạng của Người?"
+test_0063,1,B,B,A,B,B,stem,"Xét một dung dịch đệm gồm axit yếu $ \text{HB} $ và bazơ liên hợp của nó $ \text{B}^- $. Giá trị $ \text{p}K_a $ của $ \text{HB} $ là 5,00. Nếu nồng độ của $ \text{HB} $ là 0,2 M và nồng độ của $ \text{B}^- $ là 0,1 M, thì giá trị pH của dung dịch là bao nhiêu?"
+test_0071,1,C,C,A,C,C,stem,"Một thanh kim loại có chiều dài 1 mét và diện tích mặt cắt ngang 0,01 m² ban đầu ở nhiệt độ đồng nhất là 50°C. Một đầu của thanh đột ngột tiếp xúc với nguồn nhiệt duy trì nhiệt độ không đổi là 150°C, trong khi đầu còn lại được giữ ở 0°C. Hệ số dẫn nhiệt của kim loại là 40 W/(m·K), và nhiệt dung riêng là 400 J/(kg·K). Khối lượng riêng của kim loại là 7000 kg/m³. Giả sử điều kiện trạng thái ổn định và không có mất mát nhiệt ra môi trường, nhiệt độ tại một điểm cách đầu được giữ ở 0°C 0,5 mét là bao nhiêu?"
+test_0072,1,C,C,A,C,C,stem,"Tiệm bán lẻ đang phân tích tỷ lệ luân chuyển hàng tồn kho, được tính bằng chi phí hàng hóa bán ra (COGS) chia cho hàng tồn kho trung bình. Chi phí hàng hóa bán ra của tiệm trong năm vừa qua là 500.000 đô la, và tiệm dự định tăng COGS lên 10% trong năm tới. Nếu tiệm muốn duy trì tỷ lệ luân chuyển hàng tồn kho là 5, thì hàng tồn kho trung bình trong năm tới nên là bao nhiêu?"
+test_0080,1,A,A,A,A,B,knowledge,Tính nhân văn của văn hóa chính trị biểu hiện ở chỗ:
+test_0081,1,C,C,A,C,C,stem,"Một doanh nghiệp hoạt động trong thị trường cạnh tranh hoàn hảo và đối mặt với các hàm chi phí sau:
+- Tổng chi phí (TC) = 400 + 15Q + 3Q^2
+- Chi phí biên (MC) = 15 + 6Q
+- Chi phí trung bình tổng (ATC) = (400/Q) + 15 + 3Q
+Cho biết giá thị trường là P = 45, và doanh nghiệp đang sản xuất ở mức sản lượng tối đa hóa lợi nhuận, câu nào sau đây là đúng?"
+test_0097,1,A,A,B,A,A,stem,Người ở độ tuổi nào phải chịu trách nhiệm hình sự về tội phạm rất nghiêm trọng do cố ý hoặc tội phạm đặc biệt nghiêm trọng?
+test_0111,1,B,B,A,B,B,stem,"Lãi suất danh nghĩa là 10% được tính theo kỳ bán niên, vậy lãi suất hàng năm hiệu quả là bao nhiêu?"
+test_0133,1,A,A,A,A,D,knowledge,Đồng thể “Pháp bảo” là gì?
+test_0147,1,E,E,A,E,E,stem,"Một con lắc có chiều dài $ L $ được dịch chuyển bởi một góc nhỏ $ \theta_0 $ và được thả ra từ trạng thái nghỉ. Con lắc chịu tác dụng của một lực cản tỉ lệ với vận tốc góc của nó, với hệ số cản $ b $. Chuyển động của con lắc được mô tả bởi phương trình vi phân $ \frac{d^2\theta}{dt^2} + \frac{b}{mL} \frac{d\theta}{dt} + \frac{g}{L} \theta = 0 $, trong đó $ m $ là khối lượng của quả nặng con lắc, và $ g $ là gia tốc trọng trường. Trong số các câu sau, câu nào mô tả tốt nhất hành vi của độ dịch góc $ \theta(t) $ của con lắc theo thời gian?"
+test_0194,1,C,C,A,C,C,stem,"Một mạch điện gồm một acquy 24V, một điện trở 6Ω và một điện trở biến đổi được mắc nối tiếp. Điện trở biến đổi được điều chỉnh để tiêu thụ công suất đúng bằng công suất tiêu thụ của điện trở cố định 6Ω. Điện trở biến đổi có giá trị là bao nhiêu?"
+test_0257,1,C,C,A,C,C,stem,"Trong những năm 1890, sự kiện nào đã giúp Đảng Người Nông dân (Populist Party) trở nên phổ biến giữa các nông dân và công nhân Mỹ?"
+test_0274,1,A,A,A,C,A,stem,Quốc hội khóa I nước Việt Nam Dân chủ Cộng hòa được thành lập vào thời gian nào?
+test_0456,1,C,C,A,C,C,stem,Câu hỏi: Chức năng chính của máy khế tích tai trong là gì?
