@@ -27,8 +27,7 @@ COPY requirements.txt .
 RUN python -m pip install --no-cache-dir -r requirements.txt \
     && python -m pip install --no-cache-dir "vllm>=0.17.0"
 
-# Source, configs, and entrypoint. The v3 inference path is run.py (S7 runner);
-# src/pipeline.py is legacy and is deliberately NOT the entrypoint.
+# Source, configs, and entrypoint. The v3 inference path is run.py (S7 runner).
 COPY src/ ./src/
 COPY configs/ ./configs/
 COPY run.py main.py run.sh ./

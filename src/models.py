@@ -105,6 +105,6 @@ def load_vllm_primary(model_id: str | None = None):
         model=chosen_model,
         quantization=quantization,
         gpu_memory_utilization=vllm_cfg.get("gpu_memory_utilization", GPU_MEM_UTIL),
-        max_model_len=vllm_cfg.get("max_model_len", 8192),
+        max_model_len=vllm_cfg.get("max_model_len", 4096),
         enable_prefix_caching=vllm_cfg.get("enable_prefix_caching", True),
     )

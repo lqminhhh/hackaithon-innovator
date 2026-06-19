@@ -6,10 +6,6 @@ inference:
   temperature_deterministic: 0.1
   temperature_sampling: 0.7
 
-confidence_gate:
-  fast_exit_threshold: 0.85
-  ensemble_threshold: 0.55
-
 quantisation:
   load_in_4bit: true
   compute_dtype: "float16"

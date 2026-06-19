@@ -7,8 +7,9 @@ Supports two backends:
 The reading route may pass the question's own passage as ``context`` to
 ``build_route_prompt``. There is no retrieval/RAG context in v3.
 
-Returns the raw output text.  Confidence extraction and answer parsing
-are handled downstream by the normaliser and confidence gate.
+Answer selection and confidence come from guided-choice decoding
+(``src/extract.py``) — a valid option letter plus a logprob margin — not from
+parsing free-form text.
 """
 
 from __future__ import annotations

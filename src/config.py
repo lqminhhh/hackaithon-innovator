@@ -15,9 +15,25 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LLM_MODEL = "Qwen/Qwen3.5-4B"
 
 GPU_MEM_UTIL = 0.90  # single model owns the card now (no RAG contention)
-MARGIN_LOW = 0.15
+
+# Per-route low-margin thresholds. Margin = prob(top1) - prob(top2); a question
+# whose first-pass margin is below its route threshold is escalated. Distributions
+# differ by route, so a single global threshold under/over-escalates (Issue 6).
+MARGIN_LOW = {
+    "READING": 0.10,
+    "STEM": 0.15,
+    "KNOWLEDGE": 0.20,
+    "SAFETY": 0.05,
+}
+
+# Self-consistency depth.
+#   SC_N      — default sample count for non-STEM escalation
+#   SC_N_STEM — adaptive STEM depth: shallow vote when the first pass is confident,
+#               deep vote when it is not (STEM always votes; no early-exit).
 SC_N = 5
+SC_N_STEM = {"high": 3, "low": 7}
 SC_TEMP = 0.6
+SC_TOP_P = 0.95
 
 TOK = {
     "READING": 512,

@@ -10,7 +10,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 import math
 
-from src.config import FALLBACK, MARGIN_LOW, SC_N, SC_TEMP, TOK
+from src.config import FALLBACK, MARGIN_LOW, SC_N, SC_N_STEM, SC_TEMP, SC_TOP_P, TOK
 from src.extract import ChoiceResult, best_label, softmax_margin
 from src.parser import ParsedQuestion
 from src.reasoning_agent import ReasoningAgent
@@ -69,7 +69,10 @@ def solve_question(
         first = _direct_choice(agent, parsed, route)
 
         if route == "stem":
-            vote = self_consistency(agent, parsed, route, first)
+            # STEM always votes (no early-exit), but adapt depth to confidence:
+            # a confident first pass needs fewer samples than a shaky one.
+            n = SC_N_STEM["high"] if first.margin >= MARGIN_LOW["STEM"] else SC_N_STEM["low"]
+            vote = self_consistency(agent, parsed, route, first, n=n)
             return SolveResult(
                 qid=parsed.qid,
                 answer=vote.letter,
@@ -94,7 +97,7 @@ def solve_question(
                 **route_meta,
             )
 
-        if route == "knowledge" and first.margin < MARGIN_LOW:
+        if route == "knowledge" and first.margin < MARGIN_LOW["KNOWLEDGE"]:
             vote = self_consistency(agent, parsed, route, first)
             return SolveResult(
                 qid=parsed.qid,
@@ -146,7 +149,7 @@ def self_consistency(
         mode="think",
         max_tokens=_route_tokens(route),
         temperature=SC_TEMP,
-        top_p=0.95,
+        top_p=SC_TOP_P,
     )
 
     choices: list[ChoiceResult] = []
