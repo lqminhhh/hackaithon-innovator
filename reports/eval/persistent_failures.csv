@@ -1,0 +1,50 @@
+qid,ref_answer,v01_baseline,v02_alpha,v02_beta,v02_gamma,route_predicted,question
+test_0030,B,A,A,A,A,knowledge,Người đầu tiên truyền thừa tại chùa An Phú là ai?
+test_0058,B,A,A,C,C,stem,"Thời hạn giải quyết thủ tục cấp giấy phép xây dựng (cải tạo, nâng cấp đường ngang) của Bộ Xây dựng là bao nhiêu ngày làm việc kể từ khi nhận đủ hồ sơ?"
+test_0070,B,A,A,C,C,stem,"Theo quy trình cấp Chứng nhận trường mầm non đạt kiểm định chất lượng giáo dục, thành phần hồ sơ bắt buộc gồm những tài liệu nào?"
+test_0074,B,A,A,A,A,knowledge,Thế gian trụ trì Phật bảo là chỉ cho gì?
+test_0109,C,A,A,A,B,knowledge,Việc tăng giá xăng ảnh hưởng đến cầu du lịch Highland thông qua cơ chế nào trước?
+test_0119,A,D,B,B,B,reading,"Đoạn thông tin:
+Title: Cổ Thiên Lạc
+Content: Cổ Thiên Lạc (sinh ngày 21 tháng 10 năm 1970) là một diễn viên và ca sĩ người Hồng Kông. Anh từng là gương mặt nổi bật và diễn viên chủ chốt của đài truyền hình trung ương TVB TV drama. Anh từng đoạt giải TVB cho nam diễn viên xuất sắc nhất (Best Actor) trong năm 1999 cho vai diễn Từ Phi trong loạt phim Hồ sơ trinh sát 4 . Năm 2001 sau khi hoàn thành vai diễn Hạng Thiếu Long trong phim Cỗ Máy Thời gian (phim giúp Cổ Thiên Lạc lần thứ hai thắng giải thị đế) anh rời TVB và chỉ tập trung vào phim điện ảnh. Cổ Thiên Lạc là một trong những diễn viên nổi tiếng và được yêu thích nhất của điện ảnh Hoa ngữ (Điện ảnh Hồng Kông), và là gương mặt đại diện cho các thương hiệu quảng cáo như: Pepsi, Osim, Tag Heuer, Lotte, Zero Eyewear, Lay's, và những sản phẩm nội địa khác.
+
+I. Thân thế và sự nghiệp
+
+Trước khi đến với điện ảnh, Cổ Thiên Lạc đã từng ngồi tù vì tội ăn cắp. Sau đó anh thay đổi và sống tích cực hơn. Anh làm nhiều công việc khác nhau như hầu bàn, bán đồ ăn nhanh, bảo vệ,... Sau này anh tâm sự rằng cuộc sống dễ đưa thanh niên trẻ lầm đường lạc bước, anh khuyên các bạn trẻ trước khi làm gì hãy nên nghĩ tới người thân và tương lai của mình. Anh cũng dành nhiều lời tâm sự rất chân tình về những tháng ngày tuổi trẻ phải cực khổ kiếm ăn, cho đến khoảng thời gian anh lầm đường lạc bước, vào trại cải tạo vì nhận tội giùm anh em. Cổ Thiên Lạc siêng năng làm nhiều công việc lao động chân tay khác nhau, cho đến khi anh tình cờ được phát hiện và mời làm người mẫu cho những cuốn băng karaoke MTV nhờ đẹp trai (trường hợp tương tự xảy ra với Takeshi Kaneshiro). Cho đến năm 1993 thì TVB ký hợp đồng với Cổ Thiên Lạc, từ đó anh phấn đấu không ngừng để trở thành một trong những nam diễn viên chính xuất sắc và có số lượng fan hâm mộ đông đảo nhất. Nhất là từ khi anh đi tập tạ, nhuộm da cho rám nắng, cắt tóc ngắn, giữ vẻ mặt phong cách lạnh lùng trong những bộ phim anh đóng thì số fan nữ càng tăng lên đáng kể. Hình ảnh nam tính của Cổ Thiên Lạc sau khi nhuộm da khác hẳn vẻ thư sinh yếu đuối trong những ngày đầu tiên. Fan hâm mộ khen ngợi nhiệt liệt. Có thời gian anh được xếp số một trong danh sách những nam diễn viên đẹp trai nhất trên cả Lưu Đức Hoa, Takeshi Kaneshiro, Tạ Đình Phong,...
+Cổ Thiên Lạc là một trong những diễn viên siêng năng nhất. Cho dù thuộc hàng diễn viên ""top"" nhưng anh không hề chê kịch bản. Hễ có ai mời là anh tham gia, từ phim ma, phim xã hội đen, phim tình cảm, phim trinh thám, phim hài, phim kiếm hiệp,... như có lần anh đã nói: ""Có vai diễn tại sao không tham gia? Tôi lao động quen rồi nên thích kiếm tiền lắm và ít từ chối lời mời công việc lắm. Hơn nữa đây cũng là dịp cho tôi thử nhiều loại vai khác nhau, hoàn thiện khả năng diễn xuất"".
+Sau giải thưởng năm 1999, đến năm 2001, Cổ Thiên Lạc một lần nữa được bầu làm nam diễn viên được yêu thích nhất cho vai Hạng Thiếu Long (項少龍) trong bộ phim truyền hình TVB ""Cỗ máy thời gian"" (尋秦記, A Step into the Past dựa trên tác phẩm Tầm Tần Ký của Huỳnh Dị), đồng thời kiêm luôn giải ""Nam nghệ sĩ có phong cách thời trang nhất"" (The Most Stylish Personality Award and Men of Power) cùng trong năm 2001.
+Những phim truyền hình Cổ Thiên Lạc để lại ấn tượng là vai Dương Quá (楊過) trong ""Thần điêu hiệp lữ 1995"" (神鵰俠侶) đóng cặp với Lý Nhược Đồng; vai trung sĩ cảnh sát Từ Phi trong phim ""Hồ Sơ Trinh Sát 4"" cùng với Tuyên Huyên, Trần Cẩm Hồng, Xa Thi Mạn, vai phản diện Trương Tự Lực trong ""Thử Thách Nghiệt Ngã "" (創世紀II天地有情), và Hạng Thiếu Long trong phim Cỗ máy thời gian cùng vô số các vai diễn khác trước đó trong ""Giáo sư ưu ái"", ""Liệt hỏa hùng tâm"", ""Lệnh truy nã"", ""Duyên tình đôi chủ""...
+Sau thời gian đóng phim lẻ xã hội đen, và một loại phim ma trong series ""Âm Dương Lộ"" (Troublesome Night) khoảng thời gian đầu những năm 2000 Cổ Thiên Lạc chuyển sang những vai hài, lãng mạn trong những cuốn phim tình cảm nhẹ nhàng. Và anh đã ngay lập tức tạo được hình tượng mới, phong độ, ga-lăng, vui tính, lãng mạn, hiền lành... khác hẳn hình ảnh giang hồ xã hội đen, lầm lì, ít nói, lạnh lùng,... mà anh đã tạo ra trước đó. Chỉ cần nghe tên Cổ Thiên Lạc thì khán giả đã hình dung ra nhân vật trong bộ phim rồi.
+Ngoài điện ảnh Cổ Thiên Lạc cũng làm một cuộc dạo chơi trong âm nhạc. Anh hát mấy bài nhạc chủ đề cho những phim truyền hình mình đóng. Ngoài ra còn vài ca khúc khác cũng khiến bạn trẻ thích thú trong những album của anh. Album được chú ý nhất của Cổ Thiên Lạc là ""Mr.Cool"". Từ đó fan hâm mộ kêu anh luôn bằng biệt danh này ""Mister Cool"" thì thấy hợp với tên của anh. Tên tiếng Anh của Cổ Thiên Lạc là Louis Koo, hay là Koo Louis. Viết tắt sẽ thành ""Koo L"". Viết gần nhau thì thành ""KooL"", đọc tương tự như ""cool"". Anh còn biết danh khác là Cool Jay.
+Vai phản diện gần đây nhất của Cổ Thiên Lạc là tay xã hội đen sát máu Jimmy trong ""Tranh giành quyền lực"" (Election phần 1 và 2). Anh nhận được những lời ngợi khen của nhiều chuyên gia quốc tế qua vai diễn xuất sắc này khi bộ phim Election 2 (còn gọi là Triad Election) được đem đi trình chiếu tại liên hoan phim Cannes năm 2006.
+
+II. Học vấn
+
+Cổ Thiên Lạc là cựu học sinh của trường trung học ""Thánh Teresa"" (St. Teresa's School Kowloon).
+
+III. Ca nhạc
+
+Ngoài diễn viên, Cổ Thiên Lạc còn làm ca sĩ và phát hành vài album:
+
+2000：男朋友: Bạn trai
+2000：今期流行
+2001：樂天: Lạc thiên
+2003：Mr. Cool
+2006：藍色的緣份Anh hát ca khúc chủ đề cho một số phim truyền hình TVB mình từng tham gia: Lệnh Truy Nã, Thời đại chiến quốc (Cỗ máy thời gian), Hồ sơ vụ án 4, Thời đại khủng hoảng (Thử thách nghiệt ngã).
+Năm 2004, anh đến Việt Nam giao lưu cùng fan hâm mộ tại sân khấu Lan Anh. Trong đêm diễn anh song ca bài ""Bạn trai"" cùng ca sĩ Phương Thanh.
+Câu hỏi: Biệt danh 'Mr. Cool' của Cổ Thiên Lạc có nguồn gốc từ yếu tố nào sau đây?"
+test_0168,D,A,C,C,C,knowledge,"Theo Chủ Tịch Hồ Chí Minh, học để làm gì?"
+test_0178,A,D,B,B,B,knowledge,Tri giác phản ánh điều gì?
+test_0229,D,A,C,C,C,knowledge,Chủ Tịch Hồ Chí Minh xác định yếu tố nào là gốc của người cách mạng?
+test_0230,B,D,C,C,C,knowledge,"Học thuyết chính trị của Xê-nô-phôn, nhà chính trị học phương Tây cổ đại chủ yếu bàn đến vấn đề gì của chính trị?"
+test_0240,B,A,A,A,A,stem,"Công ty Kennie bán một máy in với giá 31.000 đô la sau ba năm sở hữu. Máy in có chi phí ban đầu là 58.000 đô la và cơ sở khấu hao là 48.000 đô la. Giá trị sổ sách của máy in vào thời điểm bán là bao nhiêu, và lợi nhuận từ việc bán là bao nhiêu?"
+test_0253,D,A,A,A,A,knowledge,Mô biểu bì có chức năng gì?
+test_0256,C,A,A,A,B,knowledge,"Giá cam tăng, tổng mức chi tiêu về cam vẫn còn không đổi, cam lúc này có cầu là:"
+test_0258,B,A,A,A,A,stem,"Theo phân loại của Morton Keller trong ""Ba chế độ của Mỹ,"" giai đoạn nào trong số các giai đoạn sau được đặc trưng bởi việc chính phủ trung ương có ít ảnh hưởng đến nền kinh tế và tập trung vào các đảng chính trị và tòa án?"
+test_0271,D,C,A,A,A,knowledge,Máu di chuyển một chiều trong hệ mạch là do
+test_0311,B,A,A,C,C,stem,"Khi văn bản xác nhận thông báo hoạt động bưu chính cấp tỉnh bị mất hoặc hư hỏng không sử dụng được, người dân cần thực hiện bước nào để được hỗ trợ?"
+test_0328,C,A,A,A,B,knowledge,Công việc nào không phải là nhiệm vụ của nhân viên marketing và bán hàng?
+test_0370,D,A,A,C,C,knowledge,Tại sao Nguyễn Ái Quốc (Chủ Tịch Hồ Chí Minh) ra đi tìm đường cứu nước mới vào đầu thế kỷ XX?
+test_0376,C,A,A,D,D,stem,Đối tượng nào sau đây không phải là 'Người sử dụng đất' theo quy định của Luật Đất đai năm 2024?
+test_0451,B,A,A,A,A,knowledge,Tư tưởng chính trong học thuyết chính trị của Khổng tử là:
+test_0454,B,D,A,A,D,knowledge,"Nếu một kỹ sư phát hiện ra việc tính phí quá mức bởi công ty của họ và được một chủ sở hữu (principal) khuyên rằng các khoản phí quá mức là cần thiết để bù đắp cho các chi phí được ước tính thấp, hành động nào trong số các hành động sau đây phù hợp với khái niệm bảo vệ người tố giác?"

@@ -117,7 +117,7 @@ def load_vllm_primary(
             else vllm_cfg.get("gpu_memory_utilization", GPU_MEM_UTIL)
         ),
         max_model_len=(
-            max_model_len if max_model_len is not None else vllm_cfg.get("max_model_len", 8192)
+            max_model_len if max_model_len is not None else vllm_cfg.get("max_model_len", 4096)
         ),
         max_num_seqs=(
             max_num_seqs if max_num_seqs is not None else vllm_cfg.get("max_num_seqs")

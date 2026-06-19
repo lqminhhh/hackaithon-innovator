@@ -9,8 +9,9 @@ architecture is final-inference compliant under the latest organizer rules:
 - no embedding model, reranker, RAG, semantic-router model, or second LLM
 - target hardware: 16 GB VRAM
 
-This README is intentionally short for now. See `docs/planning_v3.md`,
-`docs/version_results.md`, and `docs/refactor_plan.md` for the deeper history.
+This README is intentionally short for now. See `docs/status.md` for
+current project state, `docs/planning_v3.md` for the build spec, and
+`docs/version_results.md` for the score log.
 
 ## Current Architecture
 
@@ -89,9 +90,12 @@ data/
   traces/                   Per-question trace JSONL files
 
 docs/
-  planning_v3.md            Current plan
+  status.md                 Current project state (read this first)
+  planning_v3.md            Build spec and architecture
   version_results.md        Score/runtime log
-  evaluation_plan.md        Notebook evaluation design
+
+notebooks/
+  evaluation.ipynb          Submission scoring and analysis
 
 src/
   v01_baseline.py
@@ -136,7 +140,7 @@ Trace files live in:
 data/traces/
 ```
 
-Use these with the planned evaluation notebook workflow in `docs/evaluation_plan.md`.
+Run `notebooks/evaluation.ipynb` to score submissions against reference answers and export reports to `reports/eval/`.
 
 ## Important Exclusions
 

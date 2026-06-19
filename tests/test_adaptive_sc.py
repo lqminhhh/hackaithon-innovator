@@ -69,7 +69,9 @@ def test_wave2_uses_seven_stem_samples_for_low_margin_when_adaptive():
     wave2 = run_wave2(agent, [parsed], wave1, adaptive_sc=True)
 
     assert set(wave2) == {parsed.qid}
-    assert wave2[parsed.qid] in parsed.options
+    assert wave2[parsed.qid].answer in parsed.options
+    assert len(wave2[parsed.qid].votes) > 0
+    assert wave2[parsed.qid].escalation_reason.startswith("stem_sc_adaptive")
     assert len(agent.generated) == 1
     assert len(agent.generated[0]["prompts"]) == SC_N_STEM["low"]
     assert len(agent.scored_prompts) == SC_N_STEM["low"]
@@ -92,7 +94,9 @@ def test_wave2_uses_three_stem_samples_when_adaptive_disabled():
     wave2 = run_wave2(agent, [parsed], wave1, adaptive_sc=False)
 
     assert set(wave2) == {parsed.qid}
-    assert wave2[parsed.qid] in parsed.options
+    assert wave2[parsed.qid].answer in parsed.options
+    assert len(wave2[parsed.qid].votes) > 0
+    assert wave2[parsed.qid].escalation_reason.startswith("stem_sc_fixed")
     assert len(agent.generated) == 1
     assert len(agent.generated[0]["prompts"]) == SC_N_STEM["high"]
     assert len(agent.scored_prompts) == SC_N_STEM["high"]

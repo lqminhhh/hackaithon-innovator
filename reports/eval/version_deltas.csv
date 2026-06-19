@@ -1,0 +1,4 @@
+transition,n,unchanged_agrees,unchanged_disagrees,changed_toward_ref,changed_away_from_ref,changed_both_wrong,net_gain
+v01_baseline -> v02_alpha,463,106,76,188,28,65,160
+v02_alpha -> v02_beta,463,291,62,101,3,6,98
+v02_beta -> v02_gamma,463,375,21,44,17,6,27

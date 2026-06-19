@@ -1,0 +1,14 @@
+version,question_type,n,agreement_rate,disagree_count
+v01_baseline,None,463,0.2894,329
+v02_alpha,knowledge,143,0.6783,46
+v02_alpha,reading,100,0.76,24
+v02_alpha,safety,4,1.0,0
+v02_alpha,stem,216,0.5417,99
+v02_beta,knowledge,143,0.7063,42
+v02_beta,reading,100,0.8,20
+v02_beta,safety,4,1.0,0
+v02_beta,stem,216,0.9583,9
+v02_gamma,knowledge,143,0.8182,26
+v02_gamma,reading,100,0.95,5
+v02_gamma,safety,4,1.0,0
+v02_gamma,stem,216,0.9398,13

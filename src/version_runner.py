@@ -353,6 +353,8 @@ def _load_agent(
         chosen_gpu_util = chosen_gpu_util if chosen_gpu_util is not None else 0.70
         chosen_max_len = chosen_max_len if chosen_max_len is not None else 4096
         chosen_max_seqs = chosen_max_seqs if chosen_max_seqs is not None else 4
+    else:
+        chosen_max_seqs = chosen_max_seqs if chosen_max_seqs is not None else 16
 
     if torch.cuda.is_available():
         try:
