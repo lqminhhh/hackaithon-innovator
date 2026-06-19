@@ -1,16 +1,26 @@
-"""S4 route-specific compute budgets and escalation logic."""
+"""S4 route-specific compute budgets and escalation logic.
+
+S6 RAG is wired in here via the optional ``rag`` parameter of
+``solve_question``. Pass a ``RAGEngine`` instance to enable retrieval for
+low-margin knowledge questions. Omitting it preserves the pre-S6 behaviour.
+"""
 
 from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 import math
+from typing import TYPE_CHECKING, Any
 
 from src.config import FALLBACK, MARGIN_LOW, SC_N, SC_TEMP, TOK
 from src.extract import ChoiceResult, best_label, softmax_margin
 from src.parser import ParsedQuestion
 from src.reasoning_agent import ReasoningAgent
 from src.router import Route, get_forced_answer, route_question
+
+if TYPE_CHECKING:
+    from src.rag import RAGEngine
+    from src.semantic_router import SemanticRouter
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,17 +38,39 @@ class SolveResult:
     route: Route
     margin: float | None
     path: str
+    layer1_route: Route | None = None
+    semantic_route: Route | None = None
+    route_override: bool = False
+    override_blockers: list[str] = field(default_factory=list)
+    semantic_error: str | None = None
     first_answer: str | None = None
     votes: list[str] = field(default_factory=list)
     error: str | None = None
 
 
-def solve_question(agent: ReasoningAgent, parsed: ParsedQuestion) -> SolveResult:
-    """Solve one parsed question using the S4 policy.
+def solve_question(
+    agent: ReasoningAgent,
+    parsed: ParsedQuestion,
+    rag: "RAGEngine | None" = None,
+    semantic_router: "SemanticRouter | None" = None,
+) -> SolveResult:
+    """Solve one parsed question using the S4 policy with optional S6 RAG.
 
-    RAG is intentionally not included yet; S6 will plug into the knowledge path.
+    Parameters
+    ----------
+    agent:
+        Loaded ReasoningAgent (vLLM or HuggingFace backend).
+    parsed:
+        Pre-parsed question from ``parse_question()``.
+    rag:
+        Optional RAGEngine. When provided, low-margin knowledge questions
+        attempt retrieval before falling back to self-consistency. Pass None
+        (the default) to skip RAG entirely and preserve the pre-S6 behaviour.
+    semantic_router:
+        Optional S5 Layer-2 router. When provided, it may override the Layer-1
+        route before route-specific answering begins.
     """
-    route = route_question(parsed)
+    route, route_meta = _route_with_semantics(parsed, semantic_router)
     try:
         forced = get_forced_answer(parsed, route)
         if forced is not None:
@@ -49,6 +81,7 @@ def solve_question(agent: ReasoningAgent, parsed: ParsedQuestion) -> SolveResult
                 margin=None,
                 path="forced_safety",
                 first_answer=forced,
+                **route_meta,
             )
 
         first = _direct_choice(agent, parsed, route)
@@ -63,6 +96,7 @@ def solve_question(agent: ReasoningAgent, parsed: ParsedQuestion) -> SolveResult
                 path="stem_self_consistency",
                 first_answer=first.letter,
                 votes=vote.votes,
+                **route_meta,
             )
 
         if route == "reading" and _is_reason_purpose_question(parsed.query):
@@ -75,9 +109,16 @@ def solve_question(agent: ReasoningAgent, parsed: ParsedQuestion) -> SolveResult
                 path="reading_reason_self_consistency",
                 first_answer=first.letter,
                 votes=vote.votes,
+                **route_meta,
             )
 
         if route == "knowledge" and first.margin < MARGIN_LOW:
+            # S6: try RAG before self-consistency
+            if rag is not None:
+                rag_result = _try_rag(agent, parsed, rag, first, route_meta)
+                if rag_result is not None:
+                    return rag_result
+
             vote = self_consistency(agent, parsed, route, first)
             return SolveResult(
                 qid=parsed.qid,
@@ -87,6 +128,7 @@ def solve_question(agent: ReasoningAgent, parsed: ParsedQuestion) -> SolveResult
                 path="low_margin_self_consistency",
                 first_answer=first.letter,
                 votes=vote.votes,
+                **route_meta,
             )
 
         return SolveResult(
@@ -96,6 +138,7 @@ def solve_question(agent: ReasoningAgent, parsed: ParsedQuestion) -> SolveResult
             margin=first.margin,
             path="direct",
             first_answer=first.letter,
+            **route_meta,
         )
     except Exception as exc:
         return SolveResult(
@@ -105,7 +148,78 @@ def solve_question(agent: ReasoningAgent, parsed: ParsedQuestion) -> SolveResult
             margin=None,
             path="fallback",
             error=str(exc),
+            **route_meta,
         )
+
+
+def _route_with_semantics(
+    parsed: ParsedQuestion,
+    semantic_router: "SemanticRouter | None",
+) -> tuple[Route, dict[str, Any]]:
+    """Run Layer-1 routing, then optional S5 semantic override."""
+    layer1_route = route_question(parsed)
+    route_meta: dict[str, Any] = {
+        "layer1_route": layer1_route,
+    }
+
+    if semantic_router is None:
+        return layer1_route, route_meta
+
+    try:
+        decision = semantic_router.decide_route(parsed, layer1_route=layer1_route)
+    except Exception as exc:
+        route_meta["semantic_error"] = str(exc)
+        return layer1_route, route_meta
+
+    route_meta.update(
+        {
+            "semantic_route": decision.layer2_route,
+            "route_override": decision.should_override,
+            "override_blockers": list(decision.override_blockers),
+        }
+    )
+    return decision.final_route, route_meta
+
+
+def _try_rag(
+    agent: ReasoningAgent,
+    parsed: ParsedQuestion,
+    rag: "RAGEngine",
+    first: ChoiceResult,
+    route_meta: dict[str, Any] | None = None,
+) -> SolveResult | None:
+    """Attempt RAG-augmented answer for a low-margin knowledge question.
+
+    Returns a SolveResult if retrieval found relevant context and the
+    re-answer has margin >= the first-pass margin. Returns None otherwise
+    so the caller can fall through to self-consistency.
+    """
+    try:
+        context = rag.retrieve_and_rerank(parsed.query, exclude_id=parsed.qid)
+        if context is None:
+            return None
+
+        rag_choice = agent.predict_route_choice_result(
+            route="knowledge",
+            question=parsed.query,
+            options=parsed.options,
+            context=context,
+        )
+
+        if rag_choice.margin >= first.margin:
+            return SolveResult(
+                qid=parsed.qid,
+                answer=rag_choice.letter,
+                route="knowledge",
+                margin=rag_choice.margin,
+                path="knowledge_rag",
+                first_answer=first.letter,
+                **(route_meta or {}),
+            )
+        return None
+    except Exception as exc:
+        print(f"  [RAG] _try_rag failed for {parsed.qid}: {exc}", flush=True)
+        return None
 
 
 def self_consistency(

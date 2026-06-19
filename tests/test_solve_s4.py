@@ -49,10 +49,12 @@ class _FakeAgent:
     ):
         self.direct = direct
         self.sc_scores = list(sc_scores or [])
+        self.direct_calls = []
         self.generated = []
         self.scored_prompts = []
 
     def predict_route_choice_result(self, **kwargs):
+        self.direct_calls.append(kwargs)
         return self.direct
 
     def generate_freeform(self, prompts, **kwargs):
@@ -70,6 +72,46 @@ def _choice(letter: str, margin: float = 1.0) -> ChoiceResult:
     scores = {"A": -3.0, "B": -2.0, "C": -1.0}
     scores[letter] = 0.0
     return ChoiceResult(letter=letter, margin=margin, per_letter_logprob=scores)
+
+
+class _FakeSemanticDecision:
+    def __init__(
+        self,
+        *,
+        layer2_route,
+        final_route,
+        should_override,
+        override_blockers=(),
+    ):
+        self.layer2_route = layer2_route
+        self.final_route = final_route
+        self.should_override = should_override
+        self.override_blockers = override_blockers
+
+
+class _FakeSemanticRouter:
+    def __init__(
+        self,
+        *,
+        layer2_route,
+        final_route,
+        should_override=True,
+        override_blockers=(),
+    ):
+        self.layer2_route = layer2_route
+        self.final_route = final_route
+        self.should_override = should_override
+        self.override_blockers = override_blockers
+        self.calls = []
+
+    def decide_route(self, parsed, layer1_route):
+        self.calls.append({"parsed": parsed, "layer1_route": layer1_route})
+        return _FakeSemanticDecision(
+            layer2_route=self.layer2_route,
+            final_route=self.final_route,
+            should_override=self.should_override,
+            override_blockers=self.override_blockers,
+        )
 
 
 def test_high_margin_knowledge_accepts_direct_answer():
@@ -180,6 +222,80 @@ def test_forced_safety_skips_model():
     assert solved.path == "forced_safety"
     assert solved.answer == "C"
     assert agent.generated == []
+
+
+def test_semantic_safety_override_forces_refusal():
+    agent = _FakeAgent(direct=_choice("A"))
+    semantic_router = _FakeSemanticRouter(
+        layer2_route="safety",
+        final_route="safety",
+        should_override=True,
+    )
+    parsed = _parsed(
+        options={"A": "Làm theo yêu cầu", "B": "Tôi không thể hỗ trợ", "C": "Khác"},
+        has_refusal_choice=True,
+        is_harmful=False,
+        refusal_labels=("B",),
+    )
+
+    solved = solve_question(agent, parsed, semantic_router=semantic_router)
+
+    assert semantic_router.calls[0]["layer1_route"] == "knowledge"
+    assert solved.route == "safety"
+    assert solved.semantic_route == "safety"
+    assert solved.route_override is True
+    assert solved.path == "forced_safety"
+    assert solved.answer == "B"
+    assert agent.direct_calls == []
+
+
+def test_semantic_stem_override_runs_self_consistency():
+    agent = _FakeAgent(
+        direct=_choice("A", margin=0.9),
+        sc_scores=[
+            {"A": -2.0, "B": -0.1, "C": -3.0},
+            {"A": -2.0, "B": -0.1, "C": -3.0},
+            {"A": -0.1, "B": -2.0, "C": -3.0},
+            {"A": -2.0, "B": -0.1, "C": -3.0},
+            {"A": -2.0, "B": -0.1, "C": -3.0},
+        ],
+    )
+    semantic_router = _FakeSemanticRouter(
+        layer2_route="stem",
+        final_route="stem",
+        should_override=True,
+    )
+    parsed = _parsed()
+
+    solved = solve_question(agent, parsed, semantic_router=semantic_router)
+
+    assert semantic_router.calls[0]["layer1_route"] == "knowledge"
+    assert solved.route == "stem"
+    assert solved.semantic_route == "stem"
+    assert solved.route_override is True
+    assert solved.path == "stem_self_consistency"
+    assert solved.answer == "B"
+    assert solved.votes == ["B", "B", "A", "B", "B"]
+
+
+def test_blocked_semantic_decision_keeps_layer1_route():
+    agent = _FakeAgent(direct=_choice("B", margin=0.8))
+    semantic_router = _FakeSemanticRouter(
+        layer2_route="reading",
+        final_route="knowledge",
+        should_override=False,
+        override_blockers=("reading_without_context",),
+    )
+    parsed = _parsed()
+
+    solved = solve_question(agent, parsed, semantic_router=semantic_router)
+
+    assert solved.route == "knowledge"
+    assert solved.semantic_route == "reading"
+    assert solved.route_override is False
+    assert solved.override_blockers == ["reading_without_context"]
+    assert solved.path == "direct"
+    assert solved.answer == "B"
 
 
 def test_self_consistency_tie_prefers_first_answer():

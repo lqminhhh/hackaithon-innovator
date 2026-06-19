@@ -1,10 +1,13 @@
 model:
   name: "BAAI/bge-m3"
+  device: "cpu"
+  max_context_chars: 1200
 
 scoring:
   top_k_per_route: 3
   min_top_score: 0.35
   min_override_margin: 0.08
+  min_top_gap: 0.03
 
 policy:
   review_routes:
@@ -13,4 +16,11 @@ policy:
   allow_override_routes:
     - knowledge
     - stem
+  allow_override_targets:
+    - knowledge
+    - stem
+    - safety
   require_ambiguity: true
+  reading_requires_context: true
+  safety_requires_harmful_refusal: true
+  stem_requires_evidence: true

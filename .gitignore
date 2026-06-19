@@ -13,7 +13,11 @@ data/wiki_text/
 data/faiss.index
 data/chunks.jsonl
 data/cot_chains.jsonl
+
+# VMLU corpus + S6 RAG index (rebuild with scripts/build_vmlu_index.py)
 data/vmlu_mqa_v1.5/
+data/vmlu_faiss.index
+data/vmlu_chunks.jsonl
 
 # Wiki dump files
 *.bz2
