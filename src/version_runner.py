@@ -1,9 +1,4 @@
-"""Shared final-compliant runners for retained pipeline versions.
-
-These helpers intentionally avoid S5/RAG/ensemble inference. The retained
-versions use one primary LLM only, plus deterministic Python routing and
-same-model self-consistency where applicable.
-"""
+"""Shared runners for v01_baseline and v02_beta. One primary LLM, deterministic routing, same-model SC."""
 
 from __future__ import annotations
 
@@ -208,15 +203,13 @@ def run_v02_beta(
     max_num_seqs: int | None = None,
     sc_batch_size: int | None = None,
 ) -> None:
-    """Run S4 self-consistency/escalation without S5 or RAG."""
+    """Run S4 self-consistency/escalation."""
     resolved_sc_batch_size = _resolve_sc_batch_size(sc_batch_size, safe_mode)
 
     def solver(agent: ReasoningAgent, parsed: ParsedQuestion) -> SolveResult:
         return solve_question(
             agent,
             parsed,
-            rag=None,
-            semantic_router=None,
             sc_batch_size=resolved_sc_batch_size,
         )
 
@@ -450,13 +443,7 @@ def _solve_trace(solved: SolveResult, elapsed_seconds: float) -> dict:
         "margin": solved.margin,
         "first_answer": solved.first_answer,
         "votes": solved.votes,
-        "layer1_route": solved.layer1_route,
-        "semantic_route": solved.semantic_route,
-        "route_override": solved.route_override,
-        "override_blockers": solved.override_blockers,
-        "rag_used": solved.path == "knowledge_rag",
-        "rag_top_score": None,
-        "error": solved.error or solved.semantic_error,
+        "error": solved.error,
         "elapsed_seconds": round(elapsed_seconds, 3),
     }
 

@@ -1,8 +1,9 @@
-"""Central configuration constants for the v2 pipeline.
+"""Central configuration constants for the final-compliant pipeline.
 
-This module mirrors the S0/S1 build contract in ``docs/planning_v2.md``.
-YAML files can still hold experiment-specific settings, but core invariants
-live here so every runner can share the same defaults.
+The current competition constraints require one open LLM <=5B parameters,
+offline inference, and no embedding/reranker/RAG models. YAML files can still
+hold runtime settings, but core invariants live here so every runner shares the
+same defaults.
 """
 
 from pathlib import Path
@@ -10,21 +11,14 @@ from pathlib import Path
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 LLM_MODEL = "Qwen/Qwen3.5-4B"
-EMBED_MODEL = "BAAI/bge-m3"
-RERANK_MODEL = "Qwen/Qwen3-Reranker-0.6B"  # planning_v2.md: "BAAI/bge-reranker-v2-m3 or Qwen/Qwen3-Reranker-0.6B"
 
 GPU_MEM_UTIL = 0.85
+
+# Legacy S4/direct-runner defaults. v02_gamma uses src.sc_policy for route-
+# specific thresholds and adaptive SC depth.
 MARGIN_LOW = 0.15
 SC_N = 5
 SC_TEMP = 0.6
-RERANK_MIN = 0.5
-
-FORCE_RETRIEVE_DOMAINS = {
-    "vn_law",
-    "vn_decree",
-    "vn_admin",
-    "local_facts",
-}
 
 TOK = {
     "READING": 512,
@@ -36,40 +30,6 @@ TOK = {
 FALLBACK = "A"
 MAX_CHOICES = 26
 
-# ── S6 RAG ───────────────────────────────────────────────────────────────────
-
-VMLU_DATA_DIR = _PROJECT_ROOT / "data" / "vmlu_mqa_v1.5"
-VMLU_INDEX_PATH = _PROJECT_ROOT / "data" / "vmlu_faiss.index"
-VMLU_CHUNKS_PATH = _PROJECT_ROOT / "data" / "vmlu_chunks.jsonl"
-
-RAG_TOP_K = 20        # FAISS candidates to retrieve
-RAG_TOP_N = 3         # top chunks to inject after reranking
-RAG_TIMEOUT = 5.0     # seconds before retrieval is abandoned
-RERANK_BATCH_SIZE = 8  # pairs per forward pass through the reranker
-
-# ── VRAM budget (planning_v2.md invariant: total ≤ 20 GB) ────────────────────
-# LLM  Qwen3.5-4B AWQ  (vLLM, gpu_mem_util=0.85): weights ~2.5 GB + KV cache
-# LLM  Qwen3-8B-AWQ    (target in spec)          : weights ~4.5 GB + KV cache
-# BGE-m3 embedder      (FP16)                    : ~1.1 GB
-# Qwen3-Reranker-0.6B  (FP16)                    : ~1.2 GB
-# Auxiliary total (embedder + reranker)           : ~2.3 GB
-# On a 20 GB GPU vLLM leaves ~3.0 GB → auxiliary fits ✓
-# On a 24 GB GPU vLLM leaves ~3.6 GB → auxiliary fits ✓
-
-# 34 subjects where Qwen3.5 has knowledge gaps -- used to filter the RAG corpus.
-# STEM (01-21), Macroeconomics (28), Microeconomics (29), Logic (47) are excluded
-# because the model handles them well through the stem route / self-consistency.
-RAG_INCLUDE_SUBJECTS: frozenset[str] = frozenset({
-    # Social Science -- Vietnam-specific civics, geography, politics
-    "22", "23", "24", "25", "26", "27", "30", "31",
-    # Humanity -- Vietnamese history, literature, law, culture
-    "32", "33", "34", "35", "36", "37", "38", "39",
-    "40", "41", "42", "43", "44", "45", "46", "48", "49",
-    # Other -- Vietnam-specific professional knowledge
-    "50", "51", "52", "53", "54", "55", "56", "57", "58",
-})
-
-# Full subject metadata (all 58). Used for chunk labelling and future ablations.
 SUBJECT_META: dict[str, dict[str, str]] = {
     "01": {"name": "Elementary Mathematics",                                     "category": "STEM"},
     "02": {"name": "Elementary Science",                                          "category": "STEM"},
