@@ -113,7 +113,13 @@ def load_embedder(device: str | None = None):
     return SentenceTransformer(cfg["models"]["embedder"], **kwargs)
 
 
-def load_vllm_primary(model_id: str | None = None):
+def load_vllm_primary(
+    model_id: str | None = None,
+    *,
+    gpu_memory_utilization: float | None = None,
+    max_model_len: int | None = None,
+    max_num_seqs: int | None = None,
+):
     """Load primary model via vLLM for fast batched inference (CUDA only)."""
     from src.llm import LLM
 
@@ -124,7 +130,16 @@ def load_vllm_primary(model_id: str | None = None):
     return LLM(
         model=chosen_model,
         quantization=quantization,
-        gpu_memory_utilization=vllm_cfg.get("gpu_memory_utilization", GPU_MEM_UTIL),
-        max_model_len=vllm_cfg.get("max_model_len", 8192),
+        gpu_memory_utilization=(
+            gpu_memory_utilization
+            if gpu_memory_utilization is not None
+            else vllm_cfg.get("gpu_memory_utilization", GPU_MEM_UTIL)
+        ),
+        max_model_len=(
+            max_model_len if max_model_len is not None else vllm_cfg.get("max_model_len", 8192)
+        ),
+        max_num_seqs=(
+            max_num_seqs if max_num_seqs is not None else vllm_cfg.get("max_num_seqs")
+        ),
         enable_prefix_caching=vllm_cfg.get("enable_prefix_caching", True),
     )

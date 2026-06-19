@@ -32,6 +32,7 @@ class LLM:
         *,
         gpu_memory_utilization: float = GPU_MEM_UTIL,
         max_model_len: int = 8192,
+        max_num_seqs: int | None = None,
         quantization: str | None = None,
         enable_prefix_caching: bool = True,
         dtype: str = "half",
@@ -43,6 +44,7 @@ class LLM:
         self.model = model
         self.gpu_memory_utilization = gpu_memory_utilization
         self.max_model_len = max_model_len
+        self.max_num_seqs = max_num_seqs
         self.quantization = quantization
         self.enable_prefix_caching = enable_prefix_caching
         self.dtype = dtype
@@ -57,6 +59,8 @@ class LLM:
             "enable_prefix_caching": enable_prefix_caching,
             "trust_remote_code": trust_remote_code,
         }
+        if max_num_seqs is not None:
+            self.init_kwargs["max_num_seqs"] = max_num_seqs
         if quantization is not None:
             self.init_kwargs["quantization"] = quantization
 
