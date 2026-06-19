@@ -12,7 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from main import run as run_s0
+from src.main import run as run_s0
 from src.config import FALLBACK, LLM_MODEL
 from src.data_loader import letters, load_questions, write_submission
 

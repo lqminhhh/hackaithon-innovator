@@ -1,6 +1,0 @@
-model:
-  primary: "Qwen/Qwen3.5-4B"
-
-inference:
-  max_questions: null
-  batch_size: 32
