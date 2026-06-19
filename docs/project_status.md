@@ -48,7 +48,3 @@ See [`docs/version_results.md`](version_results.md) for the full table with desc
 1. Tune `MARGIN_LOW`, `SC_N_STEM`, `TOK["STEM"]` on a held-out dev split (S8 in `planning_v3.md`) — this is where the remaining gap to 91.58% lives.
 2. Investigate the STEM bucket specifically (largest accuracy gap).
 
-## Non-Final Components (do not use in submission)
-
-- RAG: `src/rag.py`
-- Ensemble / secondary model: `src/ensemble_agent.py`

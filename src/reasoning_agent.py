@@ -3,13 +3,6 @@
 Supports two backends:
   - vLLM  (fast, batched, CUDA only) — pass ``llm`` arg
   - HuggingFace Transformers (fallback) — pass ``model`` + ``tokenizer``
-
-And two inference modes per backend:
-  1. No-context (pure CoT) — uses the question + options only.
-  2. With-context — injects retrieved chunks before the question.
-
-Returns the raw output text.  Confidence extraction and answer parsing
-are handled downstream by the normaliser and confidence gate.
 """
 
 from __future__ import annotations
@@ -75,45 +68,28 @@ class ReasoningAgent:
         self,
         question: str,
         options: dict[str, str],
-        context: str | None = None,
     ) -> str:
         """Build the user-facing prompt text (without chat template wrapping)."""
         options_block, valid_labels = self._format_options(options)
-        kwargs = dict(
+        return self.prompts["cot_no_context"].format(
             question=question,
             options_block=options_block,
             valid_labels=valid_labels,
         )
-        if context is not None:
-            return self.prompts["cot_with_context"].format(
-                retrieved_context=context, **kwargs
-            )
-        return self.prompts["cot_no_context"].format(**kwargs)
 
     def build_guided_choice_prompt(
         self,
         question: str,
         options: dict[str, str],
-        context: str | None = None,
     ) -> str:
-        """Build a short prompt for constrained answer selection.
-
-        This path is intentionally concise: the model should decide among the
-        existing choices and output only one legal option label.
-        """
+        """Build a short prompt for constrained answer selection."""
         options_block, valid_labels = self._format_options(options)
-        kwargs = dict(
+        return self.prompts["guided_choice_no_context"].format(
             question=question,
             options_block=options_block,
             valid_labels=valid_labels,
             label_list=", ".join(sorted(options.keys())),
         )
-
-        if context is not None:
-            return self.prompts["guided_choice_with_context"].format(
-                retrieved_context=context, **kwargs
-            )
-        return self.prompts["guided_choice_no_context"].format(**kwargs)
 
     def build_route_prompt(
         self,
@@ -122,12 +98,7 @@ class ReasoningAgent:
         options: dict[str, str],
         context: str | None = None,
     ) -> str:
-        """Build a route-specific direct-answer prompt.
-
-        For the knowledge route, passing ``context`` switches to the
-        ``knowledge_rag`` template which frames the context as reference Q&A
-        pairs rather than a definitive passage.
-        """
+        """Build a route-specific direct-answer prompt."""
         route_to_template = {
             "reading": "reading_direct",
             "stem": "stem_direct",
@@ -147,10 +118,6 @@ class ReasoningAgent:
         if route == "reading":
             return self.prompts[template_name].format(
                 retrieved_context=context or "", **kwargs
-            )
-        if route == "knowledge" and context is not None:
-            return self.prompts["knowledge_rag"].format(
-                retrieved_context=context, **kwargs
             )
         return self.prompts[template_name].format(**kwargs)
 
@@ -396,17 +363,6 @@ class ReasoningAgent:
         options: dict[str, str],
         temperature: float | None = None,
     ) -> str:
-        """Run CoT with no retrieved context (single question)."""
+        """Run CoT for a single question."""
         prompt = self.build_prompt(question, options)
-        return self.generate_batch([prompt], temperature)[0]
-
-    def infer_with_context(
-        self,
-        question: str,
-        options: dict[str, str],
-        context: str,
-        temperature: float | None = None,
-    ) -> str:
-        """Run CoT with retrieved context injected (single question)."""
-        prompt = self.build_prompt(question, options, context)
         return self.generate_batch([prompt], temperature)[0]

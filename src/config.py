@@ -36,40 +36,6 @@ TOK = {
 FALLBACK = "A"
 MAX_CHOICES = 26
 
-# ── S6 RAG ───────────────────────────────────────────────────────────────────
-
-VMLU_DATA_DIR = _PROJECT_ROOT / "data" / "vmlu_mqa_v1.5"
-VMLU_INDEX_PATH = _PROJECT_ROOT / "data" / "vmlu_faiss.index"
-VMLU_CHUNKS_PATH = _PROJECT_ROOT / "data" / "vmlu_chunks.jsonl"
-
-RAG_TOP_K = 20        # FAISS candidates to retrieve
-RAG_TOP_N = 3         # top chunks to inject after reranking
-RAG_TIMEOUT = 5.0     # seconds before retrieval is abandoned
-RERANK_BATCH_SIZE = 8  # pairs per forward pass through the reranker
-
-# ── VRAM budget (planning_v2.md invariant: total ≤ 20 GB) ────────────────────
-# LLM  Qwen3.5-4B AWQ  (vLLM, gpu_mem_util=0.85): weights ~2.5 GB + KV cache
-# LLM  Qwen3-8B-AWQ    (target in spec)          : weights ~4.5 GB + KV cache
-# BGE-m3 embedder      (FP16)                    : ~1.1 GB
-# Qwen3-Reranker-0.6B  (FP16)                    : ~1.2 GB
-# Auxiliary total (embedder + reranker)           : ~2.3 GB
-# On a 20 GB GPU vLLM leaves ~3.0 GB → auxiliary fits ✓
-# On a 24 GB GPU vLLM leaves ~3.6 GB → auxiliary fits ✓
-
-# 34 subjects where Qwen3.5 has knowledge gaps -- used to filter the RAG corpus.
-# STEM (01-21), Macroeconomics (28), Microeconomics (29), Logic (47) are excluded
-# because the model handles them well through the stem route / self-consistency.
-RAG_INCLUDE_SUBJECTS: frozenset[str] = frozenset({
-    # Social Science -- Vietnam-specific civics, geography, politics
-    "22", "23", "24", "25", "26", "27", "30", "31",
-    # Humanity -- Vietnamese history, literature, law, culture
-    "32", "33", "34", "35", "36", "37", "38", "39",
-    "40", "41", "42", "43", "44", "45", "46", "48", "49",
-    # Other -- Vietnam-specific professional knowledge
-    "50", "51", "52", "53", "54", "55", "56", "57", "58",
-})
-
-# Full subject metadata (all 58). Used for chunk labelling and future ablations.
 SUBJECT_META: dict[str, dict[str, str]] = {
     "01": {"name": "Elementary Mathematics",                                     "category": "STEM"},
     "02": {"name": "Elementary Science",                                          "category": "STEM"},

@@ -1,25 +1,17 @@
-"""S4 route-specific compute budgets and escalation logic.
-
-S6 RAG is wired in here via the optional ``rag`` parameter of
-``solve_question``. Pass a ``RAGEngine`` instance to enable retrieval for
-low-margin knowledge questions. Omitting it preserves the pre-S6 behaviour.
-"""
+"""S4 route-specific compute budgets and escalation logic."""
 
 from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 import math
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from src.config import FALLBACK, MARGIN_LOW, SC_N, SC_TEMP, TOK
 from src.extract import ChoiceResult, best_label, softmax_margin
 from src.parser import ParsedQuestion
 from src.reasoning_agent import ReasoningAgent
 from src.router import Route, get_forced_answer, route_question
-
-if TYPE_CHECKING:
-    from src.rag import RAGEngine
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,25 +37,9 @@ class SolveResult:
 def solve_question(
     agent: ReasoningAgent,
     parsed: ParsedQuestion,
-    rag: "RAGEngine | None" = None,
     sc_batch_size: int | None = None,
 ) -> SolveResult:
-    """Solve one parsed question using the S4 policy with optional S6 RAG.
-
-    Parameters
-    ----------
-    agent:
-        Loaded ReasoningAgent (vLLM or HuggingFace backend).
-    parsed:
-        Pre-parsed question from ``parse_question()``.
-    rag:
-        Optional RAGEngine. When provided, low-margin knowledge questions
-        attempt retrieval before falling back to self-consistency. Pass None
-        (the default) to skip RAG entirely and preserve the pre-S6 behaviour.
-    sc_batch_size:
-        Optional maximum batch size for self-consistency generations. Use a
-        small value for 16GB VRAM-safe runs.
-    """
+    """Solve one parsed question using the S4 policy."""
     route = route_question(parsed)
     route_meta: dict[str, Any] = {}
     try:
@@ -115,12 +91,6 @@ def solve_question(
             )
 
         if route == "knowledge" and first.margin < MARGIN_LOW:
-            # S6: try RAG before self-consistency
-            if rag is not None:
-                rag_result = _try_rag(agent, parsed, rag, first, route_meta)
-                if rag_result is not None:
-                    return rag_result
-
             vote = self_consistency(agent, parsed, route, first, batch_size=sc_batch_size)
             return SolveResult(
                 qid=parsed.qid,
@@ -152,48 +122,6 @@ def solve_question(
             error=str(exc),
             **route_meta,
         )
-
-
-
-def _try_rag(
-    agent: ReasoningAgent,
-    parsed: ParsedQuestion,
-    rag: "RAGEngine",
-    first: ChoiceResult,
-    route_meta: dict[str, Any] | None = None,
-) -> SolveResult | None:
-    """Attempt RAG-augmented answer for a low-margin knowledge question.
-
-    Returns a SolveResult if retrieval found relevant context and the
-    re-answer has margin >= the first-pass margin. Returns None otherwise
-    so the caller can fall through to self-consistency.
-    """
-    try:
-        context = rag.retrieve_and_rerank(parsed.query, exclude_id=parsed.qid)
-        if context is None:
-            return None
-
-        rag_choice = agent.predict_route_choice_result(
-            route="knowledge",
-            question=parsed.query,
-            options=parsed.options,
-            context=context,
-        )
-
-        if rag_choice.margin >= first.margin:
-            return SolveResult(
-                qid=parsed.qid,
-                answer=rag_choice.letter,
-                route="knowledge",
-                margin=rag_choice.margin,
-                path="knowledge_rag",
-                first_answer=first.letter,
-                **(route_meta or {}),
-            )
-        return None
-    except Exception as exc:
-        print(f"  [RAG] _try_rag failed for {parsed.qid}: {exc}", flush=True)
-        return None
 
 
 def self_consistency(
