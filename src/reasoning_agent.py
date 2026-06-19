@@ -4,9 +4,8 @@ Supports two backends:
   - vLLM  (fast, batched, CUDA only) — pass ``llm`` arg
   - HuggingFace Transformers (fallback) — pass ``model`` + ``tokenizer``
 
-And two inference modes per backend:
-  1. No-context (pure CoT) — uses the question + options only.
-  2. With-context — injects retrieved chunks before the question.
+The reading route may pass the question's own passage as ``context`` to
+``build_route_prompt``. There is no retrieval/RAG context in v3.
 
 Returns the raw output text.  Confidence extraction and answer parsing
 are handled downstream by the normaliser and confidence gate.
@@ -75,26 +74,19 @@ class ReasoningAgent:
         self,
         question: str,
         options: dict[str, str],
-        context: str | None = None,
     ) -> str:
         """Build the user-facing prompt text (without chat template wrapping)."""
         options_block, valid_labels = self._format_options(options)
-        kwargs = dict(
+        return self.prompts["cot_no_context"].format(
             question=question,
             options_block=options_block,
             valid_labels=valid_labels,
         )
-        if context is not None:
-            return self.prompts["cot_with_context"].format(
-                retrieved_context=context, **kwargs
-            )
-        return self.prompts["cot_no_context"].format(**kwargs)
 
     def build_guided_choice_prompt(
         self,
         question: str,
         options: dict[str, str],
-        context: str | None = None,
     ) -> str:
         """Build a short prompt for constrained answer selection.
 
@@ -102,18 +94,12 @@ class ReasoningAgent:
         existing choices and output only one legal option label.
         """
         options_block, valid_labels = self._format_options(options)
-        kwargs = dict(
+        return self.prompts["guided_choice_no_context"].format(
             question=question,
             options_block=options_block,
             valid_labels=valid_labels,
             label_list=", ".join(sorted(options.keys())),
         )
-
-        if context is not None:
-            return self.prompts["guided_choice_with_context"].format(
-                retrieved_context=context, **kwargs
-            )
-        return self.prompts["guided_choice_no_context"].format(**kwargs)
 
     def build_route_prompt(
         self,
@@ -124,9 +110,8 @@ class ReasoningAgent:
     ) -> str:
         """Build a route-specific direct-answer prompt.
 
-        For the knowledge route, passing ``context`` switches to the
-        ``knowledge_rag`` template which frames the context as reference Q&A
-        pairs rather than a definitive passage.
+        For the reading route, ``context`` is the question's own passage and is
+        injected into the prompt. Other routes ignore ``context``.
         """
         route_to_template = {
             "reading": "reading_direct",
@@ -147,10 +132,6 @@ class ReasoningAgent:
         if route == "reading":
             return self.prompts[template_name].format(
                 retrieved_context=context or "", **kwargs
-            )
-        if route == "knowledge" and context is not None:
-            return self.prompts["knowledge_rag"].format(
-                retrieved_context=context, **kwargs
             )
         return self.prompts[template_name].format(**kwargs)
 
@@ -291,21 +272,19 @@ class ReasoningAgent:
         self,
         question: str,
         options: dict[str, str],
-        context: str | None = None,
     ) -> tuple[str, dict[str, float]]:
         """Select the best legal label using constrained completion scoring."""
-        result = self.predict_guided_choice_result(question, options, context)
+        result = self.predict_guided_choice_result(question, options)
         return result.letter, result.per_letter_logprob
 
     def predict_guided_choice_result(
         self,
         question: str,
         options: dict[str, str],
-        context: str | None = None,
     ) -> ChoiceResult:
         """Select the best legal label and return logprob margin evidence."""
         valid_labels = tuple(sorted(options.keys()))
-        prompt = self.build_guided_choice_prompt(question, options, context)
+        prompt = self.build_guided_choice_prompt(question, options)
         scores = self.score_valid_labels(prompt, valid_labels)
         return ChoiceResult(
             letter=best_label(scores),
@@ -396,17 +375,6 @@ class ReasoningAgent:
         options: dict[str, str],
         temperature: float | None = None,
     ) -> str:
-        """Run CoT with no retrieved context (single question)."""
+        """Run CoT on the question + options (single question)."""
         prompt = self.build_prompt(question, options)
-        return self.generate_batch([prompt], temperature)[0]
-
-    def infer_with_context(
-        self,
-        question: str,
-        options: dict[str, str],
-        context: str,
-        temperature: float | None = None,
-    ) -> str:
-        """Run CoT with retrieved context injected (single question)."""
-        prompt = self.build_prompt(question, options, context)
         return self.generate_batch([prompt], temperature)[0]
