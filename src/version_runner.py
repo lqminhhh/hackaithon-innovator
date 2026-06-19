@@ -216,7 +216,6 @@ def run_v02_beta(
             agent,
             parsed,
             rag=None,
-            semantic_router=None,
             sc_batch_size=resolved_sc_batch_size,
         )
 

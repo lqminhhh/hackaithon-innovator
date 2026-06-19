@@ -20,7 +20,6 @@ from src.router import Route, get_forced_answer, route_question
 
 if TYPE_CHECKING:
     from src.rag import RAGEngine
-    from src.semantic_router import SemanticRouter
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,11 +37,6 @@ class SolveResult:
     route: Route
     margin: float | None
     path: str
-    layer1_route: Route | None = None
-    semantic_route: Route | None = None
-    route_override: bool = False
-    override_blockers: list[str] = field(default_factory=list)
-    semantic_error: str | None = None
     first_answer: str | None = None
     votes: list[str] = field(default_factory=list)
     error: str | None = None
@@ -52,7 +46,6 @@ def solve_question(
     agent: ReasoningAgent,
     parsed: ParsedQuestion,
     rag: "RAGEngine | None" = None,
-    semantic_router: "SemanticRouter | None" = None,
     sc_batch_size: int | None = None,
 ) -> SolveResult:
     """Solve one parsed question using the S4 policy with optional S6 RAG.
@@ -67,14 +60,12 @@ def solve_question(
         Optional RAGEngine. When provided, low-margin knowledge questions
         attempt retrieval before falling back to self-consistency. Pass None
         (the default) to skip RAG entirely and preserve the pre-S6 behaviour.
-    semantic_router:
-        Optional S5 Layer-2 router. When provided, it may override the Layer-1
-        route before route-specific answering begins.
     sc_batch_size:
         Optional maximum batch size for self-consistency generations. Use a
         small value for 16GB VRAM-safe runs.
     """
-    route, route_meta = _route_with_semantics(parsed, semantic_router)
+    route = route_question(parsed)
+    route_meta: dict[str, Any] = {}
     try:
         forced = get_forced_answer(parsed, route)
         if forced is not None:
@@ -162,34 +153,6 @@ def solve_question(
             **route_meta,
         )
 
-
-def _route_with_semantics(
-    parsed: ParsedQuestion,
-    semantic_router: "SemanticRouter | None",
-) -> tuple[Route, dict[str, Any]]:
-    """Run Layer-1 routing, then optional S5 semantic override."""
-    layer1_route = route_question(parsed)
-    route_meta: dict[str, Any] = {
-        "layer1_route": layer1_route,
-    }
-
-    if semantic_router is None:
-        return layer1_route, route_meta
-
-    try:
-        decision = semantic_router.decide_route(parsed, layer1_route=layer1_route)
-    except Exception as exc:
-        route_meta["semantic_error"] = str(exc)
-        return layer1_route, route_meta
-
-    route_meta.update(
-        {
-            "semantic_route": decision.layer2_route,
-            "route_override": decision.should_override,
-            "override_blockers": list(decision.override_blockers),
-        }
-    )
-    return decision.final_route, route_meta
 
 
 def _try_rag(

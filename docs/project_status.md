@@ -50,6 +50,5 @@ See [`docs/version_results.md`](version_results.md) for the full table with desc
 
 ## Non-Final Components (do not use in submission)
 
-- S5 semantic router: `src/semantic_router.py`, `src/semantic_shadow.py`
 - RAG: `src/rag.py`
 - Ensemble / secondary model: `src/ensemble_agent.py`
