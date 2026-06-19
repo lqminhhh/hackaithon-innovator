@@ -64,7 +64,7 @@ output   = {"qid": "test_0001", "answer": "A"}                            # one 
 ```python
 LLM_MODEL   = "Qwen/Qwen3.5-4B"     # ≤5B total, single model (needs transformers>=5.2, vllm>=0.17)
 QUANT       = None                  # F16 default (4B≈8GB fits 16GB). Measure "awq" for speed on small/memory-bound cards.
-GPU_MEM_UTIL= 0.85                  # 16GB × 0.85 ≈ 13.6GB; safer than 0.90 on unknown judge cards (leaves 2.4GB for OS/driver/fragmentation)
+GPU_MEM_UTIL= 0.80                  # 16GB × 0.80 = 12.8GB; leaves 3.2GB for OS/driver/desktop on unknown judge cards
 MAX_MODEL_LEN = 4096
 
 # Per-route low-margin thresholds (Issue 6: margin distributions differ wildly by route)

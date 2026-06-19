@@ -91,7 +91,9 @@ data/
 docs/
   planning_v3.md            Current plan
   version_results.md        Score/runtime log
-  evaluation_plan.md        Notebook evaluation design
+
+notebooks/
+  evaluation.ipynb          Submission scoring and analysis
 
 src/
   v01_baseline.py
@@ -136,7 +138,7 @@ Trace files live in:
 data/traces/
 ```
 
-Use these with the planned evaluation notebook workflow in `docs/evaluation_plan.md`.
+Run `notebooks/evaluation.ipynb` to score submissions against reference answers and export reports to `reports/eval/`.
 
 ## Important Exclusions
 

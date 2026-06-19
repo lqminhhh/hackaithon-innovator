@@ -12,7 +12,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 LLM_MODEL = "Qwen/Qwen3.5-4B"
 
-GPU_MEM_UTIL = 0.85
+GPU_MEM_UTIL = 0.80
 
 # --- Legacy: only used by solve.py (v01_baseline / v02_alpha / v02_beta). ---
 # v02_gamma uses route-specific replacements in src.sc_policy instead.
