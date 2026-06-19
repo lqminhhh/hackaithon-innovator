@@ -1,8 +1,9 @@
-"""Central configuration constants for the v2 pipeline.
+"""Central configuration constants for the final-compliant pipeline.
 
-This module mirrors the S0/S1 build contract in ``docs/planning_v2.md``.
-YAML files can still hold experiment-specific settings, but core invariants
-live here so every runner can share the same defaults.
+The current competition constraints require one open LLM <=5B parameters,
+offline inference, and no embedding/reranker/RAG models. YAML files can still
+hold runtime settings, but core invariants live here so every runner shares the
+same defaults.
 """
 
 from pathlib import Path
@@ -10,21 +11,14 @@ from pathlib import Path
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 LLM_MODEL = "Qwen/Qwen3.5-4B"
-EMBED_MODEL = "BAAI/bge-m3"
-RERANK_MODEL = "Qwen/Qwen3-Reranker-0.6B"  # planning_v2.md: "BAAI/bge-reranker-v2-m3 or Qwen/Qwen3-Reranker-0.6B"
 
 GPU_MEM_UTIL = 0.85
+
+# Legacy S4/direct-runner defaults. v02_gamma uses src.sc_policy for route-
+# specific thresholds and adaptive SC depth.
 MARGIN_LOW = 0.15
 SC_N = 5
 SC_TEMP = 0.6
-RERANK_MIN = 0.5
-
-FORCE_RETRIEVE_DOMAINS = {
-    "vn_law",
-    "vn_decree",
-    "vn_admin",
-    "local_facts",
-}
 
 TOK = {
     "READING": 512,
