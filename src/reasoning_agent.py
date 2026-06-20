@@ -81,8 +81,14 @@ class ReasoningAgent:
         self,
         question: str,
         options: dict[str, str],
+        context: str | None = None,
     ) -> str:
-        """Build a short prompt for constrained answer selection."""
+        """Build a short prompt for constrained answer selection.
+
+        ``context`` is accepted for call-site symmetry with the route-specific
+        builder but intentionally unused: this path uses the context-free
+        ``guided_choice_no_context`` template.
+        """
         options_block, valid_labels = self._format_options(options)
         return self.prompts["guided_choice_no_context"].format(
             question=question,
@@ -133,9 +139,7 @@ class ReasoningAgent:
         With vLLM this is truly batched (continuous batching).
         With HF this falls back to sequential generation.
         """
-        if self.is_vllm:
-            return self._vllm_batch(prompts, temperature)
-        return [self._hf_generate(p, temperature) for p in prompts]
+        return self.generate_freeform(prompts, mode="no_think", temperature=temperature)
 
     def generate_freeform(
         self,
@@ -150,7 +154,7 @@ class ReasoningAgent:
         temp = temperature if temperature is not None else self.cfg["temperature_deterministic"]
         max_new = max_tokens if max_tokens is not None else self.cfg["max_new_tokens"]
 
-        if self.is_vllm and hasattr(self._llm, "generate_text"):
+        if self.is_vllm:
             outputs = self._llm.generate_text(
                 prompts,
                 mode=mode,  # type: ignore[arg-type]
@@ -161,32 +165,10 @@ class ReasoningAgent:
             return [output.text for output in outputs]
 
         tagged = [self._tag_mode(prompt, mode) for prompt in prompts]
-        if self.is_vllm:
-            return self._vllm_batch(tagged, temp, max_tokens=max_new, top_p=top_p)
         return [
             self._hf_generate(prompt, temp, max_tokens=max_new, top_p=top_p)
             for prompt in tagged
         ]
-
-    def _vllm_batch(
-        self,
-        prompts: list[str],
-        temperature: float | None,
-        *,
-        max_tokens: int | None = None,
-        top_p: float | None = None,
-    ) -> list[str]:
-        from vllm import SamplingParams
-
-        temp = temperature if temperature is not None else self.cfg["temperature_deterministic"]
-        params = SamplingParams(
-            temperature=temp,
-            max_tokens=max_tokens if max_tokens is not None else self.cfg["max_new_tokens"],
-            top_p=top_p if top_p is not None else (0.9 if temp > 0 else 1.0),
-        )
-        conversations = [[{"role": "user", "content": p}] for p in prompts]
-        outputs = self._llm.chat(conversations, params)
-        return [o.outputs[0].text for o in outputs]
 
     def _hf_generate(
         self,
