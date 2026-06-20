@@ -121,6 +121,50 @@ These exist in the repo for historical/analysis purposes but are banned by compe
 - Secondary LLM ensemble
 - Any external API or internet access
 
+## Recent changes (this session)
+
+### Router hardened for 2000-question private set
+
+**Safety detection** — replaced 13 broad `_HARMFUL_TERMS` (generic words like
+"trộm", "vũ khí", "tấn công" that matched historical/encyclopedic content)
+with high-precision two-tier detection:
+- `_HARMFUL_INTENT_PHRASES` (26 actionable patterns like "cách hack", "làm thế
+  nào để phá hoại", "hiệu quả nhất để")
+- `_HARMFUL_KEYWORDS` (7 specific dangerous terms like "chế tạo bom", "phát tán
+  tài liệu mật")
+- Result: all 6 true safety items caught (was 4), 0 false positives on benign
+  historical content (was 6 false `is_harmful` flags on war/crime passages)
+
+**STEM detection** — removed the `n_choices >= 8` rule from `_looks_quantitative`
+that was mislabeling 13 knowledge questions as STEM. Added stronger keywords
+("tốc độ", "gia tốc", "lực", "khối lượng", "kỳ vọng", "hệ phương trình").
+Removed noisy "giá trị". Route counts: stem 216->201, knowledge 141->155.
+
+**Reading detection** — unchanged (already perfect 100/100).
+
+**Routing confusion matrix (new):**
+```
+              knowledge  reading  safety  stem
+knowledge          151        0       0     4    = 155
+reading              0      100       0     0    = 100
+safety               1        0       6     0    =   7
+stem                 2        0       0   199    = 201
+```
+7 mismatches vs true labels (was 13). All 7 mismatched items are currently
+answered correctly by v02_gamma.
+
+### VRAM safety hardened
+
+- `GPU_MEM_UTIL`: 0.85 -> 0.80 (12.8 GB, leaves 3.2 GB for OS/driver/desktop)
+- `max_model_len` fallback: 8192 -> 4096 (prevents KV cache blowup if YAML missing)
+- `max_num_seqs`: unlimited -> 16 in normal mode, 4 in safe mode
+
+### Trace logging improved
+
+`Wave2Result` dataclass now carries actual SC votes and escalation reason.
+`write_traces` outputs real `votes` list and `escalation_reason` field instead
+of hardcoded `"votes": []`. Existing traces still have empty votes (pre-fix).
+
 ## Known bugs and accuracy blockers
 
 ### BUG: All margins are 1.0 (broken margin computation)
@@ -157,22 +201,10 @@ The 3 SC breaks are: `test_0222` (10-choice), `test_0227`, `test_0432`.
 High-choice-count questions (>=8 options) are especially vulnerable to SC
 option-shuffle confusion.
 
-### v02_beta to v02_gamma regressions: 17 questions
-
-17 questions that v02_beta had correct were broken in v02_gamma:
-- 8 knowledge (direct path, no SC available)
-- 5 STEM (SC voted wrong)
-- 4 reading (direct path, no SC)
-
 ### 21 persistent failures (wrong across ALL versions)
 
 These questions are wrong in v01 through v02_gamma. They likely need a
 capability the model lacks, not a prompt tweak. See `reports/eval/persistent_failures.csv`.
-
-Categories: Buddhist/religious knowledge (test_0030, test_0074, test_0133),
-Ho Chi Minh ideology (test_0168, test_0229, test_0370), economics (test_0109,
-test_0256, test_0304), legal/procedural (test_0058, test_0070, test_0311,
-test_0376), biology (test_0253, test_0271), accounting (test_0240), and others.
 
 ## Improvement priorities for v3
 
@@ -182,7 +214,7 @@ test_0376), biology (test_0253, test_0271), accounting (test_0240), and others.
    10+ points by enabling KNOWLEDGE SC.
 
 2. **Consider universal KNOWLEDGE SC** — if margin stays broken, run SC n=3 on
-   ALL knowledge questions (143 items, cheap). This covers the 26-error leak
+   ALL knowledge questions (~155 items, cheap). This covers the 26-error leak
    even without working margins.
 
 3. **Protect first_answer from SC on high-choice questions** — for questions
@@ -192,11 +224,6 @@ test_0376), biology (test_0253, test_0271), accounting (test_0240), and others.
 4. **Expand reading SC** — only 15/100 reading questions currently get SC
    (reason/purpose keyword match). The 5 reading errors are all non-reason
    questions. Consider SC for all reading questions or those with long contexts.
-
-5. **Knowledge misrouting** — 5 of the 26 knowledge errors have `is_legal=True`
-   flags. These legal/regulatory questions might benefit from STEM-style deeper
-   reasoning (think mode + SC) rather than the shallow KNOWLEDGE path (no_think,
-   256 tokens).
 
 ## Remaining work
 

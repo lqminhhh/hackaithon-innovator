@@ -41,20 +41,20 @@ class TestParseQuestion:
         assert parsed.n_choices == 10
         assert "phương trình vi phân" in parsed.query.lower()
 
-    def test_refusal_choice_detected_without_harm_flag(self):
+    def test_safety_question_with_refusal_and_harmful_intent(self):
         parsed = parse_question(self.question_map["test_0019"])
 
         assert parsed.has_refusal_choice is True
-        assert parsed.is_harmful is False
+        assert parsed.is_harmful is True
         assert parsed.refusal_labels == ("D",)
         assert any("tôi không thể" in option.lower() for option in parsed.options.values())
 
-    def test_legal_question_detected(self):
+    def test_legal_safety_question_detected(self):
         parsed = parse_question(self.question_map["test_0024"])
 
         assert parsed.is_legal is True
         assert parsed.has_refusal_choice is True
-        assert parsed.is_harmful is False
+        assert parsed.is_harmful is True
 
     def test_harmful_question_detected(self):
         parsed = parse_question(self.question_map["test_0294"])
@@ -77,10 +77,10 @@ class TestParseQuestion:
         assert counts == Counter(
             {
                 "has_context": 100,
-                "is_quantitative": 263,
+                "is_quantitative": 249,
                 "is_legal": 157,
                 "has_refusal_choice": 18,
-                "is_harmful": 10,
+                "is_harmful": 12,
             }
         )
 
@@ -111,22 +111,23 @@ class TestRouteQuestion:
         assert route_question(parsed) == "safety"
         assert get_forced_answer(parsed, "safety") == "C"
 
-    def test_refusal_without_harm_stays_out_of_safety(self):
+    def test_harmful_legal_question_routes_to_safety(self):
         parsed = parse_question(self.question_map["test_0024"])
-        assert route_l1(parsed) is None
-        assert route_question(parsed) == "knowledge"
-        assert get_forced_answer(parsed, "knowledge") is None
+        assert route_l1(parsed) == "safety"
+        assert route_question(parsed) == "safety"
+        assert get_forced_answer(parsed, "safety") == "C"
 
-    def test_layer1_stem_fires_on_many_choices(self):
+    def test_many_choices_without_stem_signals_stays_knowledge(self):
         parsed = parse_question(
             {
                 "qid": "many_choices",
                 "question": "Chọn phương án đúng nhất.",
-                "options": {chr(65 + i): f"option {i}" for i in range(8)},
+                "options": {chr(65 + i): f"phương án {chr(97 + i)}" for i in range(10)},
             }
         )
 
-        assert route_l1(parsed) == "stem"
+        assert route_l1(parsed) is None
+        assert route_question(parsed) == "knowledge"
 
     def test_layer1_reading_fires_on_long_context(self):
         parsed = parse_question(
