@@ -65,22 +65,6 @@ def softmax_margin(logprobs: dict[str, float]) -> float:
     return float(normalized[0] - normalized[1])
 
 
-def safe_margin(logprobs: dict[str, float], expected_labels: int) -> float:
-    """Margin that treats a degenerate extraction as low confidence.
-
-    A healthy guided-choice extraction over ``expected_labels`` legal options
-    returns a finite logprob for each. If the engine returns fewer than two
-    finite logprobs for a multi-option question, the result is malformed —
-    ``softmax_margin`` would early-exit at ``1.0`` (maximum confidence) and
-    silently suppress every downstream escalation. We invert that to ``0.0``
-    (minimum confidence) so the item escalates instead of being skipped.
-    """
-    finite = sum(1 for value in logprobs.values() if math.isfinite(value))
-    if expected_labels >= 2 and finite < 2:
-        return 0.0
-    return softmax_margin(logprobs)
-
-
 def best_label(logprobs: dict[str, float]) -> str:
     """Return the highest-logprob label, requiring at least one finite value."""
     finite_items = {
@@ -142,11 +126,11 @@ class GuidedChoiceExtractor:
             raise ValueError(f"could not derive single-token ids for labels: {missing}")
 
         params = self._sampling_params(token_map)
-        raw = self.llm.raw_generate([prompt], params)
+        raw = self.llm.generate([prompt], params)
         output = raw[0].outputs[0]
         per_letter_logprob = self._scores_from_output(output, labels, token_map)
         letter = best_label(per_letter_logprob)
-        margin = safe_margin(per_letter_logprob, len(labels))
+        margin = softmax_margin(per_letter_logprob)
         return ChoiceResult(
             letter=letter,
             margin=margin,

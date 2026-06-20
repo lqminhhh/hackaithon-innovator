@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.extract import ChoiceResult, best_label, build_label_token_map, safe_margin
+from src.extract import ChoiceResult, best_label, build_label_token_map, softmax_margin
 from src.reasoning_agent import ReasoningAgent
 
 
@@ -53,7 +53,7 @@ def _vllm_batch_extract(
         for token_map in token_maps
     ]
 
-    raw_outputs = agent._llm.raw_generate(prompts, sampling_params_list)
+    raw_outputs = agent._llm.engine.generate(prompts, sampling_params_list)
 
     results: list[ChoiceResult] = []
     for i, output in enumerate(raw_outputs):
@@ -71,7 +71,7 @@ def _vllm_batch_extract(
             results.append(
                 ChoiceResult(
                     letter=best_label(scores),
-                    margin=safe_margin(scores, len(options_list[i])),
+                    margin=softmax_margin(scores),
                     per_letter_logprob=scores,
                 )
             )
