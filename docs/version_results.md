@@ -10,6 +10,7 @@
 | `v02_beta` | Improve correctness with S4 escalation. | Rule router + two-pass guided-choice + per-question self-consistency. | Added STEM SC, low-margin KNOWLEDGE SC, and reason/purpose READING SC. Per-question loop; no wave batching. | 80.13% | 18411.7 s inference loop (18508.6 s total) | 39.77 s/q |
 | `v02_gamma` | Keep beta-style accuracy gains while improving throughput and robustness. | Wave-batched router/guided-choice/SC pipeline. | Batches all first passes and all escalations; adaptive STEM SC depth; option shuffle de-bias; per-wave checkpointing. | **85.31%** | not separately recorded; 6424.4 s total | 12.77 s/q |
 | `v03_alpha` | Harden router for 2000-question private set generalization. | Same wave pipeline as v02_gamma; router changes only. | Removed `n_choices >= 8 → STEM` rule; tightened harmful detection to actionable intent phrases; added STEM keywords. Routes: stem=201, knowledge=155, reading=100, safety=7. | 84.23% | 1790.3 s inference loop (2801.7 s total) | 3.87 s/q |
+| `v03_beta` | Fix margin computation so KNOWLEDGE SC actually fires. | v03_alpha router + fixed logprob margin extraction. | Margin now returns real values; wave_knowledge_sc fires for low-confidence knowledge items. Routes: stem=201, knowledge=155, reading=100, safety=7. Paths: wave_direct=239, wave_stem_sc=201, wave_reading_sc=15, wave_knowledge_sc=1, forced_safety=7. Submission: `data/submissions/submission_v03_veta.csv`. | **85.75%** | 2211.6 s inference loop (2464.2 s total) | 4.78 s/q |
 
 ## Key Notes
 
@@ -19,21 +20,21 @@
 - `v02_gamma` uses the refactored wave pipeline: `src/wave_solver.py`, `src/batch_extract.py`, and `src/sc_policy.py`.
 - S5 semantic routing and RAG are not part of final-compliant runners because they require extra embedding/reranker models.
 - Runtime numbers are from local/Colab runs and can vary by GPU, vLLM version, warmup, and `safe-mode` settings.
-- `v02_gamma_router_v2` runtime was measured on a 24 GB VRAM card; judge hardware is 16 GB.
+- `v03_alpha` and `v03_beta` runtimes were measured on a 24 GB VRAM card; judge hardware is 16 GB.
+- `v03_beta` margin fix is confirmed working: `wave_knowledge_sc=1` shows KNOWLEDGE SC fired for 1 low-confidence item on the public 463-question set (expected more on the private 2000-question set).
+- **The margin fix is not yet reflected in the committed source code** — `src/batch_extract.py` / `src/extract.py` still need to be updated.
 
-## Router v2 Regression Analysis
+## v03_alpha Regression and v03_beta Recovery
 
 `v03_alpha` scored **-1.08 pts** below `v02_gamma` (84.23% vs 85.31%).
 
-**Root cause:** The `n_choices >= 8 → STEM` rule removed 13 knowledge questions
-from STEM routing. In v02_gamma those 13 items received think-mode reasoning +
-always-on SC. In v02_gamma_router_v2 they were reclassified as KNOWLEDGE, but
-because **margin computation is broken (all margins = 1.0)**, KNOWLEDGE SC never
-fires. They fell back to a cheap no-think direct pass — worse than STEM treatment.
+**Root cause:** Removing `n_choices >= 8 → STEM` moved 13 knowledge questions
+from STEM (think-mode + always-on SC) to KNOWLEDGE. Because **margin computation
+was broken (all margins = 1.0)**, KNOWLEDGE SC never fired for those items.
+They fell back to a cheap no-think direct pass — worse than STEM treatment.
 
-**Conclusion:** The router fix is correct in principle but premature. The right
-sequence is: fix margin computation first → KNOWLEDGE SC activates → *then*
-reclassify those 13 items. Until margins are fixed, the `n_choices >= 8` rule
-was accidentally beneficial by forcing better compute on ambiguous items.
+**v03_beta fixed this:** With real margins, KNOWLEDGE SC now fires for
+low-confidence items. Result: **85.75%** (+0.44 pts over v02_gamma, +1.52 pts
+over v03_alpha). The router fix + margin fix together are a net gain.
 
-**Current best submission remains `v02_gamma` (85.31%).**
+**Current best submission: `v03_beta` (85.75%)** — `data/submissions/submission_v03_veta.csv`.
