@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-06-19. This file gives AI agents fast context on where
+> Last updated: 2026-06-20. This file gives AI agents fast context on where
 > the project stands. Read this before touching any code.
 
 ## What this project is
@@ -18,7 +18,13 @@ Scored on a private set of ~2000 questions on a 16 GB VRAM GPU.
 
 ## Current best runner
 
-**`v02_gamma`** (`src/v02_gamma.py`) — 85.31% on the public 463-question set.
+**`v02_gamma`** (`src/v02_gamma.py`) — **85.31%** on the public 463-question set (original router).
+
+> `v03_alpha` scored **84.23%** (-1.08 pts). See regression analysis in
+> `docs/version_results.md`. The router fix is correct in principle but regressed
+> because the margin bug means KNOWLEDGE SC never fires — items moved from STEM
+> to KNOWLEDGE lost their think-mode + SC treatment. **Do not ship v03_alpha
+> until margin computation is fixed.**
 
 Architecture:
 1. Parse input JSON/CSV via `src/parser.py` + `src/data_loader.py`
@@ -34,12 +40,13 @@ Architecture:
 
 ## Score progression
 
-| Version | File | Score | s/question |
-|---|---|---|---|
-| v01_baseline | `src/v01_baseline.py` | 28.73% | 3.81 |
-| v02_alpha | `src/v02_alpha.py` | 60.48% | 0.09 |
-| v02_beta | `src/v02_beta.py` | 80.13% | 39.77 |
-| v02_gamma | `src/v02_gamma.py` | **85.31%** | 12.77 |
+| Version | File | Score | s/question | Notes |
+|---|---|---|---|---|
+| v01_baseline | `src/v01_baseline.py` | 28.73% | 3.81 | |
+| v02_alpha | `src/v02_alpha.py` | 60.48% | 0.09 | |
+| v02_beta | `src/v02_beta.py` | 80.13% | 39.77 | |
+| v02_gamma | `src/v02_gamma.py` | **85.31%** | 12.77 | Current best |
+| v03_alpha | `src/v02_gamma.py` + new parser | 84.23% | 3.87 | Router regression; margin bug makes KNOWLEDGE SC dead |
 
 Full details: `docs/version_results.md`
 
@@ -123,7 +130,7 @@ These exist in the repo for historical/analysis purposes but are banned by compe
 
 ## Recent changes (this session)
 
-### Router hardened for 2000-question private set
+### v03_alpha: Router hardened for 2000-question private set (score: 84.23%)
 
 **Safety detection** — replaced 13 broad `_HARMFUL_TERMS` (generic words like
 "trộm", "vũ khí", "tấn công" that matched historical/encyclopedic content)
@@ -208,20 +215,29 @@ capability the model lacks, not a prompt tweak. See `reports/eval/persistent_fai
 
 ## Improvement priorities for v3
 
+**CRITICAL ORDER: fix margin first, then activate router-v2.**
+
 1. **Fix margin computation** — investigate `src/batch_extract.py` and
    `src/extract.py` for why logprob margin is always 1.0 in the wave pipeline.
-   Without real margins the adaptive system is blind. This alone could recover
-   10+ points by enabling KNOWLEDGE SC.
+   Without real margins the adaptive system is blind. The router-v2 regression
+   (-1.08 pts) confirmed this: moving items from STEM to KNOWLEDGE is safe only
+   when KNOWLEDGE SC can rescue low-confidence items. Fix this first.
 
-2. **Consider universal KNOWLEDGE SC** — if margin stays broken, run SC n=3 on
-   ALL knowledge questions (~155 items, cheap). This covers the 26-error leak
-   even without working margins.
+2. **After margins work: v03_alpha becomes v03_beta** — the new parser is
+   already in `src/parser.py`. Once margins are real, KNOWLEDGE SC will fire
+   for the 13 items reclassified from STEM, likely recovering the -1.08 pts
+   and then some (26 knowledge errors currently get zero SC).
+
+3. **Consider universal KNOWLEDGE SC as interim fallback** — if margin fix is
+   not achievable before submission, run SC n=3 on ALL knowledge questions
+   (~155 items) unconditionally. Cheap compute, directly covers the biggest
+   error bucket.
 
 3. **Protect first_answer from SC on high-choice questions** — for questions
    with >=8 options, option shuffle with SC is more likely to confuse the model.
    Skip SC or weight the first-pass answer higher in the vote.
 
-4. **Expand reading SC** — only 15/100 reading questions currently get SC
+5. **Expand reading SC** — only 15/100 reading questions currently get SC
    (reason/purpose keyword match). The 5 reading errors are all non-reason
    questions. Consider SC for all reading questions or those with long contexts.
 
