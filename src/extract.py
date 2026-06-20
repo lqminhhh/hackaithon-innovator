@@ -91,6 +91,96 @@ def best_label(logprobs: dict[str, float]) -> str:
     return max(finite_items, key=finite_items.get)
 
 
+def batch_score_continuations(
+    llm,
+    tokenizer,
+    items: list[tuple[str, dict[int, str]]],
+    *,
+    sampling_params: Any | None = None,
+) -> list[dict[str, float]]:
+    """Score every legal label by its logprob as the next token after a prompt.
+
+    This is the robust replacement for reading a single greedy decode's top-k
+    logprobs. For each ``(prompt, token_map)`` we append each label's token to
+    the prompt and read that exact token's ``prompt_logprobs`` value, so every
+    legal label always receives a finite, directly comparable logprob — even
+    for many-choice questions where vLLM's top-k logprob list would truncate
+    most legal tokens and leave them at ``-inf`` (the bug that collapsed every
+    margin to a degenerate constant).
+
+    All ``(prompt, label)`` continuations are submitted in a single batched
+    engine call; the shared prompt prefix is reused across a question's labels.
+
+    Returns one ``{label -> logprob}`` dict per item. A label whose continuation
+    logprob could not be recovered is left at ``-inf``.
+    """
+    scores: list[dict[str, float]] = [
+        {label: float("-inf") for label in token_map.values()}
+        for _prompt, token_map in items
+    ]
+
+    requests: list[dict[str, list[int]]] = []
+    owners: list[tuple[int, str, int]] = []
+    for idx, (prompt, token_map) in enumerate(items):
+        base_ids = list(tokenizer.encode(prompt, add_special_tokens=True))
+        for token_id, label in token_map.items():
+            requests.append({"prompt_token_ids": base_ids + [int(token_id)]})
+            owners.append((idx, label, int(token_id)))
+
+    if not requests:
+        return scores
+
+    params = (
+        sampling_params
+        if sampling_params is not None
+        else _continuation_sampling_params(llm)
+    )
+    raw_outputs = llm.raw_generate(requests, params)
+
+    for output, (idx, label, token_id) in zip(raw_outputs, owners):
+        logprob = _continuation_logprob(output, token_id)
+        if logprob is not None:
+            scores[idx][label] = logprob
+
+    return scores
+
+
+def _continuation_sampling_params(llm) -> Any:
+    """Sampling params that expose the appended token's prompt logprob.
+
+    ``max_tokens=1`` is the minimum vLLM allows; the generated token is ignored.
+    ``prompt_logprobs`` is what surfaces the logprob of the appended label token.
+    """
+    kwargs = {
+        "temperature": 0.0,
+        "max_tokens": 1,
+        "top_p": 1.0,
+        "prompt_logprobs": 1,
+    }
+    if hasattr(llm, "sampling_params"):
+        return llm.sampling_params(**kwargs)
+
+    from vllm import SamplingParams
+
+    return SamplingParams(**kwargs)
+
+
+def _continuation_logprob(output: Any, token_id: int) -> float | None:
+    """Read the logprob of the final (appended) prompt token from an output."""
+    prompt_logprobs = getattr(output, "prompt_logprobs", None)
+    if not prompt_logprobs:
+        return None
+    last = prompt_logprobs[-1]
+    if not last:
+        return None
+    entry = last.get(token_id)
+    if entry is None:
+        entry = last.get(int(token_id))
+    if entry is None:
+        return None
+    return _entry_logprob(entry)
+
+
 def build_label_token_map(
     tokenizer,
     valid_labels: Iterable[str],
@@ -141,55 +231,19 @@ class GuidedChoiceExtractor:
         if missing:
             raise ValueError(f"could not derive single-token ids for labels: {missing}")
 
-        params = self._sampling_params(token_map)
-        raw = self.llm.raw_generate([prompt], params)
-        output = raw[0].outputs[0]
-        per_letter_logprob = self._scores_from_output(output, labels, token_map)
-        letter = best_label(per_letter_logprob)
-        margin = safe_margin(per_letter_logprob, len(labels))
+        per_letter_logprob = batch_score_continuations(
+            self.llm, self.tokenizer, [(prompt, token_map)]
+        )[0]
+        if not any(math.isfinite(value) for value in per_letter_logprob.values()):
+            raise ValueError(
+                "guided-choice continuation scoring did not recover any legal "
+                "label logprobs"
+            )
         return ChoiceResult(
-            letter=letter,
-            margin=margin,
+            letter=best_label(per_letter_logprob),
+            margin=safe_margin(per_letter_logprob, len(labels)),
             per_letter_logprob=per_letter_logprob,
         )
-
-    def _sampling_params(self, token_map: dict[int, str]):
-        kwargs = {
-            "temperature": 0.0,
-            "max_tokens": 1,
-            "top_p": 1.0,
-            "logprobs": min(len(token_map), self.max_logprobs),
-            "allowed_token_ids": list(token_map.keys()),
-        }
-        if hasattr(self.llm, "sampling_params"):
-            return self.llm.sampling_params(**kwargs)
-
-        from vllm import SamplingParams
-
-        return SamplingParams(**kwargs)
-
-    def _scores_from_output(
-        self,
-        output,
-        valid_labels: tuple[str, ...],
-        token_map: dict[int, str],
-    ) -> dict[str, float]:
-        scores = {label: float("-inf") for label in valid_labels}
-        candidate_logprobs = getattr(output, "logprobs", None) or []
-        if not candidate_logprobs:
-            raise ValueError("guided-choice output did not include token logprobs")
-
-        for token_id, entry in candidate_logprobs[0].items():
-            label = token_map.get(int(token_id))
-            if label is None:
-                continue
-            logprob = _entry_logprob(entry)
-            if logprob is not None:
-                scores[label] = float(logprob)
-
-        if not any(math.isfinite(value) for value in scores.values()):
-            raise ValueError("guided-choice logprobs did not contain legal labels")
-        return scores
 
 
 def _entry_logprob(entry: Any) -> float | None:
