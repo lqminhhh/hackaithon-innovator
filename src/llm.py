@@ -159,8 +159,20 @@ class LLM:
         return f"{tag}\n{prompt}"
 
     # Compatibility methods for existing code that still treats this as vllm.LLM.
-    def chat(self, *args: Any, **kwargs: Any):
+    def raw_chat(self, *args: Any, **kwargs: Any):
+        """Direct passthrough to vLLM engine.chat().
+        
+        WARNING: Does NOT apply thinking-mode. Use generate_text() instead.
+        """
+        
         return self.engine.chat(*args, **kwargs)
 
-    def generate(self, *args: Any, **kwargs: Any):
+    def raw_generate(self, *args: Any, **kwargs: Any):
+        """Direct passthrough to vLLM engine.generate().
+        
+        WARNING: Does NOT apply chat template or thinking-mode.
+        Use generate_text() for all normal inference.
+        Only valid for guided-choice pass-2 where the prompt is already
+        fully constructed and we need raw token logprobs.
+        """
         return self.engine.generate(*args, **kwargs)
