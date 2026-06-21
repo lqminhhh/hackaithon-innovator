@@ -8,12 +8,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.parser import ParsedQuestion
-from src.sc_policy import SC_N_STEM, stem_sc_n
+from src.sc_policy import SC_N_HIGH_CHOICE_KNOWLEDGE, SC_N_STEM, stem_sc_n
 from src.wave_solver import Wave1Result, run_wave2
 
 
-def _parsed(*, qid: str = "q1") -> ParsedQuestion:
-    options = {"A": "Một", "B": "Hai", "C": "Ba"}
+def _parsed(
+    *,
+    qid: str = "q1",
+    options: dict[str, str] | None = None,
+    is_quantitative: bool = True,
+) -> ParsedQuestion:
+    options = options or {"A": "Một", "B": "Hai", "C": "Ba"}
     return ParsedQuestion(
         qid=qid,
         original_question="1 + 1 bằng bao nhiêu?",
@@ -23,7 +28,7 @@ def _parsed(*, qid: str = "q1") -> ParsedQuestion:
         refusal_labels=(),
         n_choices=len(options),
         has_context=False,
-        is_quantitative=True,
+        is_quantitative=is_quantitative,
         is_legal=False,
         has_refusal_choice=False,
         is_harmful=False,
@@ -100,3 +105,48 @@ def test_wave2_uses_three_stem_samples_when_adaptive_disabled():
     assert len(agent.generated) == 1
     assert len(agent.generated[0]["prompts"]) == SC_N_STEM["high"]
     assert len(agent.scored_prompts) == SC_N_STEM["high"]
+
+
+def test_wave2_escalates_high_choice_knowledge_even_with_high_margin():
+    agent = _FakeAgent()
+    options = {chr(ord("A") + i): f"Lựa chọn {i}" for i in range(10)}
+    parsed = _parsed(options=options, is_quantitative=False)
+    wave1 = {
+        parsed.qid: Wave1Result(
+            qid=parsed.qid,
+            route="knowledge",
+            answer="J",
+            margin=1.0,
+            per_letter_logprob={label: (-10.0 if label != "J" else 0.0) for label in options},
+        )
+    }
+
+    wave2 = run_wave2(agent, [parsed], wave1, adaptive_sc=True)
+
+    assert set(wave2) == {parsed.qid}
+    assert wave2[parsed.qid].answer in parsed.options
+    assert wave2[parsed.qid].escalation_reason == "knowledge_high_choice_n10"
+    assert len(agent.generated) == 1
+    assert len(agent.generated[0]["prompts"]) == SC_N_HIGH_CHOICE_KNOWLEDGE
+    assert len(agent.scored_prompts) == SC_N_HIGH_CHOICE_KNOWLEDGE
+    assert agent.generated[0]["kwargs"]["mode"] == "no_think"
+
+
+def test_wave2_does_not_escalate_high_margin_low_choice_knowledge():
+    agent = _FakeAgent()
+    parsed = _parsed(is_quantitative=False)
+    wave1 = {
+        parsed.qid: Wave1Result(
+            qid=parsed.qid,
+            route="knowledge",
+            answer="B",
+            margin=1.0,
+            per_letter_logprob={"A": -2.0, "B": 0.0, "C": -3.0},
+        )
+    }
+
+    wave2 = run_wave2(agent, [parsed], wave1, adaptive_sc=True)
+
+    assert wave2 == {}
+    assert agent.generated == []
+    assert agent.scored_prompts == []

@@ -17,7 +17,9 @@ from src.parser import ParsedQuestion
 from src.reasoning_agent import ReasoningAgent
 from src.router import get_forced_answer, route_question
 from src.sc_policy import (
+    HIGH_CHOICE_KNOWLEDGE_MIN_CHOICES,
     MARGIN_LOW_BY_ROUTE,
+    SC_N_HIGH_CHOICE_KNOWLEDGE,
     SC_N_DEFAULT,
     SC_TEMP,
     SC_TOP_P,
@@ -172,6 +174,19 @@ def run_wave2(
             and margin < MARGIN_LOW_BY_ROUTE["KNOWLEDGE"]
         ):
             escalated.append((parsed, w1.route, w1, SC_N_DEFAULT, f"knowledge_low_margin_{margin:.3f}"))
+        elif (
+            route_upper == "KNOWLEDGE"
+            and parsed.n_choices >= HIGH_CHOICE_KNOWLEDGE_MIN_CHOICES
+        ):
+            escalated.append(
+                (
+                    parsed,
+                    w1.route,
+                    w1,
+                    SC_N_HIGH_CHOICE_KNOWLEDGE,
+                    f"knowledge_high_choice_n{parsed.n_choices}",
+                )
+            )
 
     if not escalated:
         return {}
