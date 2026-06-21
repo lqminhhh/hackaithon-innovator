@@ -11,7 +11,6 @@ from src.extract import (
     batch_score_continuations,
     best_label,
     build_label_token_map,
-    safe_margin,
     softmax_margin,
 )
 from src.reasoning_agent import ReasoningAgent

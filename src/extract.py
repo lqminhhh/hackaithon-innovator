@@ -225,7 +225,7 @@ class GuidedChoiceExtractor:
             )
         return ChoiceResult(
             letter=best_label(per_letter_logprob),
-            margin=safe_margin(per_letter_logprob, len(labels)),
+            margin=softmax_margin(per_letter_logprob),
             per_letter_logprob=per_letter_logprob,
         )
 
