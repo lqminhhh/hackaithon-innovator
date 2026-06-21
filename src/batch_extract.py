@@ -60,7 +60,7 @@ def _vllm_batch_extract(
             results.append(
                 ChoiceResult(
                     letter=best_label(scores),
-                    margin=safe_margin(scores, len(options_list[i])),
+                    margin=softmax_margin(scores),
                     per_letter_logprob=scores,
                 )
             )
