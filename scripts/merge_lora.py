@@ -8,6 +8,7 @@ single model directory.
 from __future__ import annotations
 
 import argparse
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -73,6 +74,29 @@ def _load_base_model(model_cfg: dict[str, Any], *, trust_remote_code: bool):
         raise
 
 
+def _copy_base_model_file(base_model: str, output_dir: str, filename: str, *, required: bool) -> None:
+    """Copy raw base-model metadata after merge.
+
+    Some Qwen3.5 Transformers builds save the inner text config after
+    ``merge_and_unload``. vLLM expects the original top-level config, so keep
+    the raw base-model config in the merged directory.
+    """
+    local_file = Path(base_model) / filename
+    if local_file.exists():
+        source = local_file
+    else:
+        try:
+            from huggingface_hub import hf_hub_download
+
+            source = Path(hf_hub_download(base_model, filename))
+        except Exception:
+            if required:
+                raise
+            return
+
+    shutil.copyfile(source, Path(output_dir) / filename)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Merge LoRA adapter into base model")
     parser.add_argument("--config", default="configs/finetune_config.yaml")
@@ -98,6 +122,8 @@ def main() -> None:
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     model.save_pretrained(output_dir, safe_serialization=True)
+    _copy_base_model_file(model_cfg["base_model"], output_dir, "config.json", required=True)
+    _copy_base_model_file(model_cfg["base_model"], output_dir, "generation_config.json", required=False)
     tokenizer.save_pretrained(output_dir)
     print(f"Merged model written to: {output_dir}")
 
