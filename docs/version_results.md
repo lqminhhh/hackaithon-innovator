@@ -10,6 +10,7 @@
 | `v02_beta` | Improve correctness with S4 escalation. | Rule router + two-pass guided-choice + per-question self-consistency. | Added STEM SC, low-margin KNOWLEDGE SC, and reason/purpose READING SC. Per-question loop; no wave batching. | 80.13% | 18411.7 s inference loop (18508.6 s total) | 39.77 s/q |
 | `v02_gamma` | Keep beta-style accuracy gains while improving throughput and robustness. | Wave-batched router/guided-choice/SC pipeline. | Batches all first passes and all escalations; adaptive STEM SC depth; option shuffle de-bias; per-wave checkpointing. | **85.31%** | not separately recorded; 6424.4 s total | 12.77 s/q |
 | `v03_alpha` | Harden router for 2000-question private set generalization. | Same wave pipeline as v02_gamma; router changes only. | Removed `n_choices >= 8 → STEM` rule; tightened harmful detection to actionable intent phrases; added STEM keywords. Routes: stem=201, knowledge=155, reading=100, safety=7. | 84.23% | 1790.3 s inference loop (2801.7 s total) | 3.87 s/q |
+| `v03_gamma` | Keep the v3 router gains while recovering accuracy through compute policy. | Hardened router + targeted KNOWLEDGE/READING escalation + length-safe Wave 2 extraction. | Added high-choice KNOWLEDGE recovery without rerouting to STEM, broader READING detail SC, broader KNOWLEDGE ambiguity SC, and compacted Wave 2 extraction for long-context safety. | **85.96%** | not separately recorded | - |
 
 ## Key Notes
 
@@ -20,6 +21,28 @@
 - S5 semantic routing and RAG are not part of final-compliant runners because they require extra embedding/reranker models.
 - Runtime numbers are from local/Colab runs and can vary by GPU, vLLM version, warmup, and `safe-mode` settings.
 - `v02_gamma_router_v2` runtime was measured on a 24 GB VRAM card; judge hardware is 16 GB.
+
+## v03_gamma Recovery
+
+`v03_gamma` scored **+1.73 pts** above `v03_alpha` (85.96% vs 84.23%) and
+**+0.65 pts** above `v02_gamma` (85.96% vs 85.31%).
+
+**What changed:** the router stayed semantically strict, but compute policy got
+smarter:
+- 8+ choice KNOWLEDGE questions kept the `knowledge` route and received extra
+  think-mode / SC treatment instead of being mislabeled as STEM.
+- READING escalation expanded from only reason/purpose questions to
+  detail-lookup questions that need exact evidence selection.
+- KNOWLEDGE escalation expanded to ambiguous and combination-style options.
+- Wave 2 extraction became length-safe, so long reading SC prompts no longer
+  overflow the 4096-token context limit.
+
+**Why this matters:** `v03_gamma` recovers the public-set accuracy that old
+route hacks used to provide, but does it through compute allocation rather than
+sloppier route labels. That is the more judge-safe path for the 2000-question
+private set.
+
+**Current best submission: `v03_gamma` (85.96%).**
 
 ## Router v2 Regression Analysis
 
@@ -36,4 +59,5 @@ sequence is: fix margin computation first → KNOWLEDGE SC activates → *then*
 reclassify those 13 items. Until margins are fixed, the `n_choices >= 8` rule
 was accidentally beneficial by forcing better compute on ambiguous items.
 
-**Current best submission remains `v02_gamma` (85.31%).**
+**`v03_alpha` by itself was not the final answer.** The cleaner router needed
+targeted compute recovery, which is what `v03_gamma` now provides.

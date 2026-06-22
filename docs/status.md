@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-06-20. This file gives AI agents fast context on where
+> Last updated: 2026-06-21. This file gives AI agents fast context on where
 > the project stands. Read this before touching any code.
 
 ## What this project is
@@ -18,13 +18,11 @@ Scored on a private set of ~2000 questions on a 16 GB VRAM GPU.
 
 ## Current best runner
 
-**`v02_gamma`** (`src/v02_gamma.py`) — **85.31%** on the public 463-question set (original router).
+**`v03_gamma`** — **85.96%** on the public 463-question set.
 
-> `v03_alpha` scored **84.23%** (-1.08 pts). See regression analysis in
-> `docs/version_results.md`. The router fix is correct in principle but regressed
-> because the margin bug means KNOWLEDGE SC never fires — items moved from STEM
-> to KNOWLEDGE lost their think-mode + SC treatment. **Do not ship v03_alpha
-> until margin computation is fixed.**
+> `v03_gamma` keeps the hardened `v03_alpha` router, restores useful compute for
+> hard KNOWLEDGE and READING cases, and adds length-safe Wave 2 extraction so
+> long-context SC does not overflow the 4096-token vLLM limit.
 
 Architecture:
 1. Parse input JSON/CSV via `src/parser.py` + `src/data_loader.py`
@@ -45,8 +43,9 @@ Architecture:
 | v01_baseline | `src/v01_baseline.py` | 28.73% | 3.81 | |
 | v02_alpha | `src/v02_alpha.py` | 60.48% | 0.09 | |
 | v02_beta | `src/v02_beta.py` | 80.13% | 39.77 | |
-| v02_gamma | `src/v02_gamma.py` | **85.31%** | 12.77 | Current best |
+| v02_gamma | `src/v02_gamma.py` | 85.31% | 12.77 | Original wave-batched best |
 | v03_alpha | `src/v02_gamma.py` + new parser | 84.23% | 3.87 | Router regression; margin bug makes KNOWLEDGE SC dead |
+| v03_gamma | `src/v02_gamma.py` + hardened parser + compute/context fixes | **85.96%** | - | Current best |
 
 Full details: `docs/version_results.md`
 
@@ -129,6 +128,28 @@ These exist in the repo for historical/analysis purposes but are banned by compe
 - Any external API or internet access
 
 ## Recent changes (this session)
+
+### v03_gamma: hardened router + targeted compute recovery (score: 85.96%)
+
+`v03_gamma` is the current best public-set run. It keeps the `v03_alpha`
+router improvements but changes the compute policy instead of reverting to the
+old broad `n_choices >= 8 -> STEM` route hack.
+
+Key changes:
+- **High-choice KNOWLEDGE recovery** — 8+ choice knowledge questions stay on
+  the `knowledge` route but receive extra SC / think-mode treatment instead of
+  being reclassified as STEM.
+- **Broader READING rereads** — READING SC now covers detail-lookup questions
+  (dates, first-occurrence, exact evidence, `theo ngữ cảnh`, etc.), not just
+  reason/purpose questions.
+- **Broader KNOWLEDGE rescue** — extra compute now covers ambiguous options and
+  combination-style choices in addition to low-margin items.
+- **Length-safe Wave 2 extraction** — long SC prompts are compacted before
+  guided-choice extraction, preventing 4096-token context overflow on long
+  reading passages.
+
+Net result: `v03_gamma` beats both `v02_gamma` (85.31%) and `v03_alpha`
+(84.23%) on the public set while preserving the cleaner v3 router.
 
 ### v03_alpha: Router hardened for 2000-question private set (score: 84.23%)
 
