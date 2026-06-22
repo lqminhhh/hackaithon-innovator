@@ -37,9 +37,14 @@ class LLM:
         enable_prefix_caching: bool = True,
         dtype: str = "half",
         trust_remote_code: bool = True,
+        enable_lora: bool = False,
+        lora_adapter_path: str | None = None,
+        lora_name: str = "v03_delta_lora",
+        lora_int_id: int = 1,
         engine: Any | None = None,
         engine_cls: Any | None = None,
         sampling_params_cls: Any | None = None,
+        lora_request_cls: Any | None = None,
     ):
         self.model = model
         self.gpu_memory_utilization = gpu_memory_utilization
@@ -49,7 +54,12 @@ class LLM:
         self.enable_prefix_caching = enable_prefix_caching
         self.dtype = dtype
         self.trust_remote_code = trust_remote_code
+        self.enable_lora = enable_lora or lora_adapter_path is not None
+        self.lora_adapter_path = lora_adapter_path
+        self.lora_name = lora_name
+        self.lora_int_id = lora_int_id
         self._sampling_params_cls = sampling_params_cls
+        self._lora_request = None
 
         self.init_kwargs = {
             "model": model,
@@ -59,6 +69,8 @@ class LLM:
             "enable_prefix_caching": enable_prefix_caching,
             "trust_remote_code": trust_remote_code,
         }
+        if self.enable_lora:
+            self.init_kwargs["enable_lora"] = True
         if max_num_seqs is not None:
             self.init_kwargs["max_num_seqs"] = max_num_seqs
         if quantization is not None:
@@ -72,6 +84,17 @@ class LLM:
 
                 engine_cls = VllmLLM
             self.engine = engine_cls(**self.init_kwargs)
+
+        if lora_adapter_path is not None:
+            LoRARequest = lora_request_cls
+            if LoRARequest is None:
+                from vllm.lora.request import LoRARequest
+
+            self._lora_request = LoRARequest(
+                lora_name,
+                lora_int_id,
+                lora_adapter_path,
+            )
 
     def get_tokenizer(self):
         return self.engine.get_tokenizer()
@@ -100,19 +123,27 @@ class LLM:
         )
         conversations = [[{"role": "user", "content": prompt}] for prompt in prompts]
         chat_kwargs = self._chat_template_kwargs(mode)
+        request_kwargs = self._request_kwargs()
 
         try:
             raw_outputs = self.engine.chat(
                 conversations,
                 params,
                 chat_template_kwargs=chat_kwargs,
+                **request_kwargs,
             )
-        except TypeError:
+        except TypeError as exc:
+            if "chat_template_kwargs" not in str(exc):
+                raise
             tagged_conversations = [
                 [{"role": "user", "content": self._mode_prompt(prompt, mode)}]
                 for prompt in prompts
             ]
-            raw_outputs = self.engine.chat(tagged_conversations, params)
+            raw_outputs = self.engine.chat(
+                tagged_conversations,
+                params,
+                **request_kwargs,
+            )
 
         return [
             GenerationOutput(
@@ -158,9 +189,20 @@ class LLM:
             return prompt
         return f"{tag}\n{prompt}"
 
+    def _request_kwargs(self) -> dict[str, Any]:
+        if self._lora_request is None:
+            return {}
+        return {"lora_request": self._lora_request}
+
+    def raw_generate(self, prompts: list[Any], params: Any):
+        """Call vLLM ``generate`` with the active LoRA request, if any."""
+        return self.engine.generate(prompts, params, **self._request_kwargs())
+
     # Compatibility methods for existing code that still treats this as vllm.LLM.
     def chat(self, *args: Any, **kwargs: Any):
+        kwargs = {**self._request_kwargs(), **kwargs}
         return self.engine.chat(*args, **kwargs)
 
     def generate(self, *args: Any, **kwargs: Any):
+        kwargs = {**self._request_kwargs(), **kwargs}
         return self.engine.generate(*args, **kwargs)

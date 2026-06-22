@@ -27,11 +27,11 @@ COPY requirements.txt .
 RUN python -m pip install --no-cache-dir -r requirements.txt \
     && python -m pip install --no-cache-dir "vllm>=0.17.0"
 
-# Source, configs, and entrypoint. The v3 inference path is run.py (S7 runner);
-# src/pipeline.py is legacy and is deliberately NOT the entrypoint.
+# Source, configs, and entrypoint. The v3 inference path is the wave runner
+# at src/v02_gamma.py; src/run.py remains the older sequential safety runner.
 COPY src/ ./src/
 COPY configs/ ./configs/
-COPY run.py main.py run.sh ./
+COPY run.sh ./
 RUN chmod +x run.sh
 
 # Bake the single v3 model into the image so inference needs no internet.

@@ -100,6 +100,9 @@ def load_vllm_primary(
     gpu_memory_utilization: float | None = None,
     max_model_len: int | None = None,
     max_num_seqs: int | None = None,
+    lora_adapter_path: str | None = None,
+    lora_name: str = "v03_delta_lora",
+    lora_int_id: int = 1,
 ):
     """Load primary model via vLLM for fast batched inference (CUDA only)."""
     from src.llm import LLM
@@ -123,4 +126,8 @@ def load_vllm_primary(
             max_num_seqs if max_num_seqs is not None else vllm_cfg.get("max_num_seqs")
         ),
         enable_prefix_caching=vllm_cfg.get("enable_prefix_caching", True),
+        trust_remote_code=vllm_cfg.get("trust_remote_code", False),
+        lora_adapter_path=lora_adapter_path,
+        lora_name=lora_name,
+        lora_int_id=lora_int_id,
     )

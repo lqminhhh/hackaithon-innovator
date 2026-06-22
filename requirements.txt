@@ -7,6 +7,8 @@ pandas==3.0.3
 numpy>=1.26.4
 PyYAML==6.0.3
 accelerate>=1.1.1
+datasets>=3.0.0
+peft>=0.14.0
 huggingface-hub>=0.26.0
 matplotlib>=3.8
 pytest==8.4.2

@@ -6,9 +6,13 @@ reasoning prompts into one valid multiple-choice label per question.
 
 from __future__ import annotations
 
-from typing import Any
-
-from src.extract import ChoiceResult, best_label, build_label_token_map, softmax_margin
+from src.extract import (
+    ChoiceResult,
+    batch_score_continuations,
+    best_label,
+    build_label_token_map,
+    softmax_margin,
+)
 from src.reasoning_agent import ReasoningAgent
 
 
@@ -35,39 +39,23 @@ def _vllm_batch_extract(
     prompts: list[str],
     options_list: list[dict[str, str]],
 ) -> list[ChoiceResult]:
-    from vllm import SamplingParams
-
     tokenizer = agent.tokenizer
     token_maps = [
         build_label_token_map(tokenizer, sorted(opts.keys()))
         for opts in options_list
     ]
-    sampling_params_list = [
-        SamplingParams(
-            temperature=0.0,
-            max_tokens=1,
-            top_p=1.0,
-            logprobs=min(len(token_map), 64),
-            allowed_token_ids=list(token_map.keys()),
-        )
-        for token_map in token_maps
-    ]
 
-    raw_outputs = agent._llm.engine.generate(prompts, sampling_params_list)
+    # Score each legal label explicitly via prompt-logprob continuation rather
+    # than reading a single greedy decode's truncated top-k logprobs. The latter
+    # only ever returned the sampled token as finite, collapsing every margin to
+    # a degenerate constant and making every question escalate.
+    scores_per_prompt = batch_score_continuations(
+        agent._llm, tokenizer, list(zip(prompts, token_maps))
+    )
 
     results: list[ChoiceResult] = []
-    for i, output in enumerate(raw_outputs):
+    for i, scores in enumerate(scores_per_prompt):
         try:
-            scores: dict[str, float] = {label: float("-inf") for label in options_list[i]}
-            logprobs_seq = getattr(output.outputs[0], "logprobs", None) or []
-            if logprobs_seq:
-                for token_id, entry in logprobs_seq[0].items():
-                    label = token_maps[i].get(int(token_id))
-                    if label is None:
-                        continue
-                    logprob = _get_logprob(entry)
-                    if logprob is not None:
-                        scores[label] = float(logprob)
             results.append(
                 ChoiceResult(
                     letter=best_label(scores),
@@ -108,15 +96,3 @@ def _fallback_choice(options: dict[str, str]) -> ChoiceResult:
     scores = {label: float("-inf") for label in options}
     scores[first_label] = 0.0
     return ChoiceResult(letter=first_label, margin=0.0, per_letter_logprob=scores)
-
-
-def _get_logprob(entry: Any) -> float | None:
-    """Extract a logprob float from a vLLM token-logprob entry object."""
-    logprob = getattr(entry, "logprob", None)
-    if logprob is not None:
-        return float(logprob)
-    if isinstance(entry, dict) and "logprob" in entry:
-        return float(entry["logprob"])
-    if isinstance(entry, (float, int)):
-        return float(entry)
-    return None

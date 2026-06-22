@@ -34,6 +34,7 @@ vllm:
   max_model_len: 4096
   max_num_seqs: 16
   enable_prefix_caching: true
+  trust_remote_code: false
 
 runner:
   checkpoint_path: checkpoint.json

@@ -20,7 +20,9 @@
 - `v02_gamma` uses the refactored wave pipeline: `src/wave_solver.py`, `src/batch_extract.py`, and `src/sc_policy.py`.
 - S5 semantic routing and RAG are not part of final-compliant runners because they require extra embedding/reranker models.
 - Runtime numbers are from local/Colab runs and can vary by GPU, vLLM version, warmup, and `safe-mode` settings.
-- `v02_gamma_router_v2` runtime was measured on a 24 GB VRAM card; judge hardware is 16 GB.
+- `v03_alpha` and `v03_beta` runtimes were measured on a 24 GB VRAM card; judge hardware is 16 GB.
+- `v03_beta` margin fix is confirmed working: `wave_knowledge_sc=1` shows KNOWLEDGE SC fired for 1 low-confidence item on the public 463-question set (expected more on the private 2000-question set).
+- **The margin fix is not yet reflected in the committed source code** — `src/batch_extract.py` / `src/extract.py` still need to be updated.
 
 ## v03_gamma Recovery
 
@@ -48,16 +50,14 @@ private set.
 
 `v03_alpha` scored **-1.08 pts** below `v02_gamma` (84.23% vs 85.31%).
 
-**Root cause:** The `n_choices >= 8 → STEM` rule removed 13 knowledge questions
-from STEM routing. In v02_gamma those 13 items received think-mode reasoning +
-always-on SC. In v02_gamma_router_v2 they were reclassified as KNOWLEDGE, but
-because **margin computation is broken (all margins = 1.0)**, KNOWLEDGE SC never
-fires. They fell back to a cheap no-think direct pass — worse than STEM treatment.
+**Root cause:** Removing `n_choices >= 8 → STEM` moved 13 knowledge questions
+from STEM (think-mode + always-on SC) to KNOWLEDGE. Because **margin computation
+was broken (all margins = 1.0)**, KNOWLEDGE SC never fired for those items.
+They fell back to a cheap no-think direct pass — worse than STEM treatment.
 
-**Conclusion:** The router fix is correct in principle but premature. The right
-sequence is: fix margin computation first → KNOWLEDGE SC activates → *then*
-reclassify those 13 items. Until margins are fixed, the `n_choices >= 8` rule
-was accidentally beneficial by forcing better compute on ambiguous items.
+**v03_beta fixed this:** With real margins, KNOWLEDGE SC now fires for
+low-confidence items. Result: **85.75%** (+0.44 pts over v02_gamma, +1.52 pts
+over v03_alpha). The router fix + margin fix together are a net gain.
 
 **`v03_alpha` by itself was not the final answer.** The cleaner router needed
 targeted compute recovery, which is what `v03_gamma` now provides.

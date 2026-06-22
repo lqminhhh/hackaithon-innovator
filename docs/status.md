@@ -195,72 +195,55 @@ of hardcoded `"votes": []`. Existing traces still have empty votes (pre-fix).
 
 ## Known bugs and accuracy blockers
 
-### BUG: All margins are 1.0 (broken margin computation)
+### FIXED in v03_beta run (but not yet committed to source): margin computation
 
-Every single question in v02_gamma traces has `margin=1.0` and `votes=[]`.
-The logprob margin extraction in the wave pipeline (`src/batch_extract.py` /
-`src/extract.py`) is returning 1.0 for everything. This means:
+Margins were all 1.0 in v02_gamma/v03_alpha traces. v03_beta confirmed the fix
+works: `wave_knowledge_sc=1` on the 463-question public set shows KNOWLEDGE SC
+fired for 1 low-confidence item. **The fix is not yet in `src/batch_extract.py`
+or `src/extract.py`** — those files still need updating to match the v03_beta run.
 
-- **KNOWLEDGE SC never fires** — the `MARGIN_LOW_BY_ROUTE["KNOWLEDGE"] = 0.20`
-  gate never triggers because margin is always 1.0 > 0.20.
-- **Adaptive STEM SC depth never adapts** — every STEM item looks "high margin"
-  and gets n=3 instead of n=7 when it should be uncertain.
-- The entire margin-based adaptive system is flying blind.
-
-**This is the #1 blocker.** Fixing margin computation would auto-activate
-KNOWLEDGE SC for uncertain items, covering the biggest error bucket (26 errors).
-
-### Error breakdown by route (v02_gamma, 44 errors / 463 questions)
+### Error breakdown by route (v02_gamma baseline, 44 errors / 463 questions)
 
 | Route | Errors | Total | Error Rate | SC fires? | Root cause |
 |---|---|---|---|---|---|
-| knowledge | **26** | 143 | **18.2%** | Never (margin bug) | No SC rescue; biggest leak |
+| knowledge | **26** | 143 | **18.2%** | Rarely (margin bug in v02) | No SC rescue was biggest leak |
 | stem | 13 | 216 | 6.0% | Always | 3 had correct first_answer broken by SC vote |
 | reading | 5 | 100 | 5.0% | Only 15 reason/purpose | Most reading errors get no SC |
-| safety | 0 | 4 | 0% | Forced answer | Perfect |
+| safety | 0 | 7 | 0% | Forced answer | Perfect |
 
-### SC net impact
+### SC net impact (v02_gamma)
 
 - SC rescued 12 wrong first-answers to correct: **+12**
 - SC broke 3 correct first-answers to wrong: **-3**
-- **Net: +9** (positive but the 3 breaks are real cost)
+- **Net: +9**
 
 The 3 SC breaks are: `test_0222` (10-choice), `test_0227`, `test_0432`.
-High-choice-count questions (>=8 options) are especially vulnerable to SC
-option-shuffle confusion.
 
-### 21 persistent failures (wrong across ALL versions)
+### 21 persistent failures (wrong across ALL versions through v02_gamma)
 
-These questions are wrong in v01 through v02_gamma. They likely need a
-capability the model lacks, not a prompt tweak. See `reports/eval/persistent_failures.csv`.
+These questions likely need a capability the model lacks, not a prompt tweak.
+See `reports/eval/persistent_failures.csv`.
 
 ## Improvement priorities for v3
 
-**CRITICAL ORDER: fix margin first, then activate router-v2.**
+1. **Commit the margin fix to source** — v03_beta confirmed it works (+0.44 pts
+   over v02_gamma). `src/batch_extract.py` and/or `src/extract.py` need to be
+   updated to match what was run. This is the #1 pending task before any further
+   experiments.
 
-1. **Fix margin computation** — investigate `src/batch_extract.py` and
-   `src/extract.py` for why logprob margin is always 1.0 in the wave pipeline.
-   Without real margins the adaptive system is blind. The router-v2 regression
-   (-1.08 pts) confirmed this: moving items from STEM to KNOWLEDGE is safe only
-   when KNOWLEDGE SC can rescue low-confidence items. Fix this first.
+2. **Tune KNOWLEDGE SC threshold and depth** — v03_beta fired `wave_knowledge_sc=1`
+   on 463 questions. On 2000 private questions with real margins, this will fire
+   more. Review whether `MARGIN_LOW_BY_ROUTE["KNOWLEDGE"] = 0.20` is the right
+   threshold, and whether n=5 SC samples is the right depth for knowledge items.
 
-2. **After margins work: v03_alpha becomes v03_beta** — the new parser is
-   already in `src/parser.py`. Once margins are real, KNOWLEDGE SC will fire
-   for the 13 items reclassified from STEM, likely recovering the -1.08 pts
-   and then some (26 knowledge errors currently get zero SC).
+3. **Protect first_answer from SC on high-choice questions** — the 3 SC breaks
+   in v02_gamma were all high-choice items (>=8 options). Option shuffle with
+   many choices is more likely to confuse the model. Consider skipping SC or
+   weighting the first-pass answer more heavily for these.
 
-3. **Consider universal KNOWLEDGE SC as interim fallback** — if margin fix is
-   not achievable before submission, run SC n=3 on ALL knowledge questions
-   (~155 items) unconditionally. Cheap compute, directly covers the biggest
-   error bucket.
-
-3. **Protect first_answer from SC on high-choice questions** — for questions
-   with >=8 options, option shuffle with SC is more likely to confuse the model.
-   Skip SC or weight the first-pass answer higher in the vote.
-
-5. **Expand reading SC** — only 15/100 reading questions currently get SC
-   (reason/purpose keyword match). The 5 reading errors are all non-reason
-   questions. Consider SC for all reading questions or those with long contexts.
+4. **Expand reading SC** — only 15/100 reading questions get SC (reason/purpose
+   keyword match). The 5 reading errors are all non-reason questions. Consider
+   broader SC coverage for reading.
 
 ## Remaining work
 

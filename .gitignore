@@ -7,6 +7,7 @@ __pycache__/
 env/
 # Model weights (download locally, never commit)
 models/
+outputs/
 
 # AI assistant local config
 .claude/
