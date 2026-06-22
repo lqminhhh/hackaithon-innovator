@@ -17,14 +17,14 @@ from src.parser import ParsedQuestion
 from src.reasoning_agent import ReasoningAgent
 from src.router import get_forced_answer, route_question
 from src.sc_policy import (
-    HIGH_CHOICE_KNOWLEDGE_MIN_CHOICES,
-    MARGIN_LOW_BY_ROUTE,
     SC_N_HIGH_CHOICE_KNOWLEDGE,
     SC_N_DEFAULT,
     SC_TEMP,
     SC_TOP_P,
     TOKENS_BY_ROUTE,
     build_sc_reasoning_prompt,
+    knowledge_escalation_reason,
+    reading_escalation_reason,
     should_use_think_mode,
     shuffle_options,
     stem_sc_n,
@@ -32,7 +32,6 @@ from src.sc_policy import (
 from src.solve import (
     _build_extraction_from_reasoning,
     _build_reasoning_prompt,
-    _is_reason_purpose_question,
     _vote,
 )
 from src.version_runner import _trace_writer
@@ -92,11 +91,11 @@ def run_wave1(
     reasoning_prompts = [_build_reasoning_prompt(parsed, route) for parsed, route in pending]
     think_idx = [
         i for i, (parsed, route) in enumerate(pending)
-        if should_use_think_mode(parsed, route)
+        if should_use_think_mode(parsed, route, stage="wave1")
     ]
     other_idx = [
         i for i, (parsed, route) in enumerate(pending)
-        if not should_use_think_mode(parsed, route)
+        if not should_use_think_mode(parsed, route, stage="wave1")
     ]
 
     reasonings = [""] * len(pending)
@@ -173,34 +172,26 @@ def run_wave2(
             sc_n = stem_sc_n(margin, adaptive_sc)
             reason = f"stem_sc_adaptive_n{sc_n}" if adaptive_sc else f"stem_sc_fixed_n{sc_n}"
             escalated.append((parsed, w1.route, w1, sc_n, reason))
-        elif route_upper == "READING" and _is_reason_purpose_question(parsed.query):
-            escalated.append((parsed, w1.route, w1, 3, "reading_reason_purpose_sc"))
-        elif (
-            route_upper == "KNOWLEDGE"
-            and margin is not None
-            and margin < MARGIN_LOW_BY_ROUTE["KNOWLEDGE"]
-        ):
-            escalated.append((parsed, w1.route, w1, SC_N_DEFAULT, f"knowledge_low_margin_{margin:.3f}"))
-        elif (
-            route_upper == "KNOWLEDGE"
-            and parsed.n_choices >= HIGH_CHOICE_KNOWLEDGE_MIN_CHOICES
-        ):
-            escalated.append(
-                (
-                    parsed,
-                    w1.route,
-                    w1,
-                    SC_N_HIGH_CHOICE_KNOWLEDGE,
-                    f"knowledge_high_choice_n{parsed.n_choices}",
+        elif route_upper == "READING":
+            reason = reading_escalation_reason(parsed.query)
+            if reason is not None:
+                escalated.append((parsed, w1.route, w1, 3, reason))
+        elif route_upper == "KNOWLEDGE":
+            reason = knowledge_escalation_reason(parsed, margin)
+            if reason is not None:
+                sc_n = (
+                    SC_N_DEFAULT
+                    if reason.startswith("knowledge_low_margin_")
+                    else SC_N_HIGH_CHOICE_KNOWLEDGE
                 )
-            )
+                escalated.append((parsed, w1.route, w1, sc_n, reason))
 
     if not escalated:
         return {}
 
     flat_sc: list[tuple[str, str, dict[str, str], dict[str, str], bool]] = []
     for parsed, route, _w1, sc_n, _reason in escalated:
-        use_think = should_use_think_mode(parsed, route)
+        use_think = should_use_think_mode(parsed, route, stage="wave2")
         for sample_idx in range(sc_n):
             shuffled_options, reverse_map = shuffle_options(parsed.options, sample_idx)
             sc_prompt = build_sc_reasoning_prompt(parsed, route, shuffled_options)
