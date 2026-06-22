@@ -10,7 +10,7 @@
 | `v02_beta` | Improve correctness with S4 escalation. | Rule router + two-pass guided-choice + per-question self-consistency. | Added STEM SC, low-margin KNOWLEDGE SC, and reason/purpose READING SC. Per-question loop; no wave batching. | 80.13% | 18411.7 s inference loop (18508.6 s total) | 39.77 s/q |
 | `v02_gamma` | Keep beta-style accuracy gains while improving throughput and robustness. | Wave-batched router/guided-choice/SC pipeline. | Batches all first passes and all escalations; adaptive STEM SC depth; option shuffle de-bias; per-wave checkpointing. | **85.31%** | not separately recorded; 6424.4 s total | 12.77 s/q |
 | `v03_alpha` | Harden router for 2000-question private set generalization. | Same wave pipeline as v02_gamma; router changes only. | Removed `n_choices >= 8 → STEM` rule; tightened harmful detection to actionable intent phrases; added STEM keywords. Routes: stem=201, knowledge=155, reading=100, safety=7. | 84.23% | 1790.3 s inference loop (2801.7 s total) | 3.87 s/q |
-| `v03_beta` | Fix margin computation so KNOWLEDGE SC actually fires. | v03_alpha router + fixed logprob margin extraction. | Margin now returns real values; wave_knowledge_sc fires for low-confidence knowledge items. Routes: stem=201, knowledge=155, reading=100, safety=7. Paths: wave_direct=239, wave_stem_sc=201, wave_reading_sc=15, wave_knowledge_sc=1, forced_safety=7. Submission: `data/submissions/submission_v03_veta.csv`. | **85.75%** | 2211.6 s inference loop (2464.2 s total) | 4.78 s/q |
+| `v03_gamma` | Keep the v3 router gains while recovering accuracy through compute policy. | Hardened router + targeted KNOWLEDGE/READING escalation + length-safe Wave 2 extraction. | Added high-choice KNOWLEDGE recovery without rerouting to STEM, broader READING detail SC, broader KNOWLEDGE ambiguity SC, and compacted Wave 2 extraction for long-context safety. | **85.96%** | not separately recorded | - |
 
 ## Key Notes
 
@@ -24,7 +24,29 @@
 - `v03_beta` margin fix is confirmed working: `wave_knowledge_sc=1` shows KNOWLEDGE SC fired for 1 low-confidence item on the public 463-question set (expected more on the private 2000-question set).
 - **The margin fix is not yet reflected in the committed source code** — `src/batch_extract.py` / `src/extract.py` still need to be updated.
 
-## v03_alpha Regression and v03_beta Recovery
+## v03_gamma Recovery
+
+`v03_gamma` scored **+1.73 pts** above `v03_alpha` (85.96% vs 84.23%) and
+**+0.65 pts** above `v02_gamma` (85.96% vs 85.31%).
+
+**What changed:** the router stayed semantically strict, but compute policy got
+smarter:
+- 8+ choice KNOWLEDGE questions kept the `knowledge` route and received extra
+  think-mode / SC treatment instead of being mislabeled as STEM.
+- READING escalation expanded from only reason/purpose questions to
+  detail-lookup questions that need exact evidence selection.
+- KNOWLEDGE escalation expanded to ambiguous and combination-style options.
+- Wave 2 extraction became length-safe, so long reading SC prompts no longer
+  overflow the 4096-token context limit.
+
+**Why this matters:** `v03_gamma` recovers the public-set accuracy that old
+route hacks used to provide, but does it through compute allocation rather than
+sloppier route labels. That is the more judge-safe path for the 2000-question
+private set.
+
+**Current best submission: `v03_gamma` (85.96%).**
+
+## Router v2 Regression Analysis
 
 `v03_alpha` scored **-1.08 pts** below `v02_gamma` (84.23% vs 85.31%).
 
@@ -37,4 +59,5 @@ They fell back to a cheap no-think direct pass — worse than STEM treatment.
 low-confidence items. Result: **85.75%** (+0.44 pts over v02_gamma, +1.52 pts
 over v03_alpha). The router fix + margin fix together are a net gain.
 
-**Current best submission: `v03_beta` (85.75%)** — `data/submissions/submission_v03_veta.csv`.
+**`v03_alpha` by itself was not the final answer.** The cleaner router needed
+targeted compute recovery, which is what `v03_gamma` now provides.
