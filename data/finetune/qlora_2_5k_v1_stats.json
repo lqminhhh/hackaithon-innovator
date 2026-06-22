@@ -1,0 +1,96 @@
+{
+  "seed": 2026,
+  "inputs": [
+    "interim/knowledge_1800_curated.jsonl",
+    "interim/reading_250_curated.jsonl",
+    "interim/vmlu_mqa_stem_curated_250.jsonl",
+    "interim/safety_custom_normalized.jsonl",
+    "interim/format_stress_normalized.jsonl"
+  ],
+  "approved_sources": [
+    "format_stress",
+    "marx_lenin_qna",
+    "quizlet_hcm_qna",
+    "safety_custom",
+    "vietnamese_reading_comprehension",
+    "vmlu",
+    "vnhsge"
+  ],
+  "eligible_before_caps": 2377,
+  "selected": 2377,
+  "excluded": {},
+  "bucket_targets": {
+    "knowledge": 1800,
+    "reading": 250,
+    "stem": 250,
+    "safety": 100,
+    "format_stress": 100
+  },
+  "bucket_shortages": {
+    "knowledge": 73,
+    "reading": 0,
+    "stem": 0,
+    "safety": 0,
+    "format_stress": 50
+  },
+  "splits": {
+    "train": {
+      "count": 1905,
+      "buckets": {
+        "format_stress": 40,
+        "knowledge": 1383,
+        "reading": 200,
+        "safety": 80,
+        "stem": 202
+      },
+      "knowledge_subdomains": {
+        "biology_education_general_facts": 78,
+        "civics_public_admin": 202,
+        "economics_business_marketing": 202,
+        "hcm_ideology": 200,
+        "history_geography_culture": 200,
+        "marxism_leninism_political_theory": 141,
+        "vietnamese_law_admin": 360
+      }
+    },
+    "val": {
+      "count": 241,
+      "buckets": {
+        "format_stress": 5,
+        "knowledge": 177,
+        "reading": 25,
+        "safety": 10,
+        "stem": 24
+      },
+      "knowledge_subdomains": {
+        "biology_education_general_facts": 15,
+        "civics_public_admin": 24,
+        "economics_business_marketing": 24,
+        "hcm_ideology": 25,
+        "history_geography_culture": 25,
+        "marxism_leninism_political_theory": 18,
+        "vietnamese_law_admin": 46
+      }
+    },
+    "test": {
+      "count": 231,
+      "buckets": {
+        "format_stress": 5,
+        "knowledge": 167,
+        "reading": 25,
+        "safety": 10,
+        "stem": 24
+      },
+      "knowledge_subdomains": {
+        "biology_education_general_facts": 7,
+        "civics_public_admin": 24,
+        "economics_business_marketing": 24,
+        "hcm_ideology": 25,
+        "history_geography_culture": 25,
+        "marxism_leninism_political_theory": 18,
+        "vietnamese_law_admin": 44
+      }
+    }
+  },
+  "leakage_grouping": "explicit group, VNHSGE source exam, VMLU subject, otherwise canonical question"
+}
