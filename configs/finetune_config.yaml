@@ -3,9 +3,9 @@ model:
   # auto = bf16 on GPUs that support it, fp16 on GPUs without bf16 support.
   dtype: "auto"
   trust_remote_code: true
-  # Keep true for broad Google Colab compatibility. Set false on A100/H100 if
-  # you intentionally want full bf16 LoRA instead of QLoRA.
-  load_in_4bit: true
+  # A100/H100: false = full bf16 LoRA, usually the best first quality run.
+  # T4/smaller GPUs: set true for 4-bit QLoRA to avoid OOM.
+  load_in_4bit: false
   bnb_4bit_quant_type: "nf4"
   bnb_4bit_use_double_quant: true
 

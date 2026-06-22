@@ -36,6 +36,26 @@ def _load_config(path: Path) -> dict[str, Any]:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
+def _resolve_dtype_name(name: str) -> str:
+    normalized = name.lower()
+    if normalized == "auto":
+        if torch.cuda.is_available():
+            return "bf16" if torch.cuda.is_bf16_supported() else "fp16"
+        return "fp32"
+    if normalized in {"bf16", "bfloat16"}:
+        if torch.cuda.is_available() and not torch.cuda.is_bf16_supported():
+            raise RuntimeError(
+                "Config requested bf16, but this GPU does not support bf16. "
+                "Use model.dtype: auto or fp16."
+            )
+        return "bf16"
+    if normalized in {"fp16", "float16", "half"}:
+        return "fp16"
+    if normalized in {"fp32", "float32"}:
+        return "fp32"
+    raise ValueError(f"Unsupported dtype: {name}")
+
+
 def _torch_dtype(name: str):
     normalized = name.lower()
     if normalized in {"bf16", "bfloat16"}:
@@ -62,10 +82,11 @@ def _assert_model_supported(model_id: str, *, trust_remote_code: bool) -> None:
 
 
 def _load_base_model(model_cfg: dict[str, Any], *, trust_remote_code: bool):
+    resolved_dtype = model_cfg.get("resolved_dtype", model_cfg["dtype"])
     try:
         return AutoModelForCausalLM.from_pretrained(
             model_cfg["base_model"],
-            torch_dtype=_torch_dtype(model_cfg["dtype"]),
+            torch_dtype=_torch_dtype(resolved_dtype),
             device_map="auto",
             trust_remote_code=trust_remote_code,
         )
@@ -191,6 +212,8 @@ def main() -> None:
     adapter_dir = args.adapter_dir or train_cfg["output_dir"]
     output_dir = args.output_dir or train_cfg["merged_output_dir"]
     trust_remote_code = bool(model_cfg.get("trust_remote_code", True))
+    model_cfg["resolved_dtype"] = _resolve_dtype_name(str(model_cfg.get("dtype", "auto")))
+    print(f"Merge precision: {model_cfg['resolved_dtype']}", flush=True)
 
     _assert_model_supported(model_cfg["base_model"], trust_remote_code=trust_remote_code)
 
