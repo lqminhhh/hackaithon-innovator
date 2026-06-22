@@ -79,6 +79,14 @@ def _flatten_text_config(cfg: dict[str, Any]) -> dict[str, Any]:
     return flattened
 
 
+def _fill_required_text_defaults(cfg: dict[str, Any]) -> dict[str, Any]:
+    if "pad_token_id" not in cfg:
+        cfg["pad_token_id"] = cfg.get("eos_token_id", 151645)
+    if "bos_token_id" not in cfg and "eos_token_id" in cfg:
+        cfg["bos_token_id"] = cfg["eos_token_id"]
+    return cfg
+
+
 def _restore_tokenizer_files(model_dir: Path, tokenizer_source: Path) -> None:
     if not tokenizer_source.exists():
         raise FileNotFoundError(f"Tokenizer source does not exist: {tokenizer_source}")
@@ -105,7 +113,14 @@ def sanitize_model_dir(model_dir: Path, tokenizer_source: Path | None = None) ->
     if cfg.get("model_type") == "qwen3_5":
         cfg["architectures"] = ["Qwen3_5ForCausalLM"]
         cfg["use_cache"] = True
+        cfg = _fill_required_text_defaults(cfg)
     _write_json(config_path, cfg)
+
+    tokenizer_config_path = model_dir / "tokenizer_config.json"
+    tokenizer_config = _load_json(tokenizer_config_path)
+    if isinstance(tokenizer_config, dict):
+        tokenizer_config = _strip_multimodal_metadata(tokenizer_config)
+        _write_json(tokenizer_config_path, tokenizer_config)
 
     for filename in PROCESSOR_FILES:
         path = model_dir / filename
@@ -121,6 +136,7 @@ def sanitize_model_dir(model_dir: Path, tokenizer_source: Path | None = None) ->
     print(f"Sanitized: {model_dir}")
     print(f"architectures: {cfg.get('architectures')}")
     print(f"has vocab_size: {'vocab_size' in cfg}")
+    print(f"pad_token_id: {cfg.get('pad_token_id')}")
     print(f"remaining suspicious json files: {remaining}")
 
 

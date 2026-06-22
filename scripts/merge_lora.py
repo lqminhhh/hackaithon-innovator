@@ -132,6 +132,14 @@ def _flatten_text_config(cfg: dict[str, Any]) -> dict[str, Any]:
     return flattened
 
 
+def _fill_required_text_defaults(cfg: dict[str, Any]) -> dict[str, Any]:
+    if "pad_token_id" not in cfg:
+        cfg["pad_token_id"] = cfg.get("eos_token_id", 151645)
+    if "bos_token_id" not in cfg and "eos_token_id" in cfg:
+        cfg["bos_token_id"] = cfg["eos_token_id"]
+    return cfg
+
+
 def _sanitize_text_only_metadata(output_dir: str) -> None:
     root = Path(output_dir)
     config_path = root / "config.json"
@@ -142,11 +150,21 @@ def _sanitize_text_only_metadata(output_dir: str) -> None:
     if cfg.get("model_type") == "qwen3_5":
         cfg["architectures"] = ["Qwen3_5ForCausalLM"]
         cfg["use_cache"] = True
+        cfg = _fill_required_text_defaults(cfg)
 
     config_path.write_text(
         json.dumps(cfg, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+
+    tokenizer_config_path = root / "tokenizer_config.json"
+    if tokenizer_config_path.exists():
+        tokenizer_config = json.loads(tokenizer_config_path.read_text(encoding="utf-8"))
+        tokenizer_config = _strip_multimodal_metadata(tokenizer_config)
+        tokenizer_config_path.write_text(
+            json.dumps(tokenizer_config, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
 
     for filename in [
         "preprocessor_config.json",
