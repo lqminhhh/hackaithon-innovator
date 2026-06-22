@@ -76,12 +76,7 @@ def _load_base_model(model_cfg: dict[str, Any], *, trust_remote_code: bool):
 
 
 def _copy_base_model_file(base_model: str, output_dir: str, filename: str, *, required: bool) -> None:
-    """Copy raw base-model metadata after merge.
-
-    Some Qwen3.5 Transformers builds save the inner text config after
-    ``merge_and_unload``. vLLM expects the original top-level config, so keep
-    the raw base-model config in the merged directory.
-    """
+    """Copy optional base-model metadata after merge."""
     local_file = Path(base_model) / filename
     if local_file.exists():
         source = local_file
@@ -109,18 +104,32 @@ MULTIMODAL_METADATA_TERMS = (
 )
 
 
-def _strip_multimodal_metadata(value: Any) -> Any:
+def _strip_multimodal_metadata(value: Any, *, strip_auto_map: bool = False) -> Any:
     if isinstance(value, dict):
         cleaned = {}
         for key, item in value.items():
             key_lower = str(key).lower()
-            if key == "auto_map" or any(term in key_lower for term in MULTIMODAL_METADATA_TERMS):
+            if (strip_auto_map and key == "auto_map") or any(
+                term in key_lower for term in MULTIMODAL_METADATA_TERMS
+            ):
                 continue
-            cleaned[key] = _strip_multimodal_metadata(item)
+            cleaned[key] = _strip_multimodal_metadata(item, strip_auto_map=strip_auto_map)
         return cleaned
     if isinstance(value, list):
-        return [_strip_multimodal_metadata(item) for item in value]
+        return [_strip_multimodal_metadata(item, strip_auto_map=strip_auto_map) for item in value]
     return value
+
+
+def _flatten_text_config(cfg: dict[str, Any]) -> dict[str, Any]:
+    text_config = cfg.get("text_config")
+    if not isinstance(text_config, dict):
+        return cfg
+
+    flattened = dict(cfg)
+    for key, value in text_config.items():
+        flattened.setdefault(key, value)
+    flattened.pop("text_config", None)
+    return flattened
 
 
 def _sanitize_text_only_metadata(output_dir: str) -> None:
@@ -128,6 +137,7 @@ def _sanitize_text_only_metadata(output_dir: str) -> None:
     config_path = root / "config.json"
     cfg = json.loads(config_path.read_text(encoding="utf-8"))
 
+    cfg = _flatten_text_config(cfg)
     cfg = _strip_multimodal_metadata(cfg)
     if cfg.get("model_type") == "qwen3_5":
         cfg["architectures"] = ["Qwen3_5ForCausalLM"]
@@ -174,7 +184,6 @@ def main() -> None:
 
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     model.save_pretrained(output_dir, safe_serialization=True)
-    _copy_base_model_file(model_cfg["base_model"], output_dir, "config.json", required=True)
     _copy_base_model_file(model_cfg["base_model"], output_dir, "generation_config.json", required=False)
     tokenizer.save_pretrained(output_dir)
     _sanitize_text_only_metadata(output_dir)

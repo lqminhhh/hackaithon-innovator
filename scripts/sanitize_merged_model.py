@@ -40,17 +40,19 @@ TOKENIZER_FILES = (
 )
 
 
-def _strip_multimodal_metadata(value: Any) -> Any:
+def _strip_multimodal_metadata(value: Any, *, strip_auto_map: bool = False) -> Any:
     if isinstance(value, dict):
         cleaned = {}
         for key, item in value.items():
             key_lower = str(key).lower()
-            if key == "auto_map" or any(term in key_lower for term in MULTIMODAL_METADATA_TERMS):
+            if (strip_auto_map and key == "auto_map") or any(
+                term in key_lower for term in MULTIMODAL_METADATA_TERMS
+            ):
                 continue
-            cleaned[key] = _strip_multimodal_metadata(item)
+            cleaned[key] = _strip_multimodal_metadata(item, strip_auto_map=strip_auto_map)
         return cleaned
     if isinstance(value, list):
-        return [_strip_multimodal_metadata(item) for item in value]
+        return [_strip_multimodal_metadata(item, strip_auto_map=strip_auto_map) for item in value]
     return value
 
 
@@ -63,6 +65,18 @@ def _load_json(path: Path) -> Any | None:
 
 def _write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _flatten_text_config(cfg: dict[str, Any]) -> dict[str, Any]:
+    text_config = cfg.get("text_config")
+    if not isinstance(text_config, dict):
+        return cfg
+
+    flattened = dict(cfg)
+    for key, value in text_config.items():
+        flattened.setdefault(key, value)
+    flattened.pop("text_config", None)
+    return flattened
 
 
 def _restore_tokenizer_files(model_dir: Path, tokenizer_source: Path) -> None:
@@ -86,6 +100,7 @@ def sanitize_model_dir(model_dir: Path, tokenizer_source: Path | None = None) ->
     if not isinstance(cfg, dict):
         raise ValueError(f"Invalid config JSON: {config_path}")
 
+    cfg = _flatten_text_config(cfg)
     cfg = _strip_multimodal_metadata(cfg)
     if cfg.get("model_type") == "qwen3_5":
         cfg["architectures"] = ["Qwen3_5ForCausalLM"]
@@ -105,6 +120,7 @@ def sanitize_model_dir(model_dir: Path, tokenizer_source: Path | None = None) ->
 
     print(f"Sanitized: {model_dir}")
     print(f"architectures: {cfg.get('architectures')}")
+    print(f"has vocab_size: {'vocab_size' in cfg}")
     print(f"remaining suspicious json files: {remaining}")
 
 
