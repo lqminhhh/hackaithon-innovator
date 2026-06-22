@@ -105,6 +105,22 @@ def _normalise_merged_config_for_vllm(output_dir: str) -> None:
     if cfg.get("model_type") == "qwen3_5":
         cfg["architectures"] = ["Qwen3_5ForCausalLM"]
         cfg["use_cache"] = True
+        # The public Qwen3.5 wrapper config can include multimodal/processor
+        # metadata. This project fine-tunes and serves the text-only causal LM,
+        # so remove those hints or vLLM may try to load an image processor.
+        for key in [
+            "auto_map",
+            "image_token_id",
+            "video_token_id",
+            "vision_config",
+            "vision_start_token_id",
+            "vision_end_token_id",
+            "vision_token_id",
+            "visual",
+            "mm_projector",
+            "processor_class",
+        ]:
+            cfg.pop(key, None)
 
     config_path.write_text(
         json.dumps(cfg, ensure_ascii=False, indent=2) + "\n",
