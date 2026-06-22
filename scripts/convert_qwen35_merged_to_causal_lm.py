@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -116,7 +117,30 @@ def _remap_key(key: str) -> str | None:
     return key
 
 
-def _convert_weights(input_dir: Path, output_dir: Path) -> None:
+def _infer_config_from_shapes(config: dict[str, Any], shapes: dict[str, tuple[int, ...]]) -> dict[str, Any]:
+    inferred = dict(config)
+
+    embed_shape = shapes.get("model.embed_tokens.weight")
+    if embed_shape and len(embed_shape) == 2:
+        inferred["vocab_size"] = embed_shape[0]
+        inferred["hidden_size"] = embed_shape[1]
+
+    gate_shape = shapes.get("model.layers.0.mlp.gate_proj.weight")
+    if gate_shape and len(gate_shape) == 2:
+        inferred["intermediate_size"] = gate_shape[0]
+
+    layer_ids = []
+    for key in shapes:
+        match = re.match(r"model\.layers\.(\d+)\.", key)
+        if match:
+            layer_ids.append(int(match.group(1)))
+    if layer_ids:
+        inferred["num_hidden_layers"] = max(layer_ids) + 1
+
+    return inferred
+
+
+def _convert_weights(input_dir: Path, output_dir: Path) -> dict[str, tuple[int, ...]]:
     tensors: dict[str, torch.Tensor] = {}
     for weight_file in _weight_files(input_dir):
         shard = load_file(weight_file)
@@ -128,7 +152,9 @@ def _convert_weights(input_dir: Path, output_dir: Path) -> None:
     if "lm_head.weight" not in tensors and "model.embed_tokens.weight" in tensors:
         tensors["lm_head.weight"] = tensors["model.embed_tokens.weight"].clone()
 
+    shapes = {key: tuple(tensor.shape) for key, tensor in tensors.items()}
     save_file(tensors, output_dir / "model.safetensors", metadata={"format": "pt"})
+    return shapes
 
 
 def convert(input_dir: Path, output_dir: Path) -> None:
@@ -137,12 +163,16 @@ def convert(input_dir: Path, output_dir: Path) -> None:
 
     _copy_metadata(input_dir, output_dir)
     config = _text_config(_load_json(input_dir / "config.json"))
+    shapes = _convert_weights(input_dir, output_dir)
+    config = _infer_config_from_shapes(config, shapes)
     _write_json(output_dir / "config.json", config)
-    _convert_weights(input_dir, output_dir)
 
     print(f"Converted model written to: {output_dir}")
     print(f"architectures: {config.get('architectures')}")
     print(f"has vocab_size: {'vocab_size' in config}")
+    print(f"hidden_size: {config.get('hidden_size')}")
+    print(f"intermediate_size: {config.get('intermediate_size')}")
+    print(f"num_hidden_layers: {config.get('num_hidden_layers')}")
     print(f"pad_token_id: {config.get('pad_token_id')}")
 
 
