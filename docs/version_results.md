@@ -11,6 +11,7 @@
 | `v02_gamma` | Keep beta-style accuracy gains while improving throughput and robustness. | Wave-batched router/guided-choice/SC pipeline. | Batches all first passes and all escalations; adaptive STEM SC depth; option shuffle de-bias; per-wave checkpointing. | **85.31%** | not separately recorded; 6424.4 s total | 12.77 s/q |
 | `v03_alpha` | Harden router for 2000-question private set generalization. | Same wave pipeline as v02_gamma; router changes only. | Removed `n_choices >= 8 → STEM` rule; tightened harmful detection to actionable intent phrases; added STEM keywords. Routes: stem=201, knowledge=155, reading=100, safety=7. | 84.23% | 1790.3 s inference loop (2801.7 s total) | 3.87 s/q |
 | `v03_gamma` | Keep the v3 router gains while recovering accuracy through compute policy. | Hardened router + targeted KNOWLEDGE/READING escalation + length-safe Wave 2 extraction. | Added high-choice KNOWLEDGE recovery without rerouting to STEM, broader READING detail SC, broader KNOWLEDGE ambiguity SC, and compacted Wave 2 extraction for long-context safety. | **85.96%** | not separately recorded | - |
+| `v03_delta` | Convert the adaptive policy from “designed” to actually working. | Hardened router + targeted escalation + real continuation-scored margins + duplicate-safe SC handling. | Fixed wave margin extraction, repaired duplicate-option shuffle/remap, added duplicate/combination guidance in SC prompts, and made low-evidence margins conservative. Routes: safety=7, reading=100, stem=201, knowledge=155. Paths: wave_reading_sc=42, wave_stem_sc=201, wave_direct=134, wave_knowledge_sc=79, forced_safety=7. | **87.04%** | 12748.0 s inference loop (13066.0 s total) | 27.53 s/q |
 
 ## Key Notes
 
@@ -21,6 +22,33 @@
 - S5 semantic routing and RAG are not part of final-compliant runners because they require extra embedding/reranker models.
 - Runtime numbers are from local/Colab runs and can vary by GPU, vLLM version, warmup, and `safe-mode` settings.
 - `v02_gamma_router_v2` runtime was measured on a 24 GB VRAM card; judge hardware is 16 GB.
+- `v03_delta` is the current best public-set score, but it makes extraction much heavier because each legal answer choice is scored as a separate continuation. Judge-safe deployment likely needs continuation microbatching.
+
+## v03_delta Margin Recovery
+
+`v03_delta` scored **+1.08 pts** above `v03_gamma` (87.04% vs 85.96%) and
+**+2.81 pts** above `v03_alpha` (87.04% vs 84.23%).
+
+**What changed:** the router stayed the same, but the adaptive confidence path
+finally became real instead of decorative.
+- Wave guided-choice extraction now scores each legal answer label directly via
+  continuation logprobs, so margins are no longer stuck at `1.0`.
+- Exact duplicate options are handled safely during SC option shuffle/remap, so
+  votes no longer drift onto the wrong original label.
+- SC prompts now explain how to treat duplicate options, near-duplicate wording,
+  and combination answers like “cả A, B, C”.
+- When too few legal label scores are visible, margins fall back to `0.0`
+  instead of manufacturing false confidence.
+
+**Why this matters:** `v03_gamma` had the right policy ideas, but the broken
+margin path meant low-margin KNOWLEDGE rescue and adaptive STEM depth were not
+actually being driven by trustworthy evidence. `v03_delta` converts those ideas
+into working behavior and posts the best public-set score so far.
+
+**Tradeoff:** throughput got worse, not better. Because extraction now expands a
+question into one request per answer choice, large wave batches can OOM unless
+continuation scoring is microbatched. That is now the main engineering risk for
+judge deployment.
 
 ## v03_gamma Recovery
 
@@ -42,7 +70,7 @@ route hacks used to provide, but does it through compute allocation rather than
 sloppier route labels. That is the more judge-safe path for the 2000-question
 private set.
 
-**Current best submission: `v03_gamma` (85.96%).**
+**Current best submission: `v03_delta` (87.04%).**
 
 ## Router v2 Regression Analysis
 

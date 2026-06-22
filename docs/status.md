@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-06-21. This file gives AI agents fast context on where
+> Last updated: 2026-06-22. This file gives AI agents fast context on where
 > the project stands. Read this before touching any code.
 
 ## What this project is
@@ -18,11 +18,12 @@ Scored on a private set of ~2000 questions on a 16 GB VRAM GPU.
 
 ## Current best runner
 
-**`v03_gamma`** — **85.96%** on the public 463-question set.
+**`v03_delta`** — **87.04%** on the public 463-question set.
 
-> `v03_gamma` keeps the hardened `v03_alpha` router, restores useful compute for
-> hard KNOWLEDGE and READING cases, and adds length-safe Wave 2 extraction so
-> long-context SC does not overflow the 4096-token vLLM limit.
+> `v03_delta` keeps the hardened `v03_alpha` router and `v03_gamma` compute
+> policy, then fixes real margin computation and duplicate-option handling so
+> adaptive STEM depth, KNOWLEDGE SC, and tricky option sets finally behave as
+> intended.
 
 Architecture:
 1. Parse input JSON/CSV via `src/parser.py` + `src/data_loader.py`
@@ -34,7 +35,9 @@ Architecture:
    - READING: SC n=3 for reason/purpose questions
    - SAFETY: force refusal label when harmful + refusal option present
 5. Option shuffle de-bias across SC samples
-6. Checkpoint per wave; atexit writes submission on crash
+6. Guided-choice margins scored by per-label continuation logprobs
+7. Duplicate / combination / ambiguous-option handling in SC prompts and vote remapping
+8. Checkpoint per wave; atexit writes submission on crash
 
 ## Score progression
 
@@ -45,7 +48,8 @@ Architecture:
 | v02_beta | `src/v02_beta.py` | 80.13% | 39.77 | |
 | v02_gamma | `src/v02_gamma.py` | 85.31% | 12.77 | Original wave-batched best |
 | v03_alpha | `src/v02_gamma.py` + new parser | 84.23% | 3.87 | Router regression; margin bug makes KNOWLEDGE SC dead |
-| v03_gamma | `src/v02_gamma.py` + hardened parser + compute/context fixes | **85.96%** | - | Current best |
+| v03_gamma | `src/v02_gamma.py` + hardened parser + compute/context fixes | **85.96%** | - | Superseded by v03_delta |
+| v03_delta | `src/v02_gamma.py` + real margins + duplicate-option fixes | **87.04%** | 27.53 | Current best; heavier extraction path |
 
 Full details: `docs/version_results.md`
 
@@ -129,6 +133,36 @@ These exist in the repo for historical/analysis purposes but are banned by compe
 
 ## Recent changes (this session)
 
+### v03_delta: real margins + duplicate-option repair (score: 87.04%)
+
+`v03_delta` is the current best public-set run.
+
+Run summary:
+- Submission: `data/submissions/submission_v03_delta.csv`
+- Trace: `data/traces/trace_v03_delta.jsonl`
+- Routes: safety=7, reading=100, stem=201, knowledge=155
+- Paths: wave_reading_sc=42, wave_stem_sc=201, wave_direct=134, wave_knowledge_sc=79, forced_safety=7
+- Runtime: 13066.0 s total, 12748.0 s inference loop, 27.53 s/question
+
+Key changes beyond `v03_gamma`:
+- **Real continuation-scored margins** — Wave extraction now scores each legal
+  answer label directly instead of relying on the broken all-`1.0` margin path.
+  This finally activates low-margin KNOWLEDGE SC and true adaptive STEM depth.
+- **Duplicate-option-safe SC shuffle/remap** — exact duplicate choices no longer
+  corrupt reverse label mapping during option shuffle.
+- **Duplicate / combination option guidance** — SC prompts now explicitly tell
+  the model how to treat exact duplicates, near-duplicate wording, and
+  “all of the above” style options.
+- **Conservative margin fallback** — when too few legal label scores are
+  visible, margins collapse to `0.0` instead of producing a fake high-confidence
+  signal.
+
+Tradeoff:
+- Accuracy improved meaningfully, but extraction is now much heavier because
+  each question is expanded into one continuation-score request per answer
+  choice. This increases OOM risk and runtime on smaller / weaker judge-like
+  GPUs unless continuation scoring is microbatched.
+
 ### v03_gamma: hardened router + targeted compute recovery (score: 85.96%)
 
 `v03_gamma` is the current best public-set run. It keeps the `v03_alpha`
@@ -195,22 +229,29 @@ of hardcoded `"votes": []`. Existing traces still have empty votes (pre-fix).
 
 ## Known bugs and accuracy blockers
 
-### BUG: All margins are 1.0 (broken margin computation)
+### PERFORMANCE BUG: continuation-scored extraction can OOM when fully batched
 
-Every single question in v02_gamma traces has `margin=1.0` and `votes=[]`.
-The logprob margin extraction in the wave pipeline (`src/batch_extract.py` /
-`src/extract.py`) is returning 1.0 for everything. This means:
+`v03_delta` fixes margin quality by scoring each legal answer label as a
+separate continuation. That improves accuracy, but in Wave 1 extraction it also
+multiples request count by `n_choices`. Large fully-batched extraction waves can
+therefore OOM even on a 24 GB card.
 
-- **KNOWLEDGE SC never fires** — the `MARGIN_LOW_BY_ROUTE["KNOWLEDGE"] = 0.20`
-  gate never triggers because margin is always 1.0 > 0.20.
-- **Adaptive STEM SC depth never adapts** — every STEM item looks "high margin"
-  and gets n=3 instead of n=7 when it should be uncertain.
-- The entire margin-based adaptive system is flying blind.
+Observed failure mode:
+- `torch.OutOfMemoryError` / `EngineDeadError` inside `batch_score_continuations`
+- Wave 1 extraction expands to thousands of continuation requests
+- Smaller / weaker GPUs suffer most; this is now the main judge-safety risk
 
-**This is the #1 blocker.** Fixing margin computation would auto-activate
-KNOWLEDGE SC for uncertain items, covering the biggest error bucket (26 errors).
+**This is the new #1 engineering blocker.** The intended fix is microbatching
+continuation scoring separately from Wave reasoning batches.
 
-### Error breakdown by route (v02_gamma, 44 errors / 463 questions)
+### Error breakdown by route
+
+Public-set error counts should now be re-analyzed against `trace_v03_delta.jsonl`
+before any further policy work. Older `v02_gamma` route/error summaries below
+are useful historical context, but they no longer describe the current best
+runner.
+
+### Historical baseline: v02_gamma error breakdown (44 errors / 463 questions)
 
 | Route | Errors | Total | Error Rate | SC fires? | Root cause |
 |---|---|---|---|---|---|
@@ -236,31 +277,28 @@ capability the model lacks, not a prompt tweak. See `reports/eval/persistent_fai
 
 ## Improvement priorities for v3
 
-**CRITICAL ORDER: fix margin first, then activate router-v2.**
+**CRITICAL ORDER: make `v03_delta` safe, then push narrower accuracy gains.**
 
-1. **Fix margin computation** — investigate `src/batch_extract.py` and
-   `src/extract.py` for why logprob margin is always 1.0 in the wave pipeline.
-   Without real margins the adaptive system is blind. The router-v2 regression
-   (-1.08 pts) confirmed this: moving items from STEM to KNOWLEDGE is safe only
-   when KNOWLEDGE SC can rescue low-confidence items. Fix this first.
+1. **Microbatch continuation scoring** — keep real margins, but chunk
+   extraction requests so Wave 1 / Wave 2 extraction cannot OOM on 16 GB
+   judge-like GPUs.
 
-2. **After margins work: v03_alpha becomes v03_beta** — the new parser is
-   already in `src/parser.py`. Once margins are real, KNOWLEDGE SC will fire
-   for the 13 items reclassified from STEM, likely recovering the -1.08 pts
-   and then some (26 knowledge errors currently get zero SC).
+2. **Re-run failure analysis on `v03_delta`** — now that margins are real, the
+   old `v02_gamma` / `v03_gamma` error mix is stale. Recompute route/path/error
+   slices before adding more policy.
 
-3. **Consider universal KNOWLEDGE SC as interim fallback** — if margin fix is
-   not achievable before submission, run SC n=3 on ALL knowledge questions
-   (~155 items) unconditionally. Cheap compute, directly covers the biggest
-   error bucket.
+3. **Tune extraction throughput separately from reasoning throughput** — the
+   continuation-scoring path is much heavier than free reasoning, so it needs
+   its own smaller batch cap.
 
-3. **Protect first_answer from SC on high-choice questions** — for questions
-   with >=8 options, option shuffle with SC is more likely to confuse the model.
-   Skip SC or weight the first-pass answer higher in the vote.
+4. **Only then consider extra knowledge heuristics** — elimination prompts,
+   broader rescue, or more option-structure rules should come after memory
+   safety and fresh error analysis.
 
-5. **Expand reading SC** — only 15/100 reading questions currently get SC
-   (reason/purpose keyword match). The 5 reading errors are all non-reason
-   questions. Consider SC for all reading questions or those with long contexts.
+5. **Re-check reading SC coverage using `v03_delta` traces** — READING SC now
+   fires much more often than in early runs, so any further broadening should be
+   driven by fresh `trace_v03_delta.jsonl` error slices rather than the old
+   v02_gamma assumptions.
 
 ## Remaining work
 
