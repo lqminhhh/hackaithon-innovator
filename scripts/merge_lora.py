@@ -98,45 +98,67 @@ def _copy_base_model_file(base_model: str, output_dir: str, filename: str, *, re
     shutil.copyfile(source, Path(output_dir) / filename)
 
 
-def _normalise_merged_config_for_vllm(output_dir: str) -> None:
-    config_path = Path(output_dir) / "config.json"
+MULTIMODAL_METADATA_TERMS = (
+    "image",
+    "video",
+    "vision",
+    "visual",
+    "mm_",
+    "multimodal",
+    "processor",
+)
+
+
+def _strip_multimodal_metadata(value: Any) -> Any:
+    if isinstance(value, dict):
+        cleaned = {}
+        for key, item in value.items():
+            key_lower = str(key).lower()
+            if key == "auto_map" or any(term in key_lower for term in MULTIMODAL_METADATA_TERMS):
+                continue
+            cleaned[key] = _strip_multimodal_metadata(item)
+        return cleaned
+    if isinstance(value, list):
+        return [_strip_multimodal_metadata(item) for item in value]
+    return value
+
+
+def _sanitize_text_only_metadata(output_dir: str) -> None:
+    root = Path(output_dir)
+    config_path = root / "config.json"
     cfg = json.loads(config_path.read_text(encoding="utf-8"))
 
+    cfg = _strip_multimodal_metadata(cfg)
     if cfg.get("model_type") == "qwen3_5":
         cfg["architectures"] = ["Qwen3_5ForCausalLM"]
         cfg["use_cache"] = True
-        # The public Qwen3.5 wrapper config can include multimodal/processor
-        # metadata. This project fine-tunes and serves the text-only causal LM,
-        # so remove those hints or vLLM may try to load an image processor.
-        multimodal_terms = (
-            "image",
-            "video",
-            "vision",
-            "visual",
-            "mm_",
-            "multimodal",
-            "processor",
-        )
-        for key in list(cfg):
-            if any(term in key.lower() for term in multimodal_terms):
-                cfg.pop(key, None)
-        for key in ["auto_map"]:
-            cfg.pop(key, None)
 
     config_path.write_text(
         json.dumps(cfg, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
 
+    # Tokenizer/processor metadata can also trigger AutoProcessor inside vLLM.
+    for json_path in root.glob("*.json"):
+        if json_path.name in {"config.json", "generation_config.json", "model.safetensors.index.json"}:
+            continue
+        try:
+            metadata = json.loads(json_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        cleaned = _strip_multimodal_metadata(metadata)
+        json_path.write_text(
+            json.dumps(cleaned, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
 
-def _remove_multimodal_processor_files(output_dir: str) -> None:
     for filename in [
         "preprocessor_config.json",
         "processor_config.json",
         "image_processor_config.json",
         "video_processor_config.json",
     ]:
-        path = Path(output_dir) / filename
+        path = root / filename
         if path.exists():
             path.unlink()
 
@@ -168,9 +190,8 @@ def main() -> None:
     model.save_pretrained(output_dir, safe_serialization=True)
     _copy_base_model_file(model_cfg["base_model"], output_dir, "config.json", required=True)
     _copy_base_model_file(model_cfg["base_model"], output_dir, "generation_config.json", required=False)
-    _normalise_merged_config_for_vllm(output_dir)
-    _remove_multimodal_processor_files(output_dir)
     tokenizer.save_pretrained(output_dir)
+    _sanitize_text_only_metadata(output_dir)
     print(f"Merged model written to: {output_dir}")
 
 
