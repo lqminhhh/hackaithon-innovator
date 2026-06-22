@@ -29,8 +29,17 @@ Use an A100 runtime if available.
 
 ```bash
 pip install -r requirements.txt
+pip uninstall -y transformers tokenizers torchaudio torchvision torchtext torchao
+pip install --no-cache-dir git+https://github.com/huggingface/transformers.git
+pip install -U peft accelerate datasets safetensors sentencepiece protobuf
 pip install "vllm>=0.17.0"
 ```
+
+Restart the Colab runtime after installing Transformers from GitHub. This is
+needed because `Qwen/Qwen3.5-4B` uses `model_type="qwen3_5"`, which older
+Transformers builds do not recognize. The uninstall line also removes optional
+audio/vision/quantization packages that can break imports when their CUDA
+versions do not match Colab's current PyTorch install.
 
 If Colab or the environment sets fast transfer incorrectly:
 

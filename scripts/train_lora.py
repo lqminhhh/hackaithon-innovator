@@ -16,12 +16,37 @@ import yaml
 from datasets import DatasetDict, load_dataset
 from peft import LoraConfig, TaskType, get_peft_model
 from transformers import (
+    AutoConfig,
     AutoModelForCausalLM,
     AutoTokenizer,
     DataCollatorForSeq2Seq,
     Trainer,
     TrainingArguments,
 )
+
+QWEN35_TRANSFORMERS_HELP = """
+This environment cannot load Qwen/Qwen3.5 checkpoints because its
+Transformers install does not recognize model_type='qwen3_5'.
+
+In Colab, run these commands, then restart the runtime:
+
+  pip uninstall -y transformers tokenizers
+  pip install --no-cache-dir git+https://github.com/huggingface/transformers.git
+  pip install -U peft accelerate datasets safetensors sentencepiece protobuf
+
+After the restart, rerun scripts/train_lora.py.
+""".strip()
+
+TORCHAO_COMPAT_HELP = """
+PEFT found an incompatible torchao install while injecting LoRA adapters.
+This project trains plain bf16 LoRA and does not need torchao.
+
+In Colab, run this, then restart the runtime:
+
+  pip uninstall -y torchao
+
+After the restart, rerun scripts/train_lora.py.
+""".strip()
 
 
 def _load_config(path: Path) -> dict[str, Any]:
@@ -49,6 +74,43 @@ def _load_tokenizer(model_id: str, *, trust_remote_code: bool):
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
     return tokenizer
+
+
+def _is_qwen35_support_error(exc: Exception) -> bool:
+    message = str(exc)
+    return "qwen3_5" in message or "does not recognize this architecture" in message
+
+
+def _assert_model_supported(model_id: str, *, trust_remote_code: bool) -> None:
+    try:
+        AutoConfig.from_pretrained(model_id, trust_remote_code=trust_remote_code)
+    except Exception as exc:
+        if _is_qwen35_support_error(exc):
+            raise RuntimeError(QWEN35_TRANSFORMERS_HELP) from exc
+        raise
+
+
+def _load_model(model_cfg: dict[str, Any], *, trust_remote_code: bool):
+    try:
+        return AutoModelForCausalLM.from_pretrained(
+            model_cfg["base_model"],
+            torch_dtype=_torch_dtype(model_cfg["dtype"]),
+            device_map="auto",
+            trust_remote_code=trust_remote_code,
+        )
+    except Exception as exc:
+        if _is_qwen35_support_error(exc):
+            raise RuntimeError(QWEN35_TRANSFORMERS_HELP) from exc
+        raise
+
+
+def _apply_lora(model, peft_config: LoraConfig):
+    try:
+        return get_peft_model(model, peft_config)
+    except ImportError as exc:
+        if "torchao" in str(exc).lower():
+            raise RuntimeError(TORCHAO_COMPAT_HELP) from exc
+        raise
 
 
 def _chat_text(tokenizer, messages: list[dict[str, str]], *, add_generation_prompt: bool) -> str:
@@ -179,19 +241,17 @@ def main() -> None:
     cfg = _load_config(Path(args.config))
     model_cfg = cfg["model"]
     lora_cfg = cfg["lora"]
+    trust_remote_code = bool(model_cfg.get("trust_remote_code", True))
+
+    _assert_model_supported(model_cfg["base_model"], trust_remote_code=trust_remote_code)
 
     tokenizer = _load_tokenizer(
         model_cfg["base_model"],
-        trust_remote_code=bool(model_cfg.get("trust_remote_code", True)),
+        trust_remote_code=trust_remote_code,
     )
     datasets = _load_tokenized_datasets(cfg, tokenizer)
 
-    model = AutoModelForCausalLM.from_pretrained(
-        model_cfg["base_model"],
-        torch_dtype=_torch_dtype(model_cfg["dtype"]),
-        device_map="auto",
-        trust_remote_code=bool(model_cfg.get("trust_remote_code", True)),
-    )
+    model = _load_model(model_cfg, trust_remote_code=trust_remote_code)
     model.config.use_cache = False
     if hasattr(model, "enable_input_require_grads"):
         model.enable_input_require_grads()
@@ -204,7 +264,7 @@ def main() -> None:
         target_modules=list(lora_cfg["target_modules"]),
         bias="none",
     )
-    model = get_peft_model(model, peft_config)
+    model = _apply_lora(model, peft_config)
     model.print_trainable_parameters()
 
     training_args = _build_training_args(cfg)
