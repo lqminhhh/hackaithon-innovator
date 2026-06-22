@@ -8,6 +8,7 @@ single model directory.
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 from pathlib import Path
 from typing import Any
@@ -97,6 +98,20 @@ def _copy_base_model_file(base_model: str, output_dir: str, filename: str, *, re
     shutil.copyfile(source, Path(output_dir) / filename)
 
 
+def _normalise_merged_config_for_vllm(output_dir: str) -> None:
+    config_path = Path(output_dir) / "config.json"
+    cfg = json.loads(config_path.read_text(encoding="utf-8"))
+
+    if cfg.get("model_type") == "qwen3_5":
+        cfg["architectures"] = ["Qwen3_5ForCausalLM"]
+        cfg["use_cache"] = True
+
+    config_path.write_text(
+        json.dumps(cfg, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Merge LoRA adapter into base model")
     parser.add_argument("--config", default="configs/finetune_config.yaml")
@@ -124,6 +139,7 @@ def main() -> None:
     model.save_pretrained(output_dir, safe_serialization=True)
     _copy_base_model_file(model_cfg["base_model"], output_dir, "config.json", required=True)
     _copy_base_model_file(model_cfg["base_model"], output_dir, "generation_config.json", required=False)
+    _normalise_merged_config_for_vllm(output_dir)
     tokenizer.save_pretrained(output_dir)
     print(f"Merged model written to: {output_dir}")
 
