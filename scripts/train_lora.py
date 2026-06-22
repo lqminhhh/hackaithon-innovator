@@ -232,6 +232,32 @@ def _build_training_args(cfg: dict[str, Any]) -> TrainingArguments:
     return TrainingArguments(**filtered_kwargs)
 
 
+def _build_trainer(
+    *,
+    model,
+    training_args: TrainingArguments,
+    datasets: DatasetDict,
+    collator,
+    tokenizer,
+) -> Trainer:
+    supported_args = set(inspect.signature(Trainer.__init__).parameters)
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "args": training_args,
+        "train_dataset": datasets["train"],
+        "eval_dataset": datasets["validation"],
+        "data_collator": collator,
+    }
+
+    if "processing_class" in supported_args:
+        kwargs["processing_class"] = tokenizer
+    elif "tokenizer" in supported_args:
+        kwargs["tokenizer"] = tokenizer
+
+    filtered_kwargs = {key: value for key, value in kwargs.items() if key in supported_args}
+    return Trainer(**filtered_kwargs)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train a LoRA adapter")
     parser.add_argument("--config", default="configs/finetune_config.yaml")
@@ -275,12 +301,11 @@ def main() -> None:
         pad_to_multiple_of=8,
     )
 
-    trainer = Trainer(
+    trainer = _build_trainer(
         model=model,
-        args=training_args,
-        train_dataset=datasets["train"],
-        eval_dataset=datasets["validation"],
-        data_collator=collator,
+        training_args=training_args,
+        datasets=datasets,
+        collator=collator,
         tokenizer=tokenizer,
     )
     trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
