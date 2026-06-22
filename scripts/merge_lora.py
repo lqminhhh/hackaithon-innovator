@@ -138,20 +138,6 @@ def _sanitize_text_only_metadata(output_dir: str) -> None:
         encoding="utf-8",
     )
 
-    # Tokenizer/processor metadata can also trigger AutoProcessor inside vLLM.
-    for json_path in root.glob("*.json"):
-        if json_path.name in {"config.json", "generation_config.json", "model.safetensors.index.json"}:
-            continue
-        try:
-            metadata = json.loads(json_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            continue
-        cleaned = _strip_multimodal_metadata(metadata)
-        json_path.write_text(
-            json.dumps(cleaned, ensure_ascii=False, indent=2) + "\n",
-            encoding="utf-8",
-        )
-
     for filename in [
         "preprocessor_config.json",
         "processor_config.json",

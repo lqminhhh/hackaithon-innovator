@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,16 @@ PROCESSOR_FILES = (
     "processor_config.json",
     "image_processor_config.json",
     "video_processor_config.json",
+)
+
+TOKENIZER_FILES = (
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "vocab.json",
+    "merges.txt",
+    "chat_template.jinja",
+    "special_tokens_map.json",
+    "added_tokens.json",
 )
 
 
@@ -54,7 +65,19 @@ def _write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def sanitize_model_dir(model_dir: Path) -> None:
+def _restore_tokenizer_files(model_dir: Path, tokenizer_source: Path) -> None:
+    if not tokenizer_source.exists():
+        raise FileNotFoundError(f"Tokenizer source does not exist: {tokenizer_source}")
+    for filename in TOKENIZER_FILES:
+        source = tokenizer_source / filename
+        if source.exists():
+            shutil.copyfile(source, model_dir / filename)
+
+
+def sanitize_model_dir(model_dir: Path, tokenizer_source: Path | None = None) -> None:
+    if tokenizer_source is not None:
+        _restore_tokenizer_files(model_dir, tokenizer_source)
+
     config_path = model_dir / "config.json"
     if not config_path.exists():
         raise FileNotFoundError(f"Missing config.json in {model_dir}")
@@ -69,21 +92,13 @@ def sanitize_model_dir(model_dir: Path) -> None:
         cfg["use_cache"] = True
     _write_json(config_path, cfg)
 
-    for json_path in model_dir.glob("*.json"):
-        if json_path.name in {"config.json", "generation_config.json", "model.safetensors.index.json"}:
-            continue
-        metadata = _load_json(json_path)
-        if metadata is None:
-            continue
-        _write_json(json_path, _strip_multimodal_metadata(metadata))
-
     for filename in PROCESSOR_FILES:
         path = model_dir / filename
         if path.exists():
             path.unlink()
 
     remaining = []
-    for json_path in model_dir.glob("*.json"):
+    for json_path in [config_path]:
         text = json_path.read_text(encoding="utf-8").lower()
         if any(term in text for term in MULTIMODAL_METADATA_TERMS):
             remaining.append(json_path.name)
@@ -96,9 +111,17 @@ def sanitize_model_dir(model_dir: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sanitize merged Qwen3.5 text-only model metadata")
     parser.add_argument("model_dir", help="Path to merged model directory")
+    parser.add_argument(
+        "--tokenizer-source",
+        default=None,
+        help="Optional model/adapter directory to copy tokenizer files from before sanitizing",
+    )
     args = parser.parse_args()
 
-    sanitize_model_dir(Path(args.model_dir))
+    sanitize_model_dir(
+        Path(args.model_dir),
+        tokenizer_source=Path(args.tokenizer_source) if args.tokenizer_source else None,
+    )
 
 
 if __name__ == "__main__":
