@@ -26,7 +26,7 @@ In Colab, run these commands, then restart the runtime:
 
   pip uninstall -y transformers tokenizers
   pip install --no-cache-dir git+https://github.com/huggingface/transformers.git
-  pip install -U peft accelerate datasets safetensors sentencepiece protobuf
+  pip install -U peft accelerate datasets safetensors sentencepiece protobuf PyYAML
 
 After the restart, rerun scripts/merge_lora.py.
 """.strip()

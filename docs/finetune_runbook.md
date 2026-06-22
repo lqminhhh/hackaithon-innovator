@@ -20,19 +20,18 @@ data/finetune/qlora_2_5k_v1_val.jsonl
 data/finetune/qlora_2_5k_v1_test.jsonl
 ```
 
-Despite the filename prefix `qlora`, this runbook trains **LoRA bf16**, not
-QLoRA. The data name is kept to match the exported dataset version.
+The default config trains **4-bit QLoRA** for broad Google Colab compatibility.
+On A100/H100, you can set `model.load_in_4bit: false` to train full bf16 LoRA.
 
 ## Colab Setup
 
-Use an A100 runtime if available.
+Use an A100 runtime if available. T4/L4 runtimes should use the default
+`load_in_4bit: true` config.
 
 ```bash
-pip install -r requirements.txt
 pip uninstall -y transformers tokenizers torchaudio torchvision torchtext torchao
 pip install --no-cache-dir git+https://github.com/huggingface/transformers.git
-pip install -U peft accelerate datasets safetensors sentencepiece protobuf
-pip install "vllm>=0.17.0"
+pip install -U peft accelerate datasets safetensors sentencepiece protobuf PyYAML bitsandbytes
 ```
 
 Restart the Colab runtime after installing Transformers from GitHub. This is
@@ -40,6 +39,11 @@ needed because `Qwen/Qwen3.5-4B` uses `model_type="qwen3_5"`, which older
 Transformers builds do not recognize. The uninstall line also removes optional
 audio/vision/quantization packages that can break imports when their CUDA
 versions do not match Colab's current PyTorch install.
+
+Do not install `vllm` before training unless you need inference in the same
+runtime. It has stricter CUDA/Torch dependencies and can disturb an otherwise
+working LoRA environment. Install it only after merge, or use a fresh runtime
+for the smoke/full inference run.
 
 If Colab or the environment sets fast transfer incorrectly:
 
@@ -77,6 +81,12 @@ outputs/finetune/qwen35_4b_lora_2_5k_v1/
 
 This directory contains adapter weights, not a merged full model.
 
+The script prints the selected precision at startup. Expected examples:
+
+- A100/H100 with default config: `bf16 (4-bit QLoRA)`
+- T4/L4 with default config: `fp16 (4-bit QLoRA)`
+- A100/H100 with `load_in_4bit: false`: `bf16 (full LoRA)`
+
 ## 3. Merge Adapter
 
 ```bash
@@ -92,9 +102,31 @@ outputs/finetune/qwen35_4b_lora_2_5k_v1_merged/
 
 Use this merged directory for inference comparison.
 
+If vLLM complains about vision/processor metadata after merge, sanitize the
+merged directory:
+
+```bash
+python scripts/sanitize_merged_model.py \
+  outputs/finetune/qwen35_4b_lora_2_5k_v1_merged \
+  --tokenizer-source outputs/finetune/qwen35_4b_lora_2_5k_v1
+```
+
+If the merged checkpoint contains `model.language_model.*` keys instead of
+`model.*`, convert it once:
+
+```bash
+python scripts/convert_qwen35_merged_to_causal_lm.py \
+  --input-dir outputs/finetune/qwen35_4b_lora_2_5k_v1_merged \
+  --output-dir outputs/finetune/qwen35_4b_lora_2_5k_v1_merged_text
+```
+
 ## 4. Smoke Test Inference
 
 Run a tiny sample first:
+
+```bash
+pip install "vllm>=0.17.0"
+```
 
 ```bash
 python src/v02_gamma.py \

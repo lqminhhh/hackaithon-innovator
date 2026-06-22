@@ -50,22 +50,21 @@ class _FakeLLM:
     def sampling_params(self, **kwargs):
         return _FakeParams(**kwargs)
 
-    def generate(self, prompts, params):
-        self.calls.append({"prompts": prompts, "params": params})
-        logprob_map = {
-            ord(label): SimpleNamespace(logprob=score)
-            for label, score in self.scores.items()
-        }
-        return [
-            SimpleNamespace(
-                outputs=[
-                    SimpleNamespace(
-                        text=max(self.scores, key=self.scores.get),
-                        logprobs=[logprob_map],
-                    )
-                ]
+    def raw_generate(self, requests, params):
+        self.calls.append({"requests": requests, "params": params})
+        outputs = []
+        for request in requests:
+            token_id = request["prompt_token_ids"][-1]
+            label = chr(token_id)
+            score = self.scores.get(label, -99.0)
+            outputs.append(
+                SimpleNamespace(
+                    prompt_logprobs=[
+                        {token_id: SimpleNamespace(logprob=score)}
+                    ]
+                )
             )
-        ]
+        return outputs
 
 
 def test_build_choice_prompt_ends_at_answer_slot():
@@ -114,9 +113,14 @@ def test_guided_choice_extractor_returns_letter_margin_and_logprobs():
     assert 0.0 <= result.margin <= 1.0
     assert result.per_letter_logprob == {"A": -3.0, "B": -0.2, "C": -1.5}
     call = llm.calls[0]
-    assert call["params"].kwargs["allowed_token_ids"] == [ord("A"), ord("B"), ord("C")]
+    assert len(call["requests"]) == 3
+    assert [request["prompt_token_ids"][-1] for request in call["requests"]] == [
+        ord("A"),
+        ord("B"),
+        ord("C"),
+    ]
     assert call["params"].kwargs["max_tokens"] == 1
-    assert call["params"].kwargs["logprobs"] == 3
+    assert call["params"].kwargs["prompt_logprobs"] == 1
 
 
 def test_guided_choice_extractor_supports_eleven_choices():
@@ -128,18 +132,18 @@ def test_guided_choice_extractor_supports_eleven_choices():
 
     assert result.letter == "A"
     assert set(result.per_letter_logprob) == set(labels)
-    assert llm.calls[0]["params"].kwargs["logprobs"] == 11
+    assert len(llm.calls[0]["requests"]) == 11
 
 
 def test_guided_choice_extractor_requires_logprobs_not_output_text_parsing():
     llm = _FakeLLM({"A": -0.1, "B": -2.0})
 
-    def _generate_without_logprobs(prompts, params):
-        return [SimpleNamespace(outputs=[SimpleNamespace(text="A", logprobs=None)])]
+    def _generate_without_logprobs(requests, params):
+        return [SimpleNamespace(prompt_logprobs=None) for _request in requests]
 
-    llm.generate = _generate_without_logprobs
+    llm.raw_generate = _generate_without_logprobs
 
-    with pytest.raises(ValueError, match="logprobs"):
+    with pytest.raises(ValueError, match="did not recover"):
         GuidedChoiceExtractor(llm).extract("Đáp án: ", ["A", "B"])
 
 

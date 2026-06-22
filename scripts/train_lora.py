@@ -15,7 +15,7 @@ from typing import Any
 import torch
 import yaml
 from datasets import DatasetDict, load_dataset
-from peft import LoraConfig, TaskType, get_peft_model
+from peft import LoraConfig, TaskType, get_peft_model, prepare_model_for_kbit_training
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
@@ -33,7 +33,7 @@ In Colab, run these commands, then restart the runtime:
 
   pip uninstall -y transformers tokenizers
   pip install --no-cache-dir git+https://github.com/huggingface/transformers.git
-  pip install -U peft accelerate datasets safetensors sentencepiece protobuf
+  pip install -U peft accelerate datasets safetensors sentencepiece protobuf PyYAML bitsandbytes
 
 After the restart, rerun scripts/train_lora.py.
 """.strip()
@@ -52,6 +52,26 @@ After the restart, rerun scripts/train_lora.py.
 
 def _load_config(path: Path) -> dict[str, Any]:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def _resolve_dtype_name(name: str) -> str:
+    normalized = name.lower()
+    if normalized == "auto":
+        if torch.cuda.is_available():
+            return "bf16" if torch.cuda.is_bf16_supported() else "fp16"
+        return "fp32"
+    if normalized in {"bf16", "bfloat16"}:
+        if torch.cuda.is_available() and not torch.cuda.is_bf16_supported():
+            raise RuntimeError(
+                "Config requested bf16, but this GPU does not support bf16. "
+                "Use model.dtype: auto or fp16 on Colab T4/L4 runtimes."
+            )
+        return "bf16"
+    if normalized in {"fp16", "float16", "half"}:
+        return "fp16"
+    if normalized in {"fp32", "float32"}:
+        return "fp32"
+    raise ValueError(f"Unsupported dtype: {name}")
 
 
 def _torch_dtype(name: str):
@@ -92,12 +112,35 @@ def _assert_model_supported(model_id: str, *, trust_remote_code: bool) -> None:
 
 
 def _load_model(model_cfg: dict[str, Any], *, trust_remote_code: bool):
+    resolved_dtype = model_cfg.get("resolved_dtype", model_cfg["dtype"])
+    torch_dtype = _torch_dtype(resolved_dtype)
+    load_in_4bit = bool(model_cfg.get("load_in_4bit", False))
+    if load_in_4bit and not torch.cuda.is_available():
+        raise RuntimeError(
+            "4-bit QLoRA requires a CUDA GPU with bitsandbytes. "
+            "In Colab, switch Runtime -> Change runtime type -> GPU."
+        )
     try:
+        load_kwargs: dict[str, Any] = {
+            "torch_dtype": torch_dtype,
+            "device_map": "auto",
+            "trust_remote_code": trust_remote_code,
+        }
+        if load_in_4bit:
+            from transformers import BitsAndBytesConfig
+
+            load_kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch_dtype,
+                bnb_4bit_quant_type=model_cfg.get("bnb_4bit_quant_type", "nf4"),
+                bnb_4bit_use_double_quant=bool(
+                    model_cfg.get("bnb_4bit_use_double_quant", True)
+                ),
+            )
+
         return AutoModelForCausalLM.from_pretrained(
             model_cfg["base_model"],
-            torch_dtype=_torch_dtype(model_cfg["dtype"]),
-            device_map="auto",
-            trust_remote_code=trust_remote_code,
+            **load_kwargs,
         )
     except Exception as exc:
         if _is_qwen35_support_error(exc):
@@ -108,7 +151,7 @@ def _load_model(model_cfg: dict[str, Any], *, trust_remote_code: bool):
 def _apply_lora(model, peft_config: LoraConfig):
     try:
         return get_peft_model(model, peft_config)
-    except ImportError as exc:
+    except (ImportError, RuntimeError) as exc:
         if "torchao" in str(exc).lower():
             raise RuntimeError(TORCHAO_COMPAT_HELP) from exc
         raise
@@ -187,7 +230,7 @@ def _load_tokenized_datasets(cfg: dict[str, Any], tokenizer) -> DatasetDict:
 
 def _build_training_args(cfg: dict[str, Any]) -> TrainingArguments:
     train_cfg = cfg["training"]
-    dtype = cfg["model"]["dtype"].lower()
+    dtype = cfg["model"].get("resolved_dtype", cfg["model"]["dtype"]).lower()
     supported_args = set(inspect.signature(TrainingArguments.__init__).parameters)
     kwargs: dict[str, Any] = {
         "output_dir": train_cfg["output_dir"],
@@ -215,6 +258,8 @@ def _build_training_args(cfg: dict[str, Any]) -> TrainingArguments:
         "metric_for_best_model": "eval_loss",
         "greater_is_better": False,
     }
+    if "tf32" in supported_args and torch.cuda.is_available():
+        kwargs["tf32"] = torch.cuda.is_bf16_supported()
 
     # Transformers has renamed/removed a few TrainingArguments fields across
     # releases. Build only the arguments supported by the active install.
@@ -268,6 +313,13 @@ def main() -> None:
     model_cfg = cfg["model"]
     lora_cfg = cfg["lora"]
     trust_remote_code = bool(model_cfg.get("trust_remote_code", True))
+    model_cfg["resolved_dtype"] = _resolve_dtype_name(str(model_cfg.get("dtype", "auto")))
+    print(
+        "Fine-tune precision: "
+        f"{model_cfg['resolved_dtype']} "
+        f"({'4-bit QLoRA' if model_cfg.get('load_in_4bit', False) else 'full LoRA'})",
+        flush=True,
+    )
 
     _assert_model_supported(model_cfg["base_model"], trust_remote_code=trust_remote_code)
 
@@ -279,7 +331,14 @@ def main() -> None:
 
     model = _load_model(model_cfg, trust_remote_code=trust_remote_code)
     model.config.use_cache = False
-    if hasattr(model, "enable_input_require_grads"):
+    if bool(model_cfg.get("load_in_4bit", False)):
+        model = prepare_model_for_kbit_training(
+            model,
+            use_gradient_checkpointing=bool(
+                cfg["training"].get("gradient_checkpointing", True)
+            ),
+        )
+    elif hasattr(model, "enable_input_require_grads"):
         model.enable_input_require_grads()
 
     peft_config = LoraConfig(
