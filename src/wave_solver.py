@@ -25,6 +25,7 @@ from src.sc_policy import (
     SC_TOP_P,
     TOKENS_BY_ROUTE,
     build_sc_reasoning_prompt,
+    should_use_think_mode,
     shuffle_options,
     stem_sc_n,
 )
@@ -89,20 +90,26 @@ def run_wave1(
         return results
 
     reasoning_prompts = [_build_reasoning_prompt(parsed, route) for parsed, route in pending]
-    stem_idx = [i for i, (_, route) in enumerate(pending) if route == "stem"]
-    other_idx = [i for i, (_, route) in enumerate(pending) if route != "stem"]
+    think_idx = [
+        i for i, (parsed, route) in enumerate(pending)
+        if should_use_think_mode(parsed, route)
+    ]
+    other_idx = [
+        i for i, (parsed, route) in enumerate(pending)
+        if not should_use_think_mode(parsed, route)
+    ]
 
     reasonings = [""] * len(pending)
 
-    if stem_idx:
+    if think_idx:
         outputs = batch_generate(
             agent,
-            [reasoning_prompts[i] for i in stem_idx],
+            [reasoning_prompts[i] for i in think_idx],
             mode="think",
             max_tokens=TOKENS_BY_ROUTE["STEM"],
             temperature=0.0,
         )
-        for pos, idx in enumerate(stem_idx):
+        for pos, idx in enumerate(think_idx):
             reasonings[idx] = outputs[pos]
 
     if other_idx:
@@ -193,27 +200,27 @@ def run_wave2(
 
     flat_sc: list[tuple[str, str, dict[str, str], dict[str, str], bool]] = []
     for parsed, route, _w1, sc_n, _reason in escalated:
-        is_stem = route == "stem"
+        use_think = should_use_think_mode(parsed, route)
         for sample_idx in range(sc_n):
             shuffled_options, reverse_map = shuffle_options(parsed.options, sample_idx)
             sc_prompt = build_sc_reasoning_prompt(parsed, route, shuffled_options)
-            flat_sc.append((parsed.qid, sc_prompt, shuffled_options, reverse_map, is_stem))
+            flat_sc.append((parsed.qid, sc_prompt, shuffled_options, reverse_map, use_think))
 
-    stem_sc_idx = [i for i, item in enumerate(flat_sc) if item[4]]
+    think_sc_idx = [i for i, item in enumerate(flat_sc) if item[4]]
     other_sc_idx = [i for i, item in enumerate(flat_sc) if not item[4]]
 
     sc_reasonings = [""] * len(flat_sc)
 
-    if stem_sc_idx:
+    if think_sc_idx:
         outputs = batch_generate(
             agent,
-            [flat_sc[i][1] for i in stem_sc_idx],
+            [flat_sc[i][1] for i in think_sc_idx],
             mode="think",
             max_tokens=TOKENS_BY_ROUTE["STEM"],
             temperature=SC_TEMP,
             top_p=SC_TOP_P,
         )
-        for pos, idx in enumerate(stem_sc_idx):
+        for pos, idx in enumerate(think_sc_idx):
             sc_reasonings[idx] = outputs[pos]
 
     if other_sc_idx:

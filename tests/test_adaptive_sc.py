@@ -8,7 +8,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.parser import ParsedQuestion
-from src.sc_policy import SC_N_HIGH_CHOICE_KNOWLEDGE, SC_N_STEM, stem_sc_n
+from src.sc_policy import (
+    SC_N_HIGH_CHOICE_KNOWLEDGE,
+    SC_N_STEM,
+    should_use_think_mode,
+    stem_sc_n,
+)
 from src.wave_solver import Wave1Result, run_wave2
 
 
@@ -56,6 +61,20 @@ def test_stem_sc_n_uses_low_depth_only_for_low_margin_adaptive_mode():
     assert stem_sc_n(0.90, adaptive_sc=True) == SC_N_STEM["high"]
     assert stem_sc_n(None, adaptive_sc=True) == SC_N_STEM["high"]
     assert stem_sc_n(0.01, adaptive_sc=False) == SC_N_STEM["high"]
+
+
+def test_should_use_think_mode_for_stem_and_high_choice_knowledge_only():
+    stem = _parsed()
+    high_choice_knowledge = _parsed(
+        options={chr(ord("A") + i): f"Lựa chọn {i}" for i in range(10)},
+        is_quantitative=False,
+    )
+    low_choice_knowledge = _parsed(is_quantitative=False)
+
+    assert should_use_think_mode(stem, "stem") is True
+    assert should_use_think_mode(high_choice_knowledge, "knowledge") is True
+    assert should_use_think_mode(low_choice_knowledge, "knowledge") is False
+    assert should_use_think_mode(low_choice_knowledge, "reading") is False
 
 
 def test_wave2_uses_seven_stem_samples_for_low_margin_when_adaptive():
@@ -129,7 +148,7 @@ def test_wave2_escalates_high_choice_knowledge_even_with_high_margin():
     assert len(agent.generated) == 1
     assert len(agent.generated[0]["prompts"]) == SC_N_HIGH_CHOICE_KNOWLEDGE
     assert len(agent.scored_prompts) == SC_N_HIGH_CHOICE_KNOWLEDGE
-    assert agent.generated[0]["kwargs"]["mode"] == "no_think"
+    assert agent.generated[0]["kwargs"]["mode"] == "think"
 
 
 def test_wave2_does_not_escalate_high_margin_low_choice_knowledge():

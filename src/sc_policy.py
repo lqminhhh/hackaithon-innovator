@@ -43,6 +43,16 @@ def stem_sc_n(margin: float | None, adaptive_sc: bool) -> int:
     return SC_N_STEM["high"]
 
 
+def should_use_think_mode(parsed: ParsedQuestion, route: str) -> bool:
+    """Return whether a route should use think-mode generation."""
+    if route == "stem":
+        return True
+    return (
+        route == "knowledge"
+        and parsed.n_choices >= HIGH_CHOICE_KNOWLEDGE_MIN_CHOICES
+    )
+
+
 def shuffle_options(
     options: dict[str, str],
     sample_idx: int,
