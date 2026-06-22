@@ -126,7 +126,7 @@ def _convert_weights(input_dir: Path, output_dir: Path) -> None:
                 tensors[new_key] = tensor
 
     if "lm_head.weight" not in tensors and "model.embed_tokens.weight" in tensors:
-        tensors["lm_head.weight"] = tensors["model.embed_tokens.weight"]
+        tensors["lm_head.weight"] = tensors["model.embed_tokens.weight"].clone()
 
     save_file(tensors, output_dir / "model.safetensors", metadata={"format": "pt"})
 
