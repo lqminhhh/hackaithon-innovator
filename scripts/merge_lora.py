@@ -108,24 +108,37 @@ def _normalise_merged_config_for_vllm(output_dir: str) -> None:
         # The public Qwen3.5 wrapper config can include multimodal/processor
         # metadata. This project fine-tunes and serves the text-only causal LM,
         # so remove those hints or vLLM may try to load an image processor.
-        for key in [
-            "auto_map",
-            "image_token_id",
-            "video_token_id",
-            "vision_config",
-            "vision_start_token_id",
-            "vision_end_token_id",
-            "vision_token_id",
+        multimodal_terms = (
+            "image",
+            "video",
+            "vision",
             "visual",
-            "mm_projector",
-            "processor_class",
-        ]:
+            "mm_",
+            "multimodal",
+            "processor",
+        )
+        for key in list(cfg):
+            if any(term in key.lower() for term in multimodal_terms):
+                cfg.pop(key, None)
+        for key in ["auto_map"]:
             cfg.pop(key, None)
 
     config_path.write_text(
         json.dumps(cfg, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+
+
+def _remove_multimodal_processor_files(output_dir: str) -> None:
+    for filename in [
+        "preprocessor_config.json",
+        "processor_config.json",
+        "image_processor_config.json",
+        "video_processor_config.json",
+    ]:
+        path = Path(output_dir) / filename
+        if path.exists():
+            path.unlink()
 
 
 def main() -> None:
@@ -156,6 +169,7 @@ def main() -> None:
     _copy_base_model_file(model_cfg["base_model"], output_dir, "config.json", required=True)
     _copy_base_model_file(model_cfg["base_model"], output_dir, "generation_config.json", required=False)
     _normalise_merged_config_for_vllm(output_dir)
+    _remove_multimodal_processor_files(output_dir)
     tokenizer.save_pretrained(output_dir)
     print(f"Merged model written to: {output_dir}")
 
