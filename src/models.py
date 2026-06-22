@@ -123,4 +123,5 @@ def load_vllm_primary(
             max_num_seqs if max_num_seqs is not None else vllm_cfg.get("max_num_seqs")
         ),
         enable_prefix_caching=vllm_cfg.get("enable_prefix_caching", True),
+        trust_remote_code=vllm_cfg.get("trust_remote_code", False),
     )
