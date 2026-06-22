@@ -17,22 +17,26 @@ from src.parser import ParsedQuestion
 from src.reasoning_agent import ReasoningAgent
 from src.router import get_forced_answer, route_question
 from src.sc_policy import (
-    MARGIN_LOW_BY_ROUTE,
+    SC_N_HIGH_CHOICE_KNOWLEDGE,
     SC_N_DEFAULT,
     SC_TEMP,
     SC_TOP_P,
     TOKENS_BY_ROUTE,
     build_sc_reasoning_prompt,
+    knowledge_escalation_reason,
+    reading_escalation_reason,
+    should_use_think_mode,
     shuffle_options,
     stem_sc_n,
 )
 from src.solve import (
     _build_extraction_from_reasoning,
     _build_reasoning_prompt,
-    _is_reason_purpose_question,
     _vote,
 )
 from src.version_runner import _trace_writer
+
+_EXTRACTION_TOKEN_BUFFER = 8
 
 
 @dataclass
@@ -56,6 +60,110 @@ class Wave2Result:
     answer: str
     votes: list[str] = field(default_factory=list)
     escalation_reason: str = ""
+
+
+def _build_compact_extraction_prompt(
+    question: str,
+    options: dict[str, str],
+    reasoning: str,
+    *,
+    route: str,
+) -> str:
+    options_block = "\n".join(f"{label}) {options[label]}" for label in sorted(options))
+    route_instruction = {
+        "reading": (
+            "Chỉ chọn đáp án được lời giải nháp hỗ trợ trực tiếp từ đoạn thông tin đã đọc."
+        ),
+        "stem": "Ưu tiên đáp án khớp với phép tính hoặc lập luận cuối cùng trong lời giải nháp.",
+        "knowledge": "Ưu tiên đáp án khớp trực tiếp nhất với kết luận cuối cùng trong lời giải nháp.",
+        "safety": "Nếu lời giải nháp kết luận cần từ chối, chọn đúng phương án từ chối.",
+    }[route]
+    return (
+        "Bạn đang chốt đáp án trắc nghiệm tiếng Việt.\n"
+        f"{route_instruction}\n\n"
+        f"Câu hỏi:\n{question}\n\n"
+        f"Các lựa chọn:\n{options_block}\n\n"
+        "Lời giải nháp rút gọn:\n"
+        f"{reasoning}\n\n"
+        "Chọn đúng một đáp án hợp lệ.\n"
+        "Đáp án: "
+    )
+
+
+def _agent_max_input_tokens(agent: ReasoningAgent) -> int:
+    llm = getattr(agent, "_llm", None)
+    if llm is not None and getattr(llm, "max_model_len", None):
+        return int(llm.max_model_len)
+
+    model = getattr(agent, "_model", None)
+    config = getattr(model, "config", None)
+    if config is not None:
+        for attr in ("max_position_embeddings", "n_positions", "model_max_length"):
+            value = getattr(config, attr, None)
+            if isinstance(value, int) and value > 0:
+                return int(value)
+
+    return 4096
+
+
+def _encode_prompt(tokenizer, text: str, *, add_special_tokens: bool) -> list[int]:
+    try:
+        return list(tokenizer.encode(text, add_special_tokens=add_special_tokens))
+    except TypeError:
+        return list(tokenizer.encode(text))
+
+
+def _decode_prompt(tokenizer, token_ids: list[int]) -> str:
+    decode = getattr(tokenizer, "decode", None)
+    if decode is None:
+        return ""
+    try:
+        return decode(token_ids, skip_special_tokens=True)
+    except TypeError:
+        return decode(token_ids)
+
+
+def _fit_extraction_prompt(
+    agent: ReasoningAgent,
+    *,
+    route: str,
+    question: str,
+    options: dict[str, str],
+    reasoning_prompt: str,
+    reasoning: str,
+) -> str:
+    tokenizer = agent.tokenizer
+    max_input_tokens = _agent_max_input_tokens(agent) - _EXTRACTION_TOKEN_BUFFER
+
+    generic_builder = lambda draft: _build_extraction_from_reasoning(reasoning_prompt, draft)
+    compact_builder = lambda draft: _build_compact_extraction_prompt(
+        question,
+        options,
+        draft,
+        route=route,
+    )
+
+    prompt = generic_builder(reasoning)
+    if len(_encode_prompt(tokenizer, prompt, add_special_tokens=True)) <= max_input_tokens:
+        return prompt
+
+    builder = compact_builder if route == "reading" else generic_builder
+    base_prompt = builder("")
+    base_tokens = _encode_prompt(tokenizer, base_prompt, add_special_tokens=True)
+    if len(base_tokens) > max_input_tokens:
+        return base_prompt
+
+    reasoning_tokens = _encode_prompt(tokenizer, reasoning, add_special_tokens=False)
+    budget = max_input_tokens - len(base_tokens)
+    if budget <= 0:
+        return base_prompt
+    if len(reasoning_tokens) <= budget:
+        return builder(reasoning)
+
+    trimmed_reasoning = _decode_prompt(tokenizer, reasoning_tokens[-budget:]).strip()
+    if trimmed_reasoning:
+        return builder(trimmed_reasoning)
+    return base_prompt
 
 
 def run_wave1(
@@ -87,20 +195,26 @@ def run_wave1(
         return results
 
     reasoning_prompts = [_build_reasoning_prompt(parsed, route) for parsed, route in pending]
-    stem_idx = [i for i, (_, route) in enumerate(pending) if route == "stem"]
-    other_idx = [i for i, (_, route) in enumerate(pending) if route != "stem"]
+    think_idx = [
+        i for i, (parsed, route) in enumerate(pending)
+        if should_use_think_mode(parsed, route, stage="wave1")
+    ]
+    other_idx = [
+        i for i, (parsed, route) in enumerate(pending)
+        if not should_use_think_mode(parsed, route, stage="wave1")
+    ]
 
     reasonings = [""] * len(pending)
 
-    if stem_idx:
+    if think_idx:
         outputs = batch_generate(
             agent,
-            [reasoning_prompts[i] for i in stem_idx],
+            [reasoning_prompts[i] for i in think_idx],
             mode="think",
             max_tokens=TOKENS_BY_ROUTE["STEM"],
             temperature=0.0,
         )
-        for pos, idx in enumerate(stem_idx):
+        for pos, idx in enumerate(think_idx):
             reasonings[idx] = outputs[pos]
 
     if other_idx:
@@ -164,47 +278,64 @@ def run_wave2(
             sc_n = stem_sc_n(margin, adaptive_sc)
             reason = f"stem_sc_adaptive_n{sc_n}" if adaptive_sc else f"stem_sc_fixed_n{sc_n}"
             escalated.append((parsed, w1.route, w1, sc_n, reason))
-        elif route_upper == "READING" and _is_reason_purpose_question(parsed.query):
-            escalated.append((parsed, w1.route, w1, 3, "reading_reason_purpose_sc"))
-        elif (
-            route_upper == "KNOWLEDGE"
-            and margin is not None
-            and margin < MARGIN_LOW_BY_ROUTE["KNOWLEDGE"]
-        ):
-            escalated.append((parsed, w1.route, w1, SC_N_DEFAULT, f"knowledge_low_margin_{margin:.3f}"))
+        elif route_upper == "READING":
+            reason = reading_escalation_reason(parsed.query)
+            if reason is not None:
+                escalated.append((parsed, w1.route, w1, 3, reason))
+        elif route_upper == "KNOWLEDGE":
+            reason = knowledge_escalation_reason(parsed, margin)
+            if reason is not None:
+                sc_n = (
+                    SC_N_DEFAULT
+                    if reason.startswith("knowledge_low_margin_")
+                    else SC_N_HIGH_CHOICE_KNOWLEDGE
+                )
+                escalated.append((parsed, w1.route, w1, sc_n, reason))
 
     if not escalated:
         return {}
 
-    flat_sc: list[tuple[str, str, dict[str, str], dict[str, str], bool]] = []
+    flat_sc: list[
+        tuple[str, str, str, str, dict[str, str], dict[str, str], bool]
+    ] = []
     for parsed, route, _w1, sc_n, _reason in escalated:
-        is_stem = route == "stem"
+        use_think = should_use_think_mode(parsed, route, stage="wave2")
         for sample_idx in range(sc_n):
             shuffled_options, reverse_map = shuffle_options(parsed.options, sample_idx)
             sc_prompt = build_sc_reasoning_prompt(parsed, route, shuffled_options)
-            flat_sc.append((parsed.qid, sc_prompt, shuffled_options, reverse_map, is_stem))
+            flat_sc.append(
+                (
+                    parsed.qid,
+                    route,
+                    parsed.query,
+                    sc_prompt,
+                    shuffled_options,
+                    reverse_map,
+                    use_think,
+                )
+            )
 
-    stem_sc_idx = [i for i, item in enumerate(flat_sc) if item[4]]
-    other_sc_idx = [i for i, item in enumerate(flat_sc) if not item[4]]
+    think_sc_idx = [i for i, item in enumerate(flat_sc) if item[6]]
+    other_sc_idx = [i for i, item in enumerate(flat_sc) if not item[6]]
 
     sc_reasonings = [""] * len(flat_sc)
 
-    if stem_sc_idx:
+    if think_sc_idx:
         outputs = batch_generate(
             agent,
-            [flat_sc[i][1] for i in stem_sc_idx],
+            [flat_sc[i][3] for i in think_sc_idx],
             mode="think",
             max_tokens=TOKENS_BY_ROUTE["STEM"],
             temperature=SC_TEMP,
             top_p=SC_TOP_P,
         )
-        for pos, idx in enumerate(stem_sc_idx):
+        for pos, idx in enumerate(think_sc_idx):
             sc_reasonings[idx] = outputs[pos]
 
     if other_sc_idx:
         outputs = batch_generate(
             agent,
-            [flat_sc[i][1] for i in other_sc_idx],
+            [flat_sc[i][3] for i in other_sc_idx],
             mode="no_think",
             max_tokens=TOKENS_BY_ROUTE["READING"],
             temperature=SC_TEMP,
@@ -214,17 +345,24 @@ def run_wave2(
             sc_reasonings[idx] = outputs[pos]
 
     sc_extract_prompts = [
-        _build_extraction_from_reasoning(flat_sc[i][1], sc_reasonings[i])
+        _fit_extraction_prompt(
+            agent,
+            route=flat_sc[i][1],
+            question=flat_sc[i][2],
+            options=flat_sc[i][4],
+            reasoning_prompt=flat_sc[i][3],
+            reasoning=sc_reasonings[i],
+        )
         for i in range(len(flat_sc))
     ]
     sc_raw = batch_extract(
         agent,
         sc_extract_prompts,
-        [flat_sc[i][2] for i in range(len(flat_sc))],
+        [flat_sc[i][4] for i in range(len(flat_sc))],
     )
 
     qid_choices: dict[str, list[ChoiceResult]] = defaultdict(list)
-    for i, (qid, _prompt, _options, reverse_map, _is_stem) in enumerate(flat_sc):
+    for i, (qid, _route, _query, _prompt, _options, reverse_map, _use_think) in enumerate(flat_sc):
         try:
             raw = sc_raw[i]
             original_letter = reverse_map[raw.letter]
