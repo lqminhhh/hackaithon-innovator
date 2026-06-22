@@ -48,8 +48,15 @@ class _FakeEngine:
             for i, _ in enumerate(conversations)
         ]
 
-    def generate(self, prompts, params):
-        return [("generated", prompts, params)]
+    def generate(self, prompts, params, **kwargs):
+        self.calls.append(
+            {
+                "prompts": prompts,
+                "params": params,
+                "kwargs": kwargs,
+            }
+        )
+        return [("generated", prompts, params, kwargs)]
 
 
 class _FakeEngineCls:
@@ -117,7 +124,38 @@ def test_compatibility_methods_delegate_to_engine():
     params = _FakeSamplingParams(max_tokens=1, temperature=0)
 
     assert llm.get_tokenizer() == "tokenizer"
-    assert llm.generate(["p"], params) == [("generated", ["p"], params)]
+    assert llm.generate(["p"], params) == [("generated", ["p"], params, {})]
+
+
+def test_lora_request_is_passed_to_chat_and_raw_generate():
+    class _FakeLoRARequest:
+        def __init__(self, name, int_id, path):
+            self.name = name
+            self.int_id = int_id
+            self.path = path
+
+    engine = _FakeEngine()
+    llm = LLM(
+        engine=engine,
+        sampling_params_cls=_FakeSamplingParams,
+        lora_adapter_path="/tmp/adapter",
+        lora_name="adapter",
+        lora_int_id=7,
+        lora_request_cls=_FakeLoRARequest,
+    )
+
+    assert llm.init_kwargs["enable_lora"] is True
+
+    llm.generate_text(["prompt"], mode="no_think")
+    chat_kwargs = engine.calls[-1]["kwargs"]
+    assert chat_kwargs["lora_request"].name == "adapter"
+    assert chat_kwargs["lora_request"].int_id == 7
+    assert chat_kwargs["lora_request"].path == "/tmp/adapter"
+
+    params = _FakeSamplingParams(max_tokens=1, temperature=0)
+    llm.raw_generate([{"prompt_token_ids": [1, 2, 3]}], params)
+    generate_kwargs = engine.calls[-1]["kwargs"]
+    assert generate_kwargs["lora_request"].name == "adapter"
 
 
 def test_load_vllm_primary_uses_s1_wrapper_defaults(monkeypatch):
@@ -155,3 +193,27 @@ def test_load_vllm_primary_uses_awq_only_for_awq_model_names(monkeypatch):
 
     assert captured["model"] == "Qwen/Qwen3-8B-AWQ"
     assert captured["quantization"] == "awq"
+
+
+def test_load_vllm_primary_forwards_lora_adapter(monkeypatch):
+    captured = {}
+
+    class _CapturedLLM:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    import src.llm as llm_module
+
+    monkeypatch.setattr(llm_module, "LLM", _CapturedLLM)
+
+    load_vllm_primary(
+        model_id="Qwen/Qwen3.5-4B",
+        lora_adapter_path="/tmp/adapter",
+        lora_name="adapter",
+        lora_int_id=3,
+    )
+
+    assert captured["model"] == "Qwen/Qwen3.5-4B"
+    assert captured["lora_adapter_path"] == "/tmp/adapter"
+    assert captured["lora_name"] == "adapter"
+    assert captured["lora_int_id"] == 3

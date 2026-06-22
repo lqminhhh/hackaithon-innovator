@@ -161,6 +161,15 @@ def _fill_required_text_defaults(cfg: dict[str, Any]) -> dict[str, Any]:
     return cfg
 
 
+def _normalize_qwen35_text_config(cfg: dict[str, Any]) -> dict[str, Any]:
+    if str(cfg.get("model_type", "")).startswith("qwen3_5"):
+        cfg["model_type"] = "qwen3_5"
+        cfg["architectures"] = ["Qwen3_5ForCausalLM"]
+        cfg["use_cache"] = True
+        cfg = _fill_required_text_defaults(cfg)
+    return cfg
+
+
 def _sanitize_text_only_metadata(output_dir: str) -> None:
     root = Path(output_dir)
     config_path = root / "config.json"
@@ -168,10 +177,7 @@ def _sanitize_text_only_metadata(output_dir: str) -> None:
 
     cfg = _flatten_text_config(cfg)
     cfg = _strip_multimodal_metadata(cfg)
-    if cfg.get("model_type") == "qwen3_5":
-        cfg["architectures"] = ["Qwen3_5ForCausalLM"]
-        cfg["use_cache"] = True
-        cfg = _fill_required_text_defaults(cfg)
+    cfg = _normalize_qwen35_text_config(cfg)
 
     config_path.write_text(
         json.dumps(cfg, ensure_ascii=False, indent=2) + "\n",

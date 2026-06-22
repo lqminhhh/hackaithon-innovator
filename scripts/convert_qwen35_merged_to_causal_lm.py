@@ -46,17 +46,26 @@ def _write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def _strip_multimodal_metadata(value: Any) -> Any:
+def _strip_multimodal_metadata(value: Any, *, strip_auto_map: bool = False) -> Any:
     if isinstance(value, dict):
         cleaned = {}
         for key, item in value.items():
             key_lower = str(key).lower()
-            if key == "auto_map" or any(term in key_lower for term in MULTIMODAL_METADATA_TERMS):
+            if (strip_auto_map and key == "auto_map") or any(
+                term in key_lower for term in MULTIMODAL_METADATA_TERMS
+            ):
                 continue
-            cleaned[key] = _strip_multimodal_metadata(item)
+            cleaned[key] = _strip_multimodal_metadata(item, strip_auto_map=strip_auto_map)
         return cleaned
     if isinstance(value, list):
-        return [_strip_multimodal_metadata(item) for item in value]
+        return [
+            _strip_multimodal_metadata(item, strip_auto_map=strip_auto_map)
+            for item in value
+        ]
+    if isinstance(value, str):
+        lowered = value.lower()
+        if any(term in lowered for term in MULTIMODAL_METADATA_TERMS):
+            return None
     return value
 
 
@@ -70,7 +79,7 @@ def _text_config(cfg: dict[str, Any]) -> dict[str, Any]:
     else:
         merged = dict(cfg)
 
-    merged = _strip_multimodal_metadata(merged)
+    merged = _strip_multimodal_metadata(merged, strip_auto_map=True)
     merged["model_type"] = "qwen3_5"
     merged["architectures"] = ["Qwen3_5ForCausalLM"]
     merged["use_cache"] = True
@@ -92,6 +101,21 @@ def _copy_metadata(input_dir: Path, output_dir: Path) -> None:
             continue
         if source.is_file():
             shutil.copyfile(source, output_dir / source.name)
+
+
+def _sanitize_copied_metadata(output_dir: Path) -> None:
+    for filename in ("tokenizer_config.json", "generation_config.json"):
+        path = output_dir / filename
+        if not path.exists():
+            continue
+        value = _load_json(path)
+        value = _strip_multimodal_metadata(value, strip_auto_map=True)
+        _write_json(path, value)
+
+    for filename in PROCESSOR_FILES:
+        path = output_dir / filename
+        if path.exists():
+            path.unlink()
 
 
 def _weight_files(input_dir: Path) -> list[Path]:
@@ -162,6 +186,7 @@ def convert(input_dir: Path, output_dir: Path) -> None:
         raise FileNotFoundError(f"Missing config.json in {input_dir}")
 
     _copy_metadata(input_dir, output_dir)
+    _sanitize_copied_metadata(output_dir)
     config = _text_config(_load_json(input_dir / "config.json"))
     shapes = _convert_weights(input_dir, output_dir)
     config = _infer_config_from_shapes(config, shapes)

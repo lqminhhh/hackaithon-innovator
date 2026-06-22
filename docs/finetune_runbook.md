@@ -20,13 +20,13 @@ data/finetune/qlora_2_5k_v1_val.jsonl
 data/finetune/qlora_2_5k_v1_test.jsonl
 ```
 
-The default config trains **4-bit QLoRA** for broad Google Colab compatibility.
-On A100/H100, you can set `model.load_in_4bit: false` to train full bf16 LoRA.
+The default config trains **full bf16 LoRA** for A100/H100 quality runs.
+On T4/smaller GPUs, set `model.load_in_4bit: true` to train 4-bit QLoRA.
 
 ## Colab Setup
 
-Use an A100 runtime if available. T4/L4 runtimes should use the default
-`load_in_4bit: true` config.
+Use an A100 runtime if available. T4/smaller runtimes should set
+`load_in_4bit: true` in `configs/finetune_config.yaml`.
 
 ```bash
 pip uninstall -y transformers tokenizers torchaudio torchvision torchtext torchao
@@ -83,11 +83,40 @@ This directory contains adapter weights, not a merged full model.
 
 The script prints the selected precision at startup. Expected examples:
 
-- A100/H100 with default config: `bf16 (4-bit QLoRA)`
-- T4/L4 with default config: `fp16 (4-bit QLoRA)`
-- A100/H100 with `load_in_4bit: false`: `bf16 (full LoRA)`
+- A100/H100 with default config: `bf16 (full LoRA)`
+- T4/smaller with `load_in_4bit: true`: `fp16 (4-bit QLoRA)`
 
-## 3. Merge Adapter
+## 3. Preferred Inference: Base Model + Live LoRA Adapter
+
+Use `v03_delta` to avoid merged-model metadata issues. This loads the clean
+base model and applies the adapter directly in vLLM.
+
+Smoke test:
+
+```bash
+python src/v03_delta.py \
+  --input data/public-test_1780368312.json \
+  --limit 5 \
+  --safe-mode \
+  --model-id Qwen/Qwen3.5-4B \
+  --lora-adapter outputs/finetune/qwen35_4b_lora_2_5k_v1 \
+  --output data/submissions/submission_v03_delta_smoke.csv \
+  --trace-output data/traces/trace_v03_delta_smoke.jsonl
+```
+
+Full public run:
+
+```bash
+python src/v03_delta.py \
+  --input data/public-test_1780368312.json \
+  --safe-mode \
+  --model-id Qwen/Qwen3.5-4B \
+  --lora-adapter outputs/finetune/qwen35_4b_lora_2_5k_v1 \
+  --output data/submissions/submission_v03_delta.csv \
+  --trace-output data/traces/trace_v03_delta.jsonl
+```
+
+## 4. Optional Fallback: Merge Adapter
 
 ```bash
 python scripts/merge_lora.py \
@@ -120,7 +149,7 @@ python scripts/convert_qwen35_merged_to_causal_lm.py \
   --output-dir outputs/finetune/qwen35_4b_lora_2_5k_v1_merged_text
 ```
 
-## 4. Smoke Test Inference
+## 5. Smoke Test Merged Inference
 
 Run a tiny sample first:
 

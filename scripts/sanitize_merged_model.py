@@ -87,6 +87,15 @@ def _fill_required_text_defaults(cfg: dict[str, Any]) -> dict[str, Any]:
     return cfg
 
 
+def _normalize_qwen35_text_config(cfg: dict[str, Any]) -> dict[str, Any]:
+    if str(cfg.get("model_type", "")).startswith("qwen3_5"):
+        cfg["model_type"] = "qwen3_5"
+        cfg["architectures"] = ["Qwen3_5ForCausalLM"]
+        cfg["use_cache"] = True
+        cfg = _fill_required_text_defaults(cfg)
+    return cfg
+
+
 def _restore_tokenizer_files(model_dir: Path, tokenizer_source: Path) -> None:
     if not tokenizer_source.exists():
         raise FileNotFoundError(f"Tokenizer source does not exist: {tokenizer_source}")
@@ -110,10 +119,7 @@ def sanitize_model_dir(model_dir: Path, tokenizer_source: Path | None = None) ->
 
     cfg = _flatten_text_config(cfg)
     cfg = _strip_multimodal_metadata(cfg)
-    if cfg.get("model_type") == "qwen3_5":
-        cfg["architectures"] = ["Qwen3_5ForCausalLM"]
-        cfg["use_cache"] = True
-        cfg = _fill_required_text_defaults(cfg)
+    cfg = _normalize_qwen35_text_config(cfg)
     _write_json(config_path, cfg)
 
     tokenizer_config_path = model_dir / "tokenizer_config.json"
