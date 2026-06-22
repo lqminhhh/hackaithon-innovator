@@ -8,10 +8,11 @@ import math
 from typing import Any
 
 from src.config import FALLBACK, MARGIN_LOW, SC_N, SC_TEMP, TOK
-from src.extract import ChoiceResult, best_label, softmax_margin
+from src.extract import ChoiceResult, best_label, safe_margin
 from src.parser import ParsedQuestion
 from src.reasoning_agent import ReasoningAgent
 from src.router import Route, get_forced_answer, route_question
+from src.sc_policy import option_disambiguation_instruction
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,7 +162,7 @@ def self_consistency(
         choices.append(
             ChoiceResult(
                 letter=best_label(scores),
-                margin=softmax_margin(scores),
+                margin=safe_margin(scores, len(valid_labels)),
                 per_letter_logprob=scores,
             )
         )
@@ -267,6 +268,10 @@ def _build_reasoning_prompt(parsed: ParsedQuestion, route: Route) -> str:
     context = ""
     if route == "reading" and parsed.context:
         context = f"Đoạn thông tin:\n---\n{parsed.context}\n---\n\n"
+
+    disambiguation = option_disambiguation_instruction(parsed.options)
+    if disambiguation:
+        route_instruction = f"{route_instruction} {disambiguation}"
 
     return (
         "Bạn là một chuyên gia giải câu hỏi trắc nghiệm tiếng Việt.\n"

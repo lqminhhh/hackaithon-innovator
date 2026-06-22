@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.extract import (
     GuidedChoiceExtractor,
+    safe_margin,
     best_label,
     build_choice_prompt,
     build_label_token_map,
@@ -52,20 +53,20 @@ class _FakeLLM:
 
     def generate(self, prompts, params):
         self.calls.append({"prompts": prompts, "params": params})
-        logprob_map = {
-            ord(label): SimpleNamespace(logprob=score)
-            for label, score in self.scores.items()
-        }
-        return [
-            SimpleNamespace(
-                outputs=[
-                    SimpleNamespace(
-                        text=max(self.scores, key=self.scores.get),
-                        logprobs=[logprob_map],
-                    )
-                ]
+        outputs = []
+        for prompt in prompts:
+            prompt_token_ids = prompt["prompt_token_ids"]
+            label_token = prompt_token_ids[-1]
+            score = self.scores[chr(label_token)]
+            outputs.append(
+                SimpleNamespace(
+                    prompt_logprobs=[
+                        None,
+                        {label_token: SimpleNamespace(logprob=score)},
+                    ]
+                )
             )
-        ]
+        return outputs
 
 
 def test_build_choice_prompt_ends_at_answer_slot():
@@ -114,9 +115,9 @@ def test_guided_choice_extractor_returns_letter_margin_and_logprobs():
     assert 0.0 <= result.margin <= 1.0
     assert result.per_letter_logprob == {"A": -3.0, "B": -0.2, "C": -1.5}
     call = llm.calls[0]
-    assert call["params"].kwargs["allowed_token_ids"] == [ord("A"), ord("B"), ord("C")]
     assert call["params"].kwargs["max_tokens"] == 1
-    assert call["params"].kwargs["logprobs"] == 3
+    assert call["params"].kwargs["prompt_logprobs"] == 1
+    assert len(call["prompts"]) == 3
 
 
 def test_guided_choice_extractor_supports_eleven_choices():
@@ -128,19 +129,24 @@ def test_guided_choice_extractor_supports_eleven_choices():
 
     assert result.letter == "A"
     assert set(result.per_letter_logprob) == set(labels)
-    assert llm.calls[0]["params"].kwargs["logprobs"] == 11
+    assert llm.calls[0]["params"].kwargs["prompt_logprobs"] == 1
+    assert len(llm.calls[0]["prompts"]) == 11
 
 
 def test_guided_choice_extractor_requires_logprobs_not_output_text_parsing():
     llm = _FakeLLM({"A": -0.1, "B": -2.0})
 
     def _generate_without_logprobs(prompts, params):
-        return [SimpleNamespace(outputs=[SimpleNamespace(text="A", logprobs=None)])]
+        return [SimpleNamespace(prompt_logprobs=None) for _ in prompts]
 
     llm.generate = _generate_without_logprobs
 
-    with pytest.raises(ValueError, match="logprobs"):
+    with pytest.raises(ValueError, match="finite logprobs"):
         GuidedChoiceExtractor(llm).extract("Đáp án: ", ["A", "B"])
+
+
+def test_safe_margin_returns_zero_when_only_one_label_is_scored():
+    assert safe_margin({"A": 0.0, "B": float("-inf"), "C": float("-inf")}, 3) == 0.0
 
 
 class _ScoredAgent(ReasoningAgent):

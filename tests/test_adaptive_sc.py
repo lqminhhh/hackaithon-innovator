@@ -11,8 +11,11 @@ from src.parser import ParsedQuestion
 from src.sc_policy import (
     SC_N_HIGH_CHOICE_KNOWLEDGE,
     SC_N_STEM,
+    build_sc_reasoning_prompt,
     knowledge_escalation_reason,
+    option_disambiguation_instruction,
     reading_escalation_reason,
+    shuffle_options,
     should_use_think_mode,
     stem_sc_n,
 )
@@ -137,6 +140,56 @@ def test_knowledge_escalation_reason_uses_ambiguous_option_signal():
     )
 
     assert knowledge_escalation_reason(parsed, margin=1.0) == "knowledge_ambiguous_options_sc"
+
+
+def test_shuffle_options_preserves_duplicate_reverse_mapping():
+    options = {
+        "A": "8 năm",
+        "B": "8 năm",
+        "C": "10 năm",
+    }
+
+    seen_reverse_maps = set()
+    for sample_idx in range(6):
+        shuffled, reverse_map = shuffle_options(options, sample_idx)
+        assert shuffled.keys() == options.keys()
+        assert set(reverse_map) == set(options)
+        for shuffled_label, original_label in reverse_map.items():
+            assert shuffled[shuffled_label] == options[original_label]
+        seen_reverse_maps.add(tuple(sorted(reverse_map.items())))
+
+    assert len(seen_reverse_maps) > 1
+
+
+def test_option_disambiguation_instruction_mentions_duplicate_and_combination_handling():
+    options = {
+        "A": "Paris",
+        "B": "Paris",
+        "C": "Cả A, B, C",
+        "D": "London",
+    }
+
+    instruction = option_disambiguation_instruction(options)
+
+    assert "trùng hệt nội dung" in instruction
+    assert "tất cả/cả A, B, C" in instruction
+
+
+def test_sc_prompt_adds_disambiguation_guidance_for_tricky_knowledge_options():
+    parsed = _parsed(
+        is_quantitative=False,
+        options={
+            "A": "Độ co giãn cầu theo giá lớn hơn 1",
+            "B": "Độ co giãn cầu theo giá lớn hơn 1",
+            "C": "Cả A, B, C",
+            "D": "Độ co giãn cầu theo giá nhỏ hơn 1",
+        },
+    )
+
+    prompt = build_sc_reasoning_prompt(parsed, "knowledge", parsed.options)
+
+    assert "trùng hệt nội dung" in prompt
+    assert "chỉ chọn phương án gộp khi mọi thành phần đều đúng" in prompt
 
 
 def test_fit_extraction_prompt_compacts_long_reading_prompts():

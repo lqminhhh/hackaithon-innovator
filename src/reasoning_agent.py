@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-from src.extract import ChoiceResult, GuidedChoiceExtractor, best_label, softmax_margin
+from src.extract import ChoiceResult, GuidedChoiceExtractor, best_label, safe_margin
 
 _PROMPTS_PATH = Path(__file__).resolve().parent.parent / "configs" / "prompts.yaml"
 _CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "pipeline_config.yaml"
@@ -272,11 +272,11 @@ class ReasoningAgent:
     ) -> ChoiceResult:
         """Select the best legal label and return logprob margin evidence."""
         valid_labels = tuple(sorted(options.keys()))
-        prompt = self.build_guided_choice_prompt(question, options, context)
+        prompt = self.build_guided_choice_prompt(question, options)
         scores = self.score_valid_labels(prompt, valid_labels)
         return ChoiceResult(
             letter=best_label(scores),
-            margin=softmax_margin(scores),
+            margin=safe_margin(scores, len(valid_labels)),
             per_letter_logprob=scores,
         )
 
@@ -304,7 +304,7 @@ class ReasoningAgent:
         scores = self.score_valid_labels(prompt, valid_labels)
         return ChoiceResult(
             letter=best_label(scores),
-            margin=softmax_margin(scores),
+            margin=safe_margin(scores, len(valid_labels)),
             per_letter_logprob=scores,
         )
 

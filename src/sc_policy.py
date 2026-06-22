@@ -86,6 +86,10 @@ _OPTION_STOPWORDS = {
 }
 
 
+def _normalize_option_text(text: str) -> str:
+    return " ".join(_OPTION_TOKEN_RE.findall(text.lower()))
+
+
 def stem_sc_n(margin: float | None, adaptive_sc: bool) -> int:
     """Return the SC sample count for a STEM question."""
     if adaptive_sc and margin is not None and margin < MARGIN_LOW_BY_ROUTE["STEM"]:
@@ -114,10 +118,7 @@ def has_combination_option(options: dict[str, str]) -> bool:
 
 def has_ambiguous_options(options: dict[str, str]) -> bool:
     """Return True when options are duplicated or lexically too similar."""
-    normalized = [
-        " ".join(_OPTION_TOKEN_RE.findall(text.lower()))
-        for text in options.values()
-    ]
+    normalized = [_normalize_option_text(text) for text in options.values()]
     if len(set(normalized)) < len(normalized):
         return True
 
@@ -137,6 +138,39 @@ def has_ambiguous_options(options: dict[str, str]) -> bool:
             if smaller and len(shared) / smaller >= 0.6:
                 return True
     return False
+
+
+def duplicate_option_label_map(options: dict[str, str]) -> dict[str, str]:
+    """Map duplicate option labels to a stable canonical label."""
+    canonical_by_text: dict[str, str] = {}
+    label_map: dict[str, str] = {}
+    for label in sorted(options):
+        normalized = _normalize_option_text(options[label])
+        canonical = canonical_by_text.setdefault(normalized, label)
+        label_map[label] = canonical
+    return label_map
+
+
+def option_disambiguation_instruction(options: dict[str, str]) -> str:
+    """Return extra prompt guidance for tricky option sets."""
+    notes: list[str] = []
+    duplicate_map = duplicate_option_label_map(options)
+    if len(set(duplicate_map.values())) < len(duplicate_map):
+        notes.append(
+            "Nếu nhiều lựa chọn trùng hệt nội dung, xem chúng là cùng một mệnh đề; "
+            "không suy ra khác biệt chỉ từ nhãn chữ cái."
+        )
+    elif has_ambiguous_options(options):
+        notes.append(
+            "Nếu các lựa chọn gần giống nhau, hãy so sánh đúng phần khác biệt quyết định "
+            "thay vì bám vào các từ chung."
+        )
+    if has_combination_option(options):
+        notes.append(
+            "Nếu có lựa chọn kiểu 'tất cả/cả A, B, C', hãy kiểm tra từng mệnh đề thành phần "
+            "trước; chỉ chọn phương án gộp khi mọi thành phần đều đúng."
+        )
+    return " ".join(notes)
 
 
 def knowledge_requires_extra_compute(parsed: ParsedQuestion) -> bool:
@@ -199,11 +233,14 @@ def shuffle_options(
         return options, identity
 
     labels = sorted(options.keys())
-    values = [options[label] for label in labels]
-    random.Random(SC_SEED + sample_idx).shuffle(values)
-    shuffled = dict(zip(labels, values))
-    value_to_original = {value: key for key, value in options.items()}
-    reverse_map = {label: value_to_original[shuffled[label]] for label in labels}
+    original_labels = labels[:]
+    shuffled_original_labels = original_labels[:]
+    random.Random(SC_SEED + sample_idx).shuffle(shuffled_original_labels)
+    shuffled = {
+        new_label: options[original_label]
+        for new_label, original_label in zip(labels, shuffled_original_labels)
+    }
+    reverse_map = dict(zip(labels, shuffled_original_labels))
     return shuffled, reverse_map
 
 
@@ -228,6 +265,10 @@ def build_sc_reasoning_prompt(
     context = ""
     if route == "reading" and parsed.context:
         context = f"Đoạn thông tin:\n---\n{parsed.context}\n---\n\n"
+
+    disambiguation = option_disambiguation_instruction(options)
+    if disambiguation:
+        route_instruction = f"{route_instruction} {disambiguation}"
 
     return (
         "Bạn là một chuyên gia giải câu hỏi trắc nghiệm tiếng Việt.\n"

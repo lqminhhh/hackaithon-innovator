@@ -23,6 +23,7 @@ from src.sc_policy import (
     SC_TOP_P,
     TOKENS_BY_ROUTE,
     build_sc_reasoning_prompt,
+    duplicate_option_label_map,
     knowledge_escalation_reason,
     reading_escalation_reason,
     should_use_think_mode,
@@ -34,9 +35,37 @@ from src.solve import (
     _build_reasoning_prompt,
     _vote,
 )
-from src.version_runner import _trace_writer
 
 _EXTRACTION_TOKEN_BUFFER = 8
+
+
+def _canonicalize_scores_for_duplicates(
+    options: dict[str, str],
+    scores: dict[str, float],
+) -> dict[str, float]:
+    duplicate_map = duplicate_option_label_map(options)
+    if len(set(duplicate_map.values())) == len(duplicate_map):
+        return scores
+
+    canonical_scores = {label: float("-inf") for label in options}
+    for label, score in scores.items():
+        canonical_label = duplicate_map.get(label, label)
+        canonical_scores[canonical_label] = max(canonical_scores[canonical_label], score)
+    return canonical_scores
+
+
+def _canonicalize_choice_for_duplicates(
+    options: dict[str, str],
+    choice: ChoiceResult,
+) -> ChoiceResult:
+    duplicate_map = duplicate_option_label_map(options)
+    canonical_letter = duplicate_map.get(choice.letter, choice.letter)
+    canonical_scores = _canonicalize_scores_for_duplicates(options, choice.per_letter_logprob)
+    return ChoiceResult(
+        letter=canonical_letter,
+        margin=choice.margin,
+        per_letter_logprob=canonical_scores,
+    )
 
 
 @dataclass
@@ -362,7 +391,7 @@ def run_wave2(
     )
 
     qid_choices: dict[str, list[ChoiceResult]] = defaultdict(list)
-    for i, (qid, _route, _query, _prompt, _options, reverse_map, _use_think) in enumerate(flat_sc):
+    for i, (qid, _route, _query, _prompt, options, reverse_map, _use_think) in enumerate(flat_sc):
         try:
             raw = sc_raw[i]
             original_letter = reverse_map[raw.letter]
@@ -371,10 +400,13 @@ def run_wave2(
                 for shuffled_label, logprob in raw.per_letter_logprob.items()
             }
             qid_choices[qid].append(
-                ChoiceResult(
-                    letter=original_letter,
-                    margin=raw.margin,
-                    per_letter_logprob=original_logprobs,
+                _canonicalize_choice_for_duplicates(
+                    options,
+                    ChoiceResult(
+                        letter=original_letter,
+                        margin=raw.margin,
+                        per_letter_logprob=original_logprobs,
+                    ),
                 )
             )
         except Exception:
@@ -392,10 +424,13 @@ def run_wave2(
             continue
         first_choice: ChoiceResult | None = None
         if w1.per_letter_logprob:
-            first_choice = ChoiceResult(
-                letter=w1.answer,
-                margin=w1.margin or 0.0,
-                per_letter_logprob=w1.per_letter_logprob,
+            first_choice = _canonicalize_choice_for_duplicates(
+                parsed.options,
+                ChoiceResult(
+                    letter=w1.answer,
+                    margin=w1.margin or 0.0,
+                    per_letter_logprob=w1.per_letter_logprob,
+                ),
             )
         vote = _vote(choices, first_choice)
         wave2[parsed.qid] = Wave2Result(
@@ -487,6 +522,8 @@ def write_traces(
     wave2: dict[str, Wave2Result],
     final: dict[str, str],
 ) -> None:
+    from src.version_runner import _trace_writer
+
     with _trace_writer(trace_output) as write_trace:
         for parsed in parsed_list:
             qid = parsed.qid
