@@ -8,6 +8,7 @@ base model and does not change the inference pipeline. Merge the adapter with
 from __future__ import annotations
 
 import argparse
+import inspect
 from pathlib import Path
 from typing import Any
 
@@ -187,6 +188,7 @@ def _load_tokenized_datasets(cfg: dict[str, Any], tokenizer) -> DatasetDict:
 def _build_training_args(cfg: dict[str, Any]) -> TrainingArguments:
     train_cfg = cfg["training"]
     dtype = cfg["model"]["dtype"].lower()
+    supported_args = set(inspect.signature(TrainingArguments.__init__).parameters)
     kwargs: dict[str, Any] = {
         "output_dir": train_cfg["output_dir"],
         "num_train_epochs": train_cfg["num_train_epochs"],
@@ -214,22 +216,20 @@ def _build_training_args(cfg: dict[str, Any]) -> TrainingArguments:
         "greater_is_better": False,
     }
 
-    # Transformers renamed evaluation_strategy to eval_strategy in newer
-    # versions. Try the newer spelling first and fall back if needed.
-    try:
-        return TrainingArguments(
-            eval_strategy="steps",
-            eval_steps=train_cfg["eval_steps"],
-            save_strategy="steps",
-            **kwargs,
-        )
-    except TypeError:
-        return TrainingArguments(
-            evaluation_strategy="steps",
-            eval_steps=train_cfg["eval_steps"],
-            save_strategy="steps",
-            **kwargs,
-        )
+    # Transformers has renamed/removed a few TrainingArguments fields across
+    # releases. Build only the arguments supported by the active install.
+    if "eval_strategy" in supported_args:
+        kwargs["eval_strategy"] = "steps"
+    elif "evaluation_strategy" in supported_args:
+        kwargs["evaluation_strategy"] = "steps"
+
+    if "eval_steps" in supported_args:
+        kwargs["eval_steps"] = train_cfg["eval_steps"]
+    if "save_strategy" in supported_args:
+        kwargs["save_strategy"] = "steps"
+
+    filtered_kwargs = {key: value for key, value in kwargs.items() if key in supported_args}
+    return TrainingArguments(**filtered_kwargs)
 
 
 def main() -> None:
