@@ -1,6 +1,12 @@
 models:
   primary: "Qwen/Qwen3.5-4B"
 
+submission:
+  fallback_answer: "A"
+
+question_parsing:
+  max_choices: 26
+
 final_inference:
   one_model_only: true
   allow_external_apis: false
@@ -25,6 +31,37 @@ consistency_sampler:
   n_second: 5
   n_max: 7
 
+legacy_solver:
+  margin_low: 0.15
+  sc_n: 5
+  temperature: 0.6
+  tokens_by_route:
+    READING: 512
+    STEM: 3072
+    KNOWLEDGE: 256
+    SAFETY: 128
+
+route_policy:
+  margin_low_by_route:
+    READING: 0.10
+    STEM: 0.15
+    KNOWLEDGE: 0.20
+    SAFETY: 0.05
+  stem_sc:
+    high: 3
+    low: 7
+  default_sc_n: 5
+  high_choice_knowledge_sc_n: 3
+  high_choice_knowledge_min_choices: 8
+  sc_top_p: 0.95
+  sc_seed: 1234
+  shuffle_options: true
+  tokens_by_route:
+    READING: 512
+    STEM: 3072
+    KNOWLEDGE: 256
+    SAFETY: 128
+
 quantisation:
   load_in_4bit: true
   compute_dtype: "float16"
@@ -34,6 +71,11 @@ vllm:
   max_model_len: 4096
   max_num_seqs: 16
   enable_prefix_caching: true
+
+safe_vllm:
+  gpu_memory_utilization: 0.70
+  max_model_len: 4096
+  max_num_seqs: 4
 
 runner:
   checkpoint_path: checkpoint.json

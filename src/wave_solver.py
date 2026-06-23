@@ -1,4 +1,4 @@
-"""Wave-batched solver used by v02_gamma.
+"""Wave-batched solver used by the final v03_gamma runner.
 
 The wave solver keeps vLLM busy by batching all first-pass reasoning/extraction
 and then batching all self-consistency escalations.
@@ -10,7 +10,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
 from src.batch_extract import batch_extract
-from src.config import FALLBACK
+from src.config import FALLBACK, MAX_MODEL_LEN
 from src.data_loader import write_submission
 from src.extract import ChoiceResult
 from src.parser import ParsedQuestion
@@ -23,6 +23,7 @@ from src.sc_policy import (
     SC_TOP_P,
     TOKENS_BY_ROUTE,
     build_sc_reasoning_prompt,
+    duplicate_option_label_map,
     knowledge_escalation_reason,
     reading_escalation_reason,
     should_use_think_mode,
@@ -37,6 +38,35 @@ from src.solve import (
 from src.version_runner import _trace_writer
 
 _EXTRACTION_TOKEN_BUFFER = 8
+
+
+def _canonicalize_scores_for_duplicates(
+    options: dict[str, str],
+    scores: dict[str, float],
+) -> dict[str, float]:
+    duplicate_map = duplicate_option_label_map(options)
+    if len(set(duplicate_map.values())) == len(duplicate_map):
+        return scores
+
+    canonical_scores = {label: float("-inf") for label in options}
+    for label, score in scores.items():
+        canonical_label = duplicate_map.get(label, label)
+        canonical_scores[canonical_label] = max(canonical_scores[canonical_label], score)
+    return canonical_scores
+
+
+def _canonicalize_choice_for_duplicates(
+    options: dict[str, str],
+    choice: ChoiceResult,
+) -> ChoiceResult:
+    duplicate_map = duplicate_option_label_map(options)
+    canonical_letter = duplicate_map.get(choice.letter, choice.letter)
+    canonical_scores = _canonicalize_scores_for_duplicates(options, choice.per_letter_logprob)
+    return ChoiceResult(
+        letter=canonical_letter,
+        margin=choice.margin,
+        per_letter_logprob=canonical_scores,
+    )
 
 
 @dataclass
@@ -103,7 +133,7 @@ def _agent_max_input_tokens(agent: ReasoningAgent) -> int:
             if isinstance(value, int) and value > 0:
                 return int(value)
 
-    return 4096
+    return MAX_MODEL_LEN
 
 
 def _encode_prompt(tokenizer, text: str, *, add_special_tokens: bool) -> list[int]:
@@ -229,7 +259,14 @@ def run_wave1(
             reasonings[idx] = outputs[pos]
 
     extract_prompts = [
-        _build_extraction_from_reasoning(reasoning_prompts[i], reasonings[i])
+        _fit_extraction_prompt(
+            agent,
+            route=pending[i][1],
+            question=pending[i][0].query,
+            options=pending[i][0].options,
+            reasoning_prompt=reasoning_prompts[i],
+            reasoning=reasonings[i],
+        )
         for i in range(len(pending))
     ]
     choices = batch_extract(agent, extract_prompts, [parsed.options for parsed, _ in pending])
@@ -362,19 +399,26 @@ def run_wave2(
     )
 
     qid_choices: dict[str, list[ChoiceResult]] = defaultdict(list)
-    for i, (qid, _route, _query, _prompt, _options, reverse_map, _use_think) in enumerate(flat_sc):
+    for i, (qid, _route, _query, _prompt, options, reverse_map, _use_think) in enumerate(flat_sc):
         try:
             raw = sc_raw[i]
             original_letter = reverse_map[raw.letter]
+            original_options = {
+                reverse_map.get(shuffled_label, shuffled_label): text
+                for shuffled_label, text in options.items()
+            }
             original_logprobs = {
                 reverse_map.get(shuffled_label, shuffled_label): logprob
                 for shuffled_label, logprob in raw.per_letter_logprob.items()
             }
             qid_choices[qid].append(
-                ChoiceResult(
-                    letter=original_letter,
-                    margin=raw.margin,
-                    per_letter_logprob=original_logprobs,
+                _canonicalize_choice_for_duplicates(
+                    original_options,
+                    ChoiceResult(
+                        letter=original_letter,
+                        margin=raw.margin,
+                        per_letter_logprob=original_logprobs,
+                    ),
                 )
             )
         except Exception:

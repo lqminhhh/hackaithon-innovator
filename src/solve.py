@@ -31,6 +31,9 @@ class SolveResult:
     path: str
     first_answer: str | None = None
     votes: list[str] = field(default_factory=list)
+    semantic_route: Route | None = None
+    route_override: bool = False
+    override_blockers: list[str] = field(default_factory=list)
     error: str | None = None
 
 
@@ -38,10 +41,22 @@ def solve_question(
     agent: ReasoningAgent,
     parsed: ParsedQuestion,
     sc_batch_size: int | None = None,
+    semantic_router=None,
 ) -> SolveResult:
     """Solve one parsed question using the S4 policy."""
     route = route_question(parsed)
-    route_meta: dict[str, Any] = {}
+    route_meta: dict[str, Any] = {
+        "semantic_route": None,
+        "route_override": False,
+        "override_blockers": [],
+    }
+    if semantic_router is not None and hasattr(semantic_router, "decide_route"):
+        decision = semantic_router.decide_route(parsed, route)
+        route_meta["semantic_route"] = getattr(decision, "layer2_route", None)
+        route_meta["route_override"] = bool(getattr(decision, "should_override", False))
+        route_meta["override_blockers"] = list(getattr(decision, "override_blockers", ()))
+        if route_meta["route_override"]:
+            route = getattr(decision, "final_route", route)
     try:
         forced = get_forced_answer(parsed, route)
         if forced is not None:

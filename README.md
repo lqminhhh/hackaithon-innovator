@@ -1,46 +1,171 @@
-# HackAIthon 2026 - Bang C Innovator
+# Team Cow - HackAIthon 2026 Bang C Innovator
 
-Vietnamese multiple-choice QA system for HackAIthon 2026. The current retained
-architecture is final-inference compliant under the latest organizer rules:
+Offline Vietnamese multiple-choice question answering system for the HackAIthon
+2026 Bang C submission track.
 
-- one open LLM only: `Qwen/Qwen3.5-4B`
-- model size <= 5B parameters
-- offline inference, no external APIs or internet calls
-- no embedding model, reranker, RAG, semantic-router model, or second LLM
-- target hardware: 16 GB VRAM
+This repository is organized around a single final submission path:
+`src/v03_gamma.py`.
 
-This README is intentionally short for now. See `docs/status.md` for
-current project state, `docs/planning_v3.md` for the build spec, and
-`docs/version_results.md` for the score log.
+## Submission Snapshot
 
-## Current Architecture
+| Item                  | Value                                                           |
+| --------------------- | --------------------------------------------------------------- |
+| Team name             | `Cow`                                                         |
+| Team members          | `Minh Le, Uyen Nguyen, Viet Nguyen`                           |
+| School / organization | `Denison University, The Ohio State University`               |
+| GitHub repository     | `https://github.com/lqminhhh/hackaithon-innovator/tree/final` |
+| Docker Hub image      |                                                                 |
+| Final runner          | `src/v03_gamma.py`                                            |
+| Primary model         | `Qwen/Qwen3.5-4B`                                             |
+| Inference mode        | Offline, one-model only                                         |
+| Target hardware       | 16 GB VRAM                                                      |
 
-The strongest retained runner is `v02_gamma`:
+## What This Submission Does
 
-1. Parse input JSON/CSV into normalized questions.
-2. Route each question with deterministic rules:
-   `READING`, `STEM`, `SAFETY`, otherwise `KNOWLEDGE`.
-3. Run a two-pass answer process:
-   first reason freely, then extract one valid answer label.
-4. Escalate harder cases with self-consistency:
-   STEM, low-margin KNOWLEDGE, and reason/purpose READING.
-5. Use wave batching so vLLM processes first passes and escalations in large batches.
-6. Always write a complete submission and trace file.
+The system reads a multiple-choice test file, routes each question into a small
+set of reasoning modes, runs the model with constrained answer extraction, and
+writes a valid submission file with one answer letter per question.
 
-No final runner uses RAG or S5 semantic routing.
+The retained final branch is `v03_gamma`, chosen because it gave the best
+speed/reliability tradeoff for a judge-like 16 GB VRAM environment. Later
+branches reached higher public accuracy, but they were much slower and remained
+OOM-prone on longer runs.
 
-## Main Runners
+## Competition I/O Contract
 
-| Version | File | Purpose |
-| --- | --- | --- |
-| `v01_baseline` | `src/v01_baseline.py` | Same-model free-form baseline |
-| `v02_alpha` | `src/v02_alpha.py` | Rule routing + guided-choice extraction |
-| `v02_beta` | `src/v02_beta.py` | Per-question S4 self-consistency |
-| `v02_gamma` | `src/v02_gamma.py` | Wave-batched adaptive self-consistency, current best |
+The shipped container behavior is:
 
-Latest tracked results are in `docs/version_results.md`.
+- Read `/data/private_test.csv` if present
+- Otherwise read `/data/public_test.csv`
+- If CSV is absent, fall back to `/data/private_test.json` or
+  `/data/public_test.json`
+- Write `/output/pred.csv`
+- Output format: exactly two columns, `qid,answer`
 
-## Quick Start
+Each `answer` is a single valid letter for that question (`A`, `B`, `C`, ...).
+
+The entrypoint also accepts manual overrides:
+
+```bash
+./run.sh <input.json|csv> <output.csv> [trace.jsonl]
+```
+
+## Compliance Summary
+
+This repository is aligned to the current Bang C constraints:
+
+- one open LLM only
+- offline inference only
+- no external APIs or internet access at runtime
+- no embedding model
+- no reranker model
+- no RAG / retrieval pipeline
+- no second LLM
+- model size within the competition limit
+
+The final submission path uses only `Qwen/Qwen3.5-4B`.
+
+## Final Architecture
+
+`v03_gamma` is a wave-batched, route-aware pipeline:
+
+1. Load and normalize questions from JSON or CSV
+2. Parse question structure and choices
+3. Route each item deterministically into one of:
+   `READING`, `STEM`, `KNOWLEDGE`, `SAFETY`
+4. Run a first-pass reasoning stage
+5. Extract a valid answer letter with constrained choice decoding
+6. Escalate selected questions with self-consistency
+7. Merge answers and always write a complete submission file
+
+In practice:
+
+- `STEM` always gets self-consistency
+- `READING` gets reread/self-consistency for detail and reason/purpose patterns
+- `KNOWLEDGE` gets extra compute for harder cases
+- `SAFETY` can force a refusal option when the prompt is harmful and a refusal
+  answer exists
+
+The final path also includes:
+
+- wave batching for throughput
+- option shuffling across SC samples
+- duplicate-option-safe vote remapping
+- length-safe extraction prompts
+- checkpointing plus always-emit emergency write behavior
+
+## Why `v03_gamma` Is the Final Branch
+
+We evaluated multiple versions of the system.
+
+`v03_delta` reached a stronger public score, but it depended on heavier
+continuation-scored margin logic that increased runtime by roughly 3.5x to 4x
+and still showed OOM risk on 16 GB judge-like hardware.
+
+`v03_gamma` was selected as the final operating point because it is:
+
+- more likely to complete a long private-set run
+- materially faster
+- simpler to ship safely
+- still strong on the public benchmark
+
+This is an efficiency-first final branch, not a fallback branch.
+
+## Reported Results
+
+Public-set results tracked in this repository:
+
+| Version       | Score            | Runtime          |
+| ------------- | ---------------- | ---------------- |
+| `v02_gamma` | 85.31%           | 12.77 s/question |
+| `v03_alpha` | 84.23%           | 3.87 s/question  |
+| `v03_gamma` | **85.96%** | 7.98 s/question  |
+| `v03_delta` | 87.04%           | 27.53 s/question |
+
+For the final submission, we prefer `v03_gamma` over `v03_delta` because judge
+reliability matters more than squeezing out a small public-set gain with a much
+heavier branch.
+
+Full history is documented in [docs/version_results.md](docs/version_results.md).
+
+## Repository Layout
+
+```text
+configs/
+  pipeline_config.yaml      Runtime settings and judge-safe defaults
+
+data/
+  reference/                Reference answers for local evaluation
+  submissions/              Generated submission CSVs
+  traces/                   Per-question trace JSONL files
+
+docs/
+  status.md                 Current working status and design notes
+  planning_v3.md            Final build plan
+  version_results.md        Version-by-version score log
+
+notebooks/
+  evaluation.ipynb          Local scoring and error analysis
+
+src/
+  v03_gamma.py              Final submission runner
+  v02_gamma.py              Compatibility shim
+  wave_solver.py            Wave 1 / Wave 2 batching logic
+  batch_extract.py          Batched constrained answer extraction
+  sc_policy.py              Route-aware self-consistency policy
+  parser.py                 Question parsing
+  router.py                 Deterministic route assignment
+  reasoning_agent.py        Model-facing inference wrapper
+  data_loader.py            JSON/CSV loading and submission writing
+  config.py                 YAML-backed shared config loader
+
+tests/
+  Focused tests for routing, parsing, extraction, runner entrypoints, and SC
+```
+
+## Running Locally
+
+Create an environment:
 
 ```bash
 python3.11 -m venv venv
@@ -48,110 +173,166 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Run the current best pipeline:
+Notes:
+
+- `requirements.txt` includes `vllm`, which is required for the intended GPU
+  submission path.
+- This project is built around the CUDA 12.4 Docker image in the repository.
+  Missing CUDA 13 is not the expected cause of `vLLM unavailable`.
+- On non-Docker machines, the more common causes are: package not installed,
+  no supported NVIDIA GPU, or an NVIDIA driver too old for the CUDA 12.4 stack.
+
+Run the final pipeline directly:
 
 ```bash
-python src/v02_gamma.py \
+python src/v03_gamma.py \
   --input data/public-test_1780368312.json \
-  --output data/submissions/submission_v02_gamma.csv \
-  --trace-output data/traces/trace_v02_gamma.jsonl
-```
-
-Safer 16 GB VRAM mode:
-
-```bash
-python src/v02_gamma.py \
-  --input data/public-test_1780368312.json \
-  --output data/submissions/submission_v02_gamma.csv \
-  --trace-output data/traces/trace_v02_gamma.jsonl \
+  --output data/submissions/submission_v03_gamma.csv \
+  --trace-output data/traces/trace_v03_gamma.jsonl \
   --safe-mode
 ```
 
-Smoke test with a small limit:
+By default, `v03_gamma` performs a small deterministic vLLM warmup before the
+real run to reduce first-run JIT latency spikes. Disable it only for ablation
+or debugging:
 
 ```bash
-python src/v02_gamma.py \
+python src/v03_gamma.py --no-warmup ...
+```
+
+Quick smoke run:
+
+```bash
+python src/v03_gamma.py \
   --input data/public-test_1780368312.json \
   --limit 5 \
   --safe-mode
 ```
 
-## Project Layout
+## Running As a Container
 
-```text
-configs/
-  pipeline_config.yaml      Final-compliant runtime settings
-  prompts.yaml              Prompt templates
+The intended container workflow is:
 
-data/
-  public-test_1780368312.json
-  reference/                Reference answers for evaluation
-  submissions/              Generated submission CSVs
-  traces/                   Per-question trace JSONL files
-
-docs/
-  status.md                 Current project state (read this first)
-  planning_v3.md            Build spec and architecture
-  version_results.md        Score/runtime log
-
-notebooks/
-  evaluation.ipynb          Submission scoring and analysis
-
-src/
-  v01_baseline.py
-  v02_alpha.py
-  v02_beta.py
-  v02_gamma.py
-  version_runner.py         Shared runner utilities
-  wave_solver.py            Wave-batched S4 logic
-  batch_extract.py          Batched guided-choice extraction
-  sc_policy.py              Adaptive self-consistency policy
-  router.py                 Rule router
-  parser.py                 Input parser
-  reasoning_agent.py        LLM wrapper
-
-tests/
-  Unit tests for parser, routing, guided choice, vLLM wrapper, and adaptive SC
+```bash
+docker pull <fill-in-dockerhub-image>
+mkdir -p data output
+cp private_test.csv data/
+docker run --rm --gpus all \
+  -v "$PWD/data:/data" \
+  -v "$PWD/output:/output" \
+  <fill-in-dockerhub-image>
 ```
 
-## Configuration Notes
-
-- `configs/pipeline_config.yaml` states the final inference constraints and vLLM defaults.
-- `src/config.py` contains stable Python constants such as `LLM_MODEL`, `FALLBACK`, and token budgets.
-- `src/sc_policy.py` contains the route-specific self-consistency policy used by `v02_gamma`.
-
-## Evaluation
-
-Reference answers live in:
+Expected output:
 
 ```text
-data/reference/reference_answers.csv
+output/pred.csv
 ```
 
-Submission files live in:
+with header:
+
+```csv
+qid,answer
+```
+
+If you are testing from the repository without a published image yet:
+
+```bash
+mkdir -p output
+./run.sh data/private_test.csv output/pred.csv
+```
+
+## Input Format Notes
+
+The loader supports:
+
+- organizer-style JSON
+- CSV with separate choice columns like `A,B,C,D`
+- CSV where choices are embedded in the question text
+
+The official container contract should still be treated as
+`/data/public_test.csv` or `/data/private_test.csv`.
+
+## Output Guarantees
+
+The final runner is designed to avoid invalid submissions:
+
+- output is always written in `qid,answer` format
+- fallback answers are prefilled before inference starts
+- answers are normalized to valid choice labels
+- checkpointing reduces the chance of losing progress
+- atomic output writing helps avoid partial-file corruption
+- signal and exception handlers emit a best-effort complete submission on failure
+
+This does not mean the run is mathematically impossible to fail, but the code
+is intentionally shaped around completion reliability.
+
+## Configuration
+
+The runtime source of truth is:
 
 ```text
-data/submissions/
+configs/pipeline_config.yaml
 ```
 
-Trace files live in:
+That file controls:
 
-```text
-data/traces/
+- model selection
+- vLLM settings
+- safe-mode limits
+- self-consistency policy
+- token budgets
+- fallback answer behavior
+
+Python modules consume the same config through
+`src/config.py`, so YAML and runtime constants stay aligned.
+
+## Tests
+
+Run the focused suite with:
+
+```bash
+pytest -q
 ```
 
-Run `notebooks/evaluation.ipynb` to score submissions against reference answers and export reports to `reports/eval/`.
+The most relevant final-runner checks cover:
 
-## Important Exclusions
+- parser behavior
+- routing behavior
+- constrained guided-choice extraction
+- adaptive/self-consistency policy
+- gamma entrypoints
+- output format and I/O contract
 
-The repository may still contain old/offline-analysis artifacts from earlier
-experiments, but final inference should not use:
+## Files to Read First
 
-- RAG / FAISS / retrieval
-- embedding models
-- reranker models
-- S5 semantic router
-- secondary LLM ensemble
+If you are reviewing or extending this submission, start here:
 
-Those paths were removed from the retained final runners because they violate
-the updated one-model rule and were not improving the measured result.
+- [docs/status.md](docs/status.md)
+- [docs/version_results.md](docs/version_results.md)
+- [src/v03_gamma.py](src/v03_gamma.py)
+- [src/wave_solver.py](src/wave_solver.py)
+- [configs/pipeline_config.yaml](configs/pipeline_config.yaml)
+
+## Known Limits
+
+- `v03_gamma` uses a lightweight confidence signal rather than the heavier
+  exact-margin logic explored later
+- the final branch favors judge-safe deployment over peak public-set accuracy
+- later experiments exist in the repo history but are not the shipped path
+
+## Fill-In Before Submission
+
+Please replace these blanks before final handoff:
+
+- Team members in the submission table
+- School / organization
+- Public repository URL
+- Docker Hub image name and tag
+- Any final slide or write-up links you want to expose
+
+## Contact
+
+- Team: `Cow`
+- Representative: `[Fill in contact name]`
+- Email: `[Fill in contact email]`

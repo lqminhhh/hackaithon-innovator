@@ -6,7 +6,7 @@
 ## What this project is
 
 Vietnamese multiple-choice QA system for HackAIthon 2026 Bang C.
-Input: JSON of questions with choices. Output: `submission.csv` (`qid,answer`).
+Input: JSON or CSV of questions with choices. Output: `submission.csv` (`qid,answer`).
 Scored on a private set of ~2000 questions on a 16 GB VRAM GPU.
 
 ## Competition constraints (non-negotiable)
@@ -21,8 +21,9 @@ Scored on a private set of ~2000 questions on a 16 GB VRAM GPU.
 **`v03_gamma`** — **85.96%** on the public 463-question set.
 
 > `v03_gamma` keeps the hardened `v03_alpha` router, restores useful compute for
-> hard KNOWLEDGE and READING cases, and adds length-safe Wave 2 extraction so
-> long-context SC does not overflow the 4096-token vLLM limit.
+> hard KNOWLEDGE and READING cases, adds length-safe extraction so long-context
+> reasoning does not overflow the 4096-token vLLM limit, and now wraps the
+> shipped runner in a stronger always-emit safety layer.
 >
 > We are choosing `v03_gamma` as the final submission candidate not because the
 > later real-margin idea was wrong, but because the later `v03_delta` /
@@ -43,7 +44,10 @@ Architecture:
    - READING: SC n=3 for reason/purpose questions
    - SAFETY: force refusal label when harmful + refusal option present
 5. Option shuffle de-bias across SC samples
-6. Checkpoint per wave; atexit writes submission on crash
+6. Checkpoint per wave; fallback-prefilled output plus atomic always-emit on
+   exception or signal
+7. Additive deterministic vLLM warmup before the real run to reduce first-run
+   Triton JIT latency spikes without changing route / SC policy
 
 ## Score progression
 
@@ -53,8 +57,8 @@ Architecture:
 | v02_alpha | `src/v02_alpha.py` | 60.48% | 0.09 | |
 | v02_beta | `src/v02_beta.py` | 80.13% | 39.77 | |
 | v02_gamma | `src/v02_gamma.py` | 85.31% | 12.77 | Original wave-batched best |
-| v03_alpha | `src/v02_gamma.py` + new parser | 84.23% | 3.87 | Router regression; margin bug makes KNOWLEDGE SC dead |
-| v03_gamma | `src/v02_gamma.py` + hardened parser + compute/context fixes | **85.96%** | 7.98 | Final submission candidate; best speed/reliability tradeoff |
+| v03_alpha | `src/v03_gamma.py` + new parser | 84.23% | 3.87 | Router regression; margin bug makes KNOWLEDGE SC dead |
+| v03_gamma | `src/v03_gamma.py` + hardened parser + compute/context fixes | **85.96%** | 7.98 | Final submission candidate; best speed/reliability tradeoff |
 | v03_delta | later experimental branch | **87.04%** | 27.53 | Higher public accuracy, but ~4x slower and not judge-safe on 16 GB |
 | v03_epsilon | later experimental branch | pending final score | similar to delta | Delta-compatible safety attempt; still hit OOM in late Wave 2 on 16 GB |
 
@@ -79,15 +83,16 @@ These settings are in `src/config.py`, `src/sc_policy.py`, and `configs/pipeline
 - `configs/pipeline_config.yaml` — vLLM settings, runner config, quantisation settings
 
 ### Runners (entry points)
-- `src/v02_gamma.py` — current final runner, wave-batched (the one to use)
-- `src/run.py` — S7 never-crash sequential runner with checkpoint/resume/always-emit
+- `src/v03_gamma.py` — current final runner, wave-batched (the one to use)
+- `src/v02_gamma.py` — compatibility shim for older commands/imports
+- `src/run.py` — S7 never-crash sequential fallback utility, not the submission default
 - `src/v01_baseline.py`, `src/v02_alpha.py`, `src/v02_beta.py` — older versions, kept for eval comparison
 - `src/main.py` — S0 fallback runner (writes all FALLBACK, no model)
 
 ### Core pipeline
 - `src/wave_solver.py` — Wave1 (batch first passes) + Wave2 (batch SC escalations) + trace writer
 - `src/batch_extract.py` — batched guided-choice extraction via vLLM
-- `src/solve.py` — per-question solver (used by older runners, not v02_gamma)
+- `src/solve.py` — per-question solver (used by older runners, not the final `v03_gamma` path)
 - `src/router.py` — deterministic rule router (READING/STEM/SAFETY/KNOWLEDGE)
 - `src/parser.py` — question parsing, context splitting, flag extraction
 - `src/extract.py` — single-question guided-choice extraction + logprob margin
@@ -119,6 +124,7 @@ Run with: `python3.11 -m pytest tests/ -v -m "not slow"`
 | `test_route_prompts.py` | Router + prompt integration |
 | `test_solve_s4.py` | Per-question solver (requires torch) |
 | `test_vllm_label_map.py` | Label map edge cases |
+| `test_gamma_entrypoints.py` | Final runner rename shim + shipped entrypoint checks |
 | `test_pipeline_smoke.py` | Output format smoke test |
 
 ## Evaluation
@@ -283,38 +289,24 @@ option-shuffle confusion.
 These questions are wrong in v01 through v02_gamma. They likely need a
 capability the model lacks, not a prompt tweak. See `reports/eval/persistent_failures.csv`.
 
-## Improvement priorities for v3
+## Post-submission follow-ups
 
-**CRITICAL ORDER: fix margin first, then activate router-v2.**
-
-1. **Fix margin computation** — investigate `src/batch_extract.py` and
-   `src/extract.py` for why logprob margin is always 1.0 in the wave pipeline.
-   Without real margins the adaptive system is blind. The router-v2 regression
-   (-1.08 pts) confirmed this: moving items from STEM to KNOWLEDGE is safe only
-   when KNOWLEDGE SC can rescue low-confidence items. Fix this first.
-
-2. **After margins work: v03_alpha becomes v03_beta** — the new parser is
-   already in `src/parser.py`. Once margins are real, KNOWLEDGE SC will fire
-   for the 13 items reclassified from STEM, likely recovering the -1.08 pts
-   and then some (26 knowledge errors currently get zero SC).
-
-3. **Consider universal KNOWLEDGE SC as interim fallback** — if margin fix is
-   not achievable before submission, run SC n=3 on ALL knowledge questions
-   (~155 items) unconditionally. Cheap compute, directly covers the biggest
-   error bucket.
-
-3. **Protect first_answer from SC on high-choice questions** — for questions
-   with >=8 options, option shuffle with SC is more likely to confuse the model.
-   Skip SC or weight the first-pass answer higher in the vote.
-
-5. **Expand reading SC** — only 15/100 reading questions currently get SC
-   (reason/purpose keyword match). The 5 reading errors are all non-reason
-   questions. Consider SC for all reading questions or those with long contexts.
+1. **If revisiting exact margins, treat it as a separate deployment track** —
+   the delta/epsilon work proved that real continuation-scored margins can help,
+   but they must first become genuinely safe on 16 GB cards before they can be
+   reconsidered for the final path.
+2. **Re-analyze gamma errors by route/path before any new policy work** —
+   the remaining misses are narrower now, so future changes should be driven by
+   fresh error slices rather than the older broad v2 assumptions.
+3. **Tune only low-risk execution knobs first** — safe-mode defaults, entrypoint
+   stability, and batching/throughput hygiene are better next steps than adding
+   new accuracy heuristics late.
+4. **Keep legacy comparison runners intact** — they are still useful for
+   evaluation and regression analysis even though they are not the final branch.
 
 ## Remaining work
 
-- Docker image (`Dockerfile` exists but not yet finalized — will be last step)
-- `run.sh` entrypoint currently calls `src/run.py` (sequential); should be updated to call `src/v02_gamma.py` or pass safe-mode flags before submission
+- Docker image / entrypoint should stay aligned with `src/v03_gamma.py` + `--safe-mode`
 - Private test set is ~2000 questions (~4.3x public set); wall-clock estimate: 2-4 hours on judge GPU
 
 ## Docs index

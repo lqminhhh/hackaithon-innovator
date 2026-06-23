@@ -10,12 +10,17 @@ from collections import Counter
 from pathlib import Path
 from typing import Callable
 
-import torch
-
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.config import FALLBACK
-from src.data_loader import load_questions, write_submission
+from src.config import (
+    FALLBACK,
+    GPU_MEM_UTIL,
+    MAX_MODEL_LEN,
+    MAX_NUM_SEQS,
+    SAFE_GPU_MEM_UTIL,
+    SAFE_MAX_MODEL_LEN,
+    SAFE_MAX_NUM_SEQS,
+)
 from src.extract import ChoiceResult
 from src.models import load_primary_model, load_vllm_primary
 from src.normaliser import normalise_answer
@@ -345,16 +350,20 @@ def _load_agent(
     max_num_seqs: int | None,
     t_start: float,
 ) -> ReasoningAgent:
+    import torch
+
     chosen_gpu_util = gpu_memory_utilization
     chosen_max_len = max_model_len
     chosen_max_seqs = max_num_seqs
 
     if safe_mode:
-        chosen_gpu_util = chosen_gpu_util if chosen_gpu_util is not None else 0.70
-        chosen_max_len = chosen_max_len if chosen_max_len is not None else 4096
-        chosen_max_seqs = chosen_max_seqs if chosen_max_seqs is not None else 4
+        chosen_gpu_util = chosen_gpu_util if chosen_gpu_util is not None else SAFE_GPU_MEM_UTIL
+        chosen_max_len = chosen_max_len if chosen_max_len is not None else SAFE_MAX_MODEL_LEN
+        chosen_max_seqs = chosen_max_seqs if chosen_max_seqs is not None else SAFE_MAX_NUM_SEQS
     else:
-        chosen_max_seqs = chosen_max_seqs if chosen_max_seqs is not None else 16
+        chosen_gpu_util = chosen_gpu_util if chosen_gpu_util is not None else GPU_MEM_UTIL
+        chosen_max_len = chosen_max_len if chosen_max_len is not None else MAX_MODEL_LEN
+        chosen_max_seqs = chosen_max_seqs if chosen_max_seqs is not None else MAX_NUM_SEQS
 
     if torch.cuda.is_available():
         try:
@@ -377,6 +386,8 @@ def _load_agent(
 
 
 def _load_limited_questions(input_path: str, limit: int | None) -> list[dict]:
+    from src.data_loader import load_questions
+
     questions = load_questions(input_path)
     if limit is not None:
         return questions[:limit]
@@ -488,6 +499,8 @@ def _finish_run(
     route_counts: Counter[str],
     path_counts: Counter[str],
 ) -> None:
+    from src.data_loader import write_submission
+
     write_submission(results, output_path)
     total = time.time() - t_start
     infer_only = time.time() - run_start

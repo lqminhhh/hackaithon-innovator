@@ -1,32 +1,70 @@
-"""Central configuration constants for the final-compliant pipeline.
+"""Central configuration loader for the final-compliant pipeline.
 
-The current competition constraints require one open LLM <=5B parameters,
-offline inference, and no embedding/reranker/RAG models. YAML files can still
-hold runtime settings, but core invariants live here so every runner shares the
-same defaults.
+`configs/pipeline_config.yaml` is the runtime source of truth. This module
+loads that file once and exposes the settings as Python constants for the rest
+of the codebase.
 """
 
+from __future__ import annotations
+
+from functools import lru_cache
 from pathlib import Path
 
+import yaml
+
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_CFG_PATH = _PROJECT_ROOT / "configs" / "pipeline_config.yaml"
 
-LLM_MODEL = "Qwen/Qwen3.5-4B"
 
-GPU_MEM_UTIL = 0.80
+@lru_cache(maxsize=1)
+def load_project_config() -> dict:
+    with _CFG_PATH.open(encoding="utf-8") as f:
+        return yaml.safe_load(f)
 
-# --- Legacy: only used by solve.py (v01_baseline / v02_alpha / v02_beta). ---
-# v02_gamma uses route-specific replacements in src.sc_policy instead.
-MARGIN_LOW = 0.15  # replaced by sc_policy.MARGIN_LOW_BY_ROUTE
-SC_N = 5           # replaced by sc_policy.SC_N_DEFAULT / SC_N_STEM
-SC_TEMP = 0.6      # canonical copy; sc_policy re-exports from here
 
-# Legacy per-route token budgets (replaced by sc_policy.TOKENS_BY_ROUTE).
+_CFG = load_project_config()
+
+LLM_MODEL = str(_CFG["models"]["primary"])
+
+GPU_MEM_UTIL = float(_CFG["vllm"]["gpu_memory_utilization"])
+MAX_MODEL_LEN = int(_CFG["vllm"]["max_model_len"])
+MAX_NUM_SEQS = _CFG["vllm"].get("max_num_seqs")
+ENABLE_PREFIX_CACHING = bool(_CFG["vllm"].get("enable_prefix_caching", True))
+SAFE_GPU_MEM_UTIL = float(_CFG["safe_vllm"]["gpu_memory_utilization"])
+SAFE_MAX_MODEL_LEN = int(_CFG["safe_vllm"]["max_model_len"])
+SAFE_MAX_NUM_SEQS = int(_CFG["safe_vllm"]["max_num_seqs"])
+
+FALLBACK = str(_CFG["submission"]["fallback_answer"])
+MAX_CHOICES = int(_CFG["question_parsing"]["max_choices"])
+
+MARGIN_LOW = float(_CFG["legacy_solver"]["margin_low"])
+SC_N = int(_CFG["legacy_solver"]["sc_n"])
+SC_TEMP = float(_CFG["legacy_solver"]["temperature"])
 TOK = {
-    "READING": 512,
-    "STEM": 3072,
-    "KNOWLEDGE": 256,
-    "SAFETY": 128,
+    route: int(tokens)
+    for route, tokens in _CFG["legacy_solver"]["tokens_by_route"].items()
 }
 
-FALLBACK = "A"
-MAX_CHOICES = 26
+MARGIN_LOW_BY_ROUTE = {
+    route: float(value)
+    for route, value in _CFG["route_policy"]["margin_low_by_route"].items()
+}
+SC_N_STEM = {
+    key: int(value)
+    for key, value in _CFG["route_policy"]["stem_sc"].items()
+}
+SC_N_DEFAULT = int(_CFG["route_policy"]["default_sc_n"])
+SC_N_HIGH_CHOICE_KNOWLEDGE = int(_CFG["route_policy"]["high_choice_knowledge_sc_n"])
+HIGH_CHOICE_KNOWLEDGE_MIN_CHOICES = int(
+    _CFG["route_policy"]["high_choice_knowledge_min_choices"]
+)
+SC_TOP_P = float(_CFG["route_policy"]["sc_top_p"])
+SC_SEED = int(_CFG["route_policy"]["sc_seed"])
+SHUFFLE_OPTIONS = bool(_CFG["route_policy"]["shuffle_options"])
+TOKENS_BY_ROUTE = {
+    route: int(tokens)
+    for route, tokens in _CFG["route_policy"]["tokens_by_route"].items()
+}
+
+GAMMA_GPU_MEM_UTIL = GPU_MEM_UTIL
+GAMMA_MAX_MODEL_LEN = MAX_MODEL_LEN

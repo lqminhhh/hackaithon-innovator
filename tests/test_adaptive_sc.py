@@ -16,7 +16,8 @@ from src.sc_policy import (
     should_use_think_mode,
     stem_sc_n,
 )
-from src.wave_solver import Wave1Result, _fit_extraction_prompt, run_wave2
+import src.wave_solver as wave_solver
+from src.wave_solver import Wave1Result, _fit_extraction_prompt, run_wave1, run_wave2
 
 
 def _parsed(
@@ -153,6 +154,40 @@ def test_fit_extraction_prompt_compacts_long_reading_prompts():
     assert "Bạn đang chốt đáp án trắc nghiệm tiếng Việt." in prompt
     assert "Lời giải nháp rút gọn:" in prompt
     assert "Đoạn thông tin:\n---\n" not in prompt
+
+
+def test_wave1_uses_length_fitted_extraction_prompts(monkeypatch):
+    agent = _FakeAgent()
+    parsed = ParsedQuestion(
+        qid="reading-long",
+        original_question="Theo ngữ cảnh, điều gì đã xảy ra?",
+        query="Theo ngữ cảnh, điều gì đã xảy ra?",
+        context="Đoạn thông tin dài",
+        options={"A": "X", "B": "Y"},
+        refusal_labels=(),
+        n_choices=2,
+        has_context=True,
+        is_quantitative=False,
+        is_legal=False,
+        has_refusal_choice=False,
+        is_harmful=False,
+    )
+    long_reasoning_prompt = "Đoạn thông tin:\n---\n" + ("chi tiết " * 80) + "\n---\n\nCâu hỏi:\nTheo ngữ cảnh..."
+    long_reasoning = "kết luận " * 80
+
+    monkeypatch.setattr(wave_solver, "route_question", lambda _parsed: "reading")
+    monkeypatch.setattr(wave_solver, "get_forced_answer", lambda _parsed, _route: None)
+    monkeypatch.setattr(wave_solver, "_build_reasoning_prompt", lambda _parsed, _route: long_reasoning_prompt)
+    monkeypatch.setattr(wave_solver, "batch_generate", lambda *_args, **_kwargs: [long_reasoning])
+
+    results = run_wave1(agent, [parsed], skip_qids=set())
+
+    assert results[parsed.qid].answer in parsed.options
+    assert len(agent.scored_prompts) == 1
+    scored_prompt = agent.scored_prompts[0]["prompt"]
+    assert "Bạn đang chốt đáp án trắc nghiệm tiếng Việt." in scored_prompt
+    assert "Lời giải nháp rút gọn:" in scored_prompt
+    assert "Đoạn thông tin:\n---\n" not in scored_prompt
 
 
 def test_wave2_uses_seven_stem_samples_for_low_margin_when_adaptive():

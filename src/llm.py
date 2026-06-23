@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from src.config import GPU_MEM_UTIL, LLM_MODEL
+from src.config import ENABLE_PREFIX_CACHING, GPU_MEM_UTIL, LLM_MODEL, MAX_MODEL_LEN
 
 ThinkingMode = Literal["think", "no_think"]
 
@@ -31,10 +31,10 @@ class LLM:
         model: str = LLM_MODEL,
         *,
         gpu_memory_utilization: float = GPU_MEM_UTIL,
-        max_model_len: int = 4096,
+        max_model_len: int = MAX_MODEL_LEN,
         max_num_seqs: int | None = None,
         quantization: str | None = None,
-        enable_prefix_caching: bool = True,
+        enable_prefix_caching: bool = ENABLE_PREFIX_CACHING,
         dtype: str = "half",
         trust_remote_code: bool = True,
         engine: Any | None = None,
