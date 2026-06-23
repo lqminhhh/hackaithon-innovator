@@ -47,6 +47,73 @@ def test_v03_gamma_exports_main_runner():
     assert callable(v03_gamma.run_v03_gamma)
 
 
+def test_v03_gamma_runs_additive_warmup_before_pipeline(tmp_path, monkeypatch):
+    input_path = tmp_path / "input.json"
+    output_path = tmp_path / "pred.csv"
+    trace_path = tmp_path / "trace.jsonl"
+    input_path.write_text(
+        json.dumps(
+            [{"qid": "q1", "question": "2 + 2 = ?", "choices": ["3", "4"]}],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    calls: list[str] = []
+
+    class _FakeAgent:
+        is_vllm = True
+
+    monkeypatch.setattr(v03_gamma, "_load_agent", lambda **_kwargs: _FakeAgent())
+    monkeypatch.setattr(v03_gamma, "_warmup_agent", lambda _agent: calls.append("warmup"))
+
+    def fake_run_wave1(_agent, parsed_list, _skip_qids):
+        calls.append("wave1")
+        qid = parsed_list[0].qid
+        return {
+            qid: type(
+                "W1",
+                (),
+                {
+                    "qid": qid,
+                    "answer": "B",
+                    "route": "stem",
+                    "margin": 1.0,
+                    "forced": False,
+                    "error": None,
+                    "reasoning_prompt": "",
+                    "per_letter_logprob": {"A": -1.0, "B": 0.0},
+                },
+            )()
+        }
+
+    def fake_run_wave2(_agent, _parsed_list, _wave1, adaptive_sc=True):
+        calls.append("wave2")
+        return {}
+
+    monkeypatch.setattr("src.wave_solver.run_wave1", fake_run_wave1)
+    monkeypatch.setattr("src.wave_solver.run_wave2", fake_run_wave2)
+    monkeypatch.setattr("src.wave_solver.finalize_answers", lambda parsed_list, _wave1, _wave2, _answers: {parsed.qid: "B" for parsed in parsed_list})
+    monkeypatch.setattr("src.wave_solver.write_traces", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.wave_solver.path_counts", lambda *_args, **_kwargs: {"wave_direct": 1})
+
+    v03_gamma.run_v03_gamma(
+        input_path=str(input_path),
+        output_path=str(output_path),
+        trace_output=str(trace_path),
+        install_handlers=False,
+    )
+
+    assert calls[:3] == ["warmup", "wave1", "wave2"]
+
+
+def test_v03_gamma_warmup_is_noop_for_non_vllm():
+    class _FakeAgent:
+        is_vllm = False
+
+    v03_gamma._warmup_agent(_FakeAgent())
+
+
 def test_v03_gamma_writes_complete_fallback_submission_on_failure(tmp_path, monkeypatch):
     input_path = tmp_path / "input.json"
     output_path = tmp_path / "pred.csv"

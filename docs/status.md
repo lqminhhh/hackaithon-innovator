@@ -46,6 +46,8 @@ Architecture:
 5. Option shuffle de-bias across SC samples
 6. Checkpoint per wave; fallback-prefilled output plus atomic always-emit on
    exception or signal
+7. Additive deterministic vLLM warmup before the real run to reduce first-run
+   Triton JIT latency spikes without changing route / SC policy
 
 ## Score progression
 

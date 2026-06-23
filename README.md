@@ -11,9 +11,9 @@ This repository is organized around a single final submission path:
 | Item | Value |
 | --- | --- |
 | Team name | `Cow` |
-| Team members | `[Fill in full names here]` |
-| School / organization | `[Fill in school or organization]` |
-| GitHub repository | `[Fill in repository URL]` |
+| Team members | `Minh Le, Uyen Nguyen, Viet Nguyen` |
+| School / organization | `Denison University, The Ohio State University` |
+| GitHub repository | `https://github.com/lqminhhh/hackaithon-innovator/tree/final` |
 | Docker Hub image | |
 | Final runner | `src/v03_gamma.py` |
 | Primary model | `Qwen/Qwen3.5-4B` |
@@ -173,6 +173,15 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Notes:
+
+- `requirements.txt` includes `vllm`, which is required for the intended GPU
+  submission path.
+- This project is built around the CUDA 12.4 Docker image in the repository.
+  Missing CUDA 13 is not the expected cause of `vLLM unavailable`.
+- On non-Docker machines, the more common causes are: package not installed,
+  no supported NVIDIA GPU, or an NVIDIA driver too old for the CUDA 12.4 stack.
+
 Run the final pipeline directly:
 
 ```bash
@@ -181,6 +190,14 @@ python src/v03_gamma.py \
   --output data/submissions/submission_v03_gamma.csv \
   --trace-output data/traces/trace_v03_gamma.jsonl \
   --safe-mode
+```
+
+By default, `v03_gamma` performs a small deterministic vLLM warmup before the
+real run to reduce first-run JIT latency spikes. Disable it only for ablation
+or debugging:
+
+```bash
+python src/v03_gamma.py --no-warmup ...
 ```
 
 Quick smoke run:

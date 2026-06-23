@@ -20,12 +20,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && ln -sf /usr/bin/python3.11 /usr/local/bin/python \
     && rm -rf /var/lib/apt/lists/*
 
-# Python deps. vLLM >= 0.17 is required for Qwen3.5 (the qwen3_5 architecture);
-# it is intentionally not pinned in requirements.txt (optional for CPU dev), so
-# install it explicitly here for the GPU image.
+# Python deps. Keep the container and local environment aligned by installing
+# the exact pinned GPU stack from requirements.txt, including vLLM.
 COPY requirements.txt .
-RUN python -m pip install --no-cache-dir -r requirements.txt \
-    && python -m pip install --no-cache-dir "vllm>=0.17.0"
+RUN python -m pip install --no-cache-dir -r requirements.txt
 
 # Source, configs, and entrypoint. The final submission path is the wave-batched
 # `src.v03_gamma` runner; `src/run.py` stays in the repo as a fallback utility.
@@ -35,6 +33,7 @@ COPY run.sh ./
 RUN chmod +x run.sh
 
 # Bake the single v3 model into the image so inference needs no internet.
+# The image runs on CUDA 12.4; host machines need a compatible NVIDIA driver.
 # (Switch to an AWQ repo here if you decide to ship 4-bit for a small/unknown card.)
 RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen3.5-4B')"
 

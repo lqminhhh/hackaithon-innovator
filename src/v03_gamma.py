@@ -90,6 +90,13 @@ def add_common_args(parser: argparse.ArgumentParser, *, default_output: str, def
         default=None,
         help="Override vLLM max_num_seqs.",
     )
+    parser.add_argument(
+        "--no-warmup",
+        dest="warmup",
+        action="store_false",
+        default=True,
+        help="Disable the additive vLLM pre-run warmup step.",
+    )
 
 
 def main() -> None:
@@ -124,6 +131,7 @@ def main() -> None:
         max_model_len=args.max_model_len,
         max_num_seqs=args.max_num_seqs,
         adaptive_sc=args.adaptive_sc,
+        warmup=args.warmup,
     )
 
 
@@ -140,6 +148,7 @@ def run_v03_gamma(
     max_num_seqs: int | None = None,
     adaptive_sc: bool = True,
     install_handlers: bool = True,
+    warmup: bool = True,
 ) -> None:
     """Run the v03_gamma wave-batched pipeline."""
     from src.data_loader import load_questions
@@ -233,6 +242,8 @@ def run_v03_gamma(
             max_num_seqs=chosen_max_seqs,
             t_start=t_start,
         )
+        if warmup:
+            _warmup_agent(agent)
 
         print("Wave 1: batching all first passes...", flush=True)
         wave1 = run_wave1(agent, parsed_list, restored_qids)
@@ -344,6 +355,64 @@ def _install_always_emit(emitter) -> Any:
                 pass
 
     return _cleanup
+
+
+def _warmup_agent(agent: Any) -> None:
+    """Best-effort deterministic warmup for common vLLM inference shapes.
+
+    This is intentionally additive: it runs before the real pipeline, uses
+    deterministic generation only, and swallows failures so normal inference
+    still proceeds unchanged.
+    """
+    if not getattr(agent, "is_vllm", False):
+        return
+
+    from src.batch_extract import batch_extract
+
+    long_context = " ".join(["chi tiet"] * 900)
+    reasoning_prompts = [
+        "Cau hoi: 2 + 2 bang bao nhieu?\nA) 3\nB) 4\nTra loi ngan gon.",
+        (
+            "Doan thong tin:\n"
+            f"{long_context}\n\n"
+            "Cau hoi: Theo doan thong tin, chi tiet nao duoc nhac den?\n"
+            "A) Lua chon 1\nB) Lua chon 2\nC) Lua chon 3\nD) Lua chon 4"
+        ),
+        "Giai bai toan ngan gon tung buoc va chon dap an dung nhat.\nA) 1\nB) 2\nC) 3\nD) 4",
+    ]
+    extract_prompts = [
+        "Chon dung mot dap an hop le.\nA) 3\nB) 4\nDap an: ",
+        (
+            "Chon dung mot dap an hop le.\n"
+            + "\n".join(f"{chr(ord('A') + i)}) Lua chon {i + 1}" for i in range(10))
+            + "\nDap an: "
+        ),
+    ]
+    extract_options = [
+        {"A": "3", "B": "4"},
+        {chr(ord("A") + i): f"Lua chon {i + 1}" for i in range(10)},
+    ]
+
+    print("[v03_gamma] Warmup: priming vLLM kernels...", flush=True)
+    t0 = time.time()
+    try:
+        agent.generate_freeform(
+            [reasoning_prompts[0], reasoning_prompts[1]],
+            mode="no_think",
+            max_tokens=16,
+            temperature=0.0,
+        )
+        agent.generate_freeform(
+            [reasoning_prompts[2]],
+            mode="think",
+            max_tokens=32,
+            temperature=0.0,
+        )
+        batch_extract(agent, extract_prompts, extract_options)
+    except Exception as exc:
+        print(f"[v03_gamma] Warmup skipped after error: {exc}", flush=True)
+        return
+    print(f"[v03_gamma] Warmup complete in {time.time() - t0:.1f}s", flush=True)
 
 
 def _load_agent(
