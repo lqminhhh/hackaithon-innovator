@@ -11,22 +11,15 @@ from pathlib import Path
 
 import yaml
 
+from src.config import load_project_config
 from src.extract import ChoiceResult, GuidedChoiceExtractor, best_label, softmax_margin
 
 _PROMPTS_PATH = Path(__file__).resolve().parent.parent / "configs" / "prompts.yaml"
-_CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "pipeline_config.yaml"
 
 
 def _load_prompts() -> dict[str, str]:
     with open(_PROMPTS_PATH) as f:
         return yaml.safe_load(f)
-
-
-def _load_config() -> dict:
-    with open(_CFG_PATH) as f:
-        return yaml.safe_load(f)
-
-
 class ReasoningAgent:
     """Unified reasoning agent supporting vLLM and HuggingFace backends."""
 
@@ -34,7 +27,7 @@ class ReasoningAgent:
 
     def __init__(self, llm=None, model=None, tokenizer=None):
         self.prompts = _load_prompts()
-        self.cfg = _load_config()["inference"]
+        self.cfg = load_project_config()["inference"]
 
         self._llm = llm
         self._model = model
@@ -81,15 +74,22 @@ class ReasoningAgent:
         self,
         question: str,
         options: dict[str, str],
+        context: str | None = None,
     ) -> str:
         """Build a short prompt for constrained answer selection."""
         options_block, valid_labels = self._format_options(options)
-        return self.prompts["guided_choice_no_context"].format(
+        kwargs = dict(
             question=question,
             options_block=options_block,
             valid_labels=valid_labels,
             label_list=", ".join(sorted(options.keys())),
         )
+        if context is not None:
+            return self.prompts["guided_choice_with_context"].format(
+                retrieved_context=context,
+                **kwargs,
+            )
+        return self.prompts["guided_choice_no_context"].format(**kwargs)
 
     def build_route_prompt(
         self,

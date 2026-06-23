@@ -19,7 +19,7 @@
 - Final-compliant inference uses one model only: `Qwen/Qwen3.5-4B`.
 - `configs/pipeline_config.yaml` now marks final inference as offline, no external APIs, no embedding model, no reranker model, and no RAG.
 - `src/config.py` holds shared Python constants such as `LLM_MODEL`, `GPU_MEM_UTIL`, `FALLBACK`, token budgets, and legacy S4 defaults.
-- `v02_gamma` uses the refactored wave pipeline: `src/wave_solver.py`, `src/batch_extract.py`, and `src/sc_policy.py`.
+- The final `v03_gamma` runner uses the refactored wave pipeline: `src/wave_solver.py`, `src/batch_extract.py`, and `src/sc_policy.py`.
 - S5 semantic routing and RAG are not part of final-compliant runners because they require extra embedding/reranker models.
 - Runtime numbers are from local/Colab runs and can vary by GPU, vLLM version, warmup, and `safe-mode` settings.
 - `v02_gamma_router_v2` runtime was measured on a 24 GB VRAM card; judge hardware is 16 GB.

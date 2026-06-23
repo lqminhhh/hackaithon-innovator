@@ -12,22 +12,17 @@ On CPU: loads in float32.
 from __future__ import annotations
 
 import os
-import yaml
-from pathlib import Path
 
-from src.config import GPU_MEM_UTIL, LLM_MODEL
-
-_CFG_PATH = Path(__file__).resolve().parent.parent / "configs" / "pipeline_config.yaml"
+from src.config import (
+    ENABLE_PREFIX_CACHING,
+    GPU_MEM_UTIL,
+    LLM_MODEL,
+    MAX_MODEL_LEN,
+    load_project_config,
+)
 
 # Let MPS allocations spill into system RAM instead of hard-crashing
 os.environ.setdefault("PYTORCH_MPS_HIGH_WATERMARK_RATIO", "0.0")
-
-
-def _load_config() -> dict:
-    with open(_CFG_PATH) as f:
-        return yaml.safe_load(f)
-
-
 def _get_torch():
     import torch
 
@@ -54,7 +49,7 @@ def _load_model(model_id: str, device_map_override: str | None = None):
     torch = _get_torch()
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    cfg = _load_config()
+    cfg = load_project_config()
     auto_device, dtype, can_4bit = _get_device_info()
     device_map = device_map_override or auto_device
 
@@ -89,7 +84,7 @@ def load_primary_model(
     model_id: str | None = None,
 ):
     """Load the configured primary model, or an explicit override."""
-    cfg = _load_config()
+    cfg = load_project_config()
     return _load_model(model_id or cfg["models"]["primary"], device_map)
 
 
@@ -104,7 +99,7 @@ def load_vllm_primary(
     """Load primary model via vLLM for fast batched inference (CUDA only)."""
     from src.llm import LLM
 
-    cfg = _load_config()
+    cfg = load_project_config()
     vllm_cfg = cfg.get("vllm", {})
     chosen_model = model_id or cfg.get("models", {}).get("primary") or LLM_MODEL
     quantization = "awq" if "awq" in chosen_model.lower() else None
@@ -117,10 +112,10 @@ def load_vllm_primary(
             else vllm_cfg.get("gpu_memory_utilization", GPU_MEM_UTIL)
         ),
         max_model_len=(
-            max_model_len if max_model_len is not None else vllm_cfg.get("max_model_len", 4096)
+            max_model_len if max_model_len is not None else vllm_cfg.get("max_model_len", MAX_MODEL_LEN)
         ),
         max_num_seqs=(
             max_num_seqs if max_num_seqs is not None else vllm_cfg.get("max_num_seqs")
         ),
-        enable_prefix_caching=vllm_cfg.get("enable_prefix_caching", True),
+        enable_prefix_caching=vllm_cfg.get("enable_prefix_caching", ENABLE_PREFIX_CACHING),
     )

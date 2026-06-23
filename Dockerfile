@@ -27,16 +27,19 @@ COPY requirements.txt .
 RUN python -m pip install --no-cache-dir -r requirements.txt \
     && python -m pip install --no-cache-dir "vllm>=0.17.0"
 
-# Source, configs, and entrypoint. The v3 inference path is run.py (S7 runner);
-# src/pipeline.py is legacy and is deliberately NOT the entrypoint.
+# Source, configs, and entrypoint. The final submission path is the wave-batched
+# `src.v03_gamma` runner; `src/run.py` stays in the repo as a fallback utility.
 COPY src/ ./src/
 COPY configs/ ./configs/
-COPY run.py main.py run.sh ./
+COPY run.sh ./
 RUN chmod +x run.sh
 
 # Bake the single v3 model into the image so inference needs no internet.
 # (Switch to an AWQ repo here if you decide to ship 4-bit for a small/unknown card.)
 RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen3.5-4B')"
 
-# run.sh forwards: ./run.sh <input.json|csv> <output.csv>
+# run.sh defaults to the competition contract:
+# - input: /data/public_test.csv or /data/private_test.csv
+# - output: /output/pred.csv
+# Optional overrides remain: ./run.sh <input.json|csv> <output.csv> [trace.jsonl]
 ENTRYPOINT ["./run.sh"]

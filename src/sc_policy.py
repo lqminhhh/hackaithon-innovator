@@ -5,36 +5,21 @@ from __future__ import annotations
 import random
 import re
 
-from src.config import GPU_MEM_UTIL, SC_TEMP
+from src.config import (
+    GAMMA_GPU_MEM_UTIL,
+    GAMMA_MAX_MODEL_LEN,
+    HIGH_CHOICE_KNOWLEDGE_MIN_CHOICES,
+    MARGIN_LOW_BY_ROUTE,
+    SC_N_DEFAULT,
+    SC_N_HIGH_CHOICE_KNOWLEDGE,
+    SC_N_STEM,
+    SC_SEED,
+    SC_TEMP,
+    SC_TOP_P,
+    SHUFFLE_OPTIONS,
+    TOKENS_BY_ROUTE,
+)
 from src.parser import ParsedQuestion
-
-# Per-route low-margin thresholds. These differ significantly by route.
-MARGIN_LOW_BY_ROUTE = {
-    "READING": 0.10,
-    "STEM": 0.15,
-    "KNOWLEDGE": 0.20,
-    "SAFETY": 0.05,
-}
-
-# STEM SC depth is adaptive, not an early-exit toggle.
-SC_N_STEM = {"high": 3, "low": 7}
-
-SC_N_DEFAULT = 5
-SC_N_HIGH_CHOICE_KNOWLEDGE = 3
-HIGH_CHOICE_KNOWLEDGE_MIN_CHOICES = 8
-SC_TOP_P = 0.95
-SC_SEED = 1234
-SHUFFLE_OPTIONS = True
-
-TOKENS_BY_ROUTE = {
-    "READING": 512,
-    "STEM": 3072,
-    "KNOWLEDGE": 256,
-    "SAFETY": 128,
-}
-
-GAMMA_GPU_MEM_UTIL = GPU_MEM_UTIL
-GAMMA_MAX_MODEL_LEN = 4096
 
 _READING_REASON_MARKERS = (
     "lý do",
@@ -139,6 +124,17 @@ def has_ambiguous_options(options: dict[str, str]) -> bool:
     return False
 
 
+def duplicate_option_label_map(options: dict[str, str]) -> dict[str, str]:
+    """Map duplicate labels onto the first label that carries the same text."""
+    canonical_by_text: dict[str, str] = {}
+    label_map: dict[str, str] = {}
+    for label in sorted(options):
+        normalized = " ".join(_OPTION_TOKEN_RE.findall(options[label].lower()))
+        canonical = canonical_by_text.setdefault(normalized, label)
+        label_map[label] = canonical
+    return label_map
+
+
 def knowledge_requires_extra_compute(parsed: ParsedQuestion) -> bool:
     """Return True for knowledge questions that deserve extra compute."""
     return (
@@ -199,11 +195,13 @@ def shuffle_options(
         return options, identity
 
     labels = sorted(options.keys())
-    values = [options[label] for label in labels]
-    random.Random(SC_SEED + sample_idx).shuffle(values)
-    shuffled = dict(zip(labels, values))
-    value_to_original = {value: key for key, value in options.items()}
-    reverse_map = {label: value_to_original[shuffled[label]] for label in labels}
+    shuffled_original_labels = labels[:]
+    random.Random(SC_SEED + sample_idx).shuffle(shuffled_original_labels)
+    shuffled = {
+        new_label: options[original_label]
+        for new_label, original_label in zip(labels, shuffled_original_labels)
+    }
+    reverse_map = dict(zip(labels, shuffled_original_labels))
     return shuffled, reverse_map
 
 

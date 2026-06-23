@@ -13,13 +13,30 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.main import run as run_s0
-from src.config import FALLBACK, LLM_MODEL
+from src.config import (
+    FALLBACK,
+    GPU_MEM_UTIL,
+    LLM_MODEL,
+    MAX_CHOICES,
+    SAFE_GPU_MEM_UTIL,
+    load_project_config,
+)
 from src.data_loader import letters, load_questions, write_submission
 
 
 def test_config_exposes_planned_defaults():
     assert LLM_MODEL == "Qwen/Qwen3.5-4B"
     assert FALLBACK == "A"
+
+
+def test_config_constants_are_loaded_from_pipeline_yaml():
+    cfg = load_project_config()
+
+    assert LLM_MODEL == cfg["models"]["primary"]
+    assert FALLBACK == cfg["submission"]["fallback_answer"]
+    assert GPU_MEM_UTIL == cfg["vllm"]["gpu_memory_utilization"]
+    assert SAFE_GPU_MEM_UTIL == cfg["safe_vllm"]["gpu_memory_utilization"]
+    assert MAX_CHOICES == cfg["question_parsing"]["max_choices"]
 
 
 def test_letters_supports_a_through_j():
@@ -31,7 +48,7 @@ def test_letters_rejects_out_of_contract_counts():
     with pytest.raises(ValueError):
         letters(0)
     with pytest.raises(ValueError):
-        letters(27)
+        letters(MAX_CHOICES + 1)
 
 
 def test_load_questions_preserves_vietnamese_and_normalises_choices(tmp_path):
