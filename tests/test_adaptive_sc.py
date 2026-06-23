@@ -19,6 +19,7 @@ from src.sc_policy import (
     should_use_think_mode,
     stem_sc_n,
 )
+import src.wave_solver as wave_solver
 from src.wave_solver import Wave1Result, _fit_extraction_prompt, run_wave2
 
 
@@ -311,6 +312,73 @@ def test_wave2_escalates_ambiguous_knowledge_even_with_high_margin():
     assert len(agent.generated) == 1
     assert len(agent.generated[0]["prompts"]) == SC_N_HIGH_CHOICE_KNOWLEDGE
     assert agent.generated[0]["kwargs"]["mode"] == "think"
+
+
+def test_wave2_canonicalizes_duplicate_votes_in_original_label_space(monkeypatch):
+    agent = _FakeAgent()
+    parsed = _parsed(
+        qid="duplicate-remap",
+        is_quantitative=False,
+        options={
+            "A": "8 năm",
+            "B": "8 năm",
+            "C": "10 năm",
+            "D": "12 năm",
+            "E": "14 năm",
+            "F": "16 năm",
+            "G": "18 năm",
+            "H": "20 năm",
+            "I": "22 năm",
+            "J": "24 năm",
+        },
+    )
+    wave1 = {
+        parsed.qid: Wave1Result(
+            qid=parsed.qid,
+            route="knowledge",
+            answer="B",
+            margin=1.0,
+            per_letter_logprob={label: (-10.0 if label != "B" else 0.0) for label in parsed.options},
+        )
+    }
+
+    def _fake_batch_extract(_agent, _prompts, options_list):
+        outputs = []
+        for options in options_list:
+            if options.get("H") == "8 năm" and options.get("I") == "8 năm":
+                outputs.append(
+                    wave_solver.ChoiceResult(
+                        letter="I",
+                        margin=1.0,
+                        per_letter_logprob={
+                            "A": -5.0,
+                            "B": -5.0,
+                            "C": -5.0,
+                            "D": -5.0,
+                            "E": -5.0,
+                            "F": -5.0,
+                            "G": -5.0,
+                            "H": -1.0,
+                            "I": 0.0,
+                            "J": -5.0,
+                        },
+                    )
+                )
+            else:
+                outputs.append(
+                    wave_solver.ChoiceResult(
+                        letter="A",
+                        margin=1.0,
+                        per_letter_logprob={label: (0.0 if label == "A" else -2.0) for label in options},
+                    )
+                )
+        return outputs
+
+    monkeypatch.setattr(wave_solver, "batch_extract", _fake_batch_extract)
+    wave2 = run_wave2(agent, [parsed], wave1, adaptive_sc=True)
+
+    assert set(wave2) == {parsed.qid}
+    assert wave2[parsed.qid].answer == "A"
 
 
 def test_wave2_escalates_reading_detail_lookup_questions():

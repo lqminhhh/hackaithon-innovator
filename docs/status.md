@@ -6,7 +6,7 @@
 ## What this project is
 
 Vietnamese multiple-choice QA system for HackAIthon 2026 Bang C.
-Input: JSON of questions with choices. Output: `submission.csv` (`qid,answer`).
+Input: JSON or CSV of questions with choices. Output: `submission.csv` (`qid,answer`).
 Scored on a private set of ~2000 questions on a 16 GB VRAM GPU.
 
 ## Competition constraints (non-negotiable)
@@ -24,8 +24,13 @@ Scored on a private set of ~2000 questions on a 16 GB VRAM GPU.
 > policy, then fixes real margin computation and duplicate-option handling so
 > adaptive STEM depth, KNOWLEDGE SC, and tricky option sets finally behave as
 > intended.
+>
+> **Deployment variant:** `v03_epsilon` currently means "run the same
+> delta-compatible policy, but with safer continuation microbatching defaults
+> for 16 GB cards." It has not replaced `v03_delta` as the best scored run yet.
 
 Architecture:
+
 1. Parse input JSON/CSV via `src/parser.py` + `src/data_loader.py`
 2. Route each question deterministically via `src/router.py` (READING / STEM / SAFETY / KNOWLEDGE)
 3. Two-pass guided-choice: reason freely, then constrain to a valid letter via `src/batch_extract.py`
@@ -41,25 +46,26 @@ Architecture:
 
 ## Score progression
 
-| Version | File | Score | s/question | Notes |
-|---|---|---|---|---|
-| v01_baseline | `src/v01_baseline.py` | 28.73% | 3.81 | |
-| v02_alpha | `src/v02_alpha.py` | 60.48% | 0.09 | |
-| v02_beta | `src/v02_beta.py` | 80.13% | 39.77 | |
-| v02_gamma | `src/v02_gamma.py` | 85.31% | 12.77 | Original wave-batched best |
-| v03_alpha | `src/v02_gamma.py` + new parser | 84.23% | 3.87 | Router regression; margin bug makes KNOWLEDGE SC dead |
-| v03_gamma | `src/v02_gamma.py` + hardened parser + compute/context fixes | **85.96%** | - | Superseded by v03_delta |
-| v03_delta | `src/v02_gamma.py` + real margins + duplicate-option fixes | **87.04%** | 27.53 | Current best; heavier extraction path |
+| Version      | File                                                           | Score            | s/question | Notes                                                 |
+| ------------ | -------------------------------------------------------------- | ---------------- | ---------- | ----------------------------------------------------- |
+| v01_baseline | `src/v01_baseline.py`                                        | 28.73%           | 3.81       |                                                       |
+| v02_alpha    | `src/v02_alpha.py`                                           | 60.48%           | 0.09       |                                                       |
+| v02_beta     | `src/v02_beta.py`                                            | 80.13%           | 39.77      |                                                       |
+| v02_gamma    | `src/v02_gamma.py`                                           | 85.31%           | 12.77      | Original wave-batched best                            |
+| v03_alpha    | `src/v02_gamma.py` + new parser                              | 84.23%           | 3.87       | Router regression; margin bug makes KNOWLEDGE SC dead |
+| v03_gamma    | `src/v02_gamma.py` + hardened parser + compute/context fixes | **85.96%** | 7.98       | Superseded by v03_delta                               |
+| v03_delta    | `src/v02_gamma.py` + real margins + duplicate-option fixes   | **87.04%** | 27.53      | Current best; heavier extraction path                 |
+| v03_epsilon  | `src/v03_epsilon.py`                                         | pending          | pending    | Delta-compatible safer deployment wrapper; not re-scored yet |
 
 Full details: `docs/version_results.md`
 
 ## VRAM safety settings (tuned for unknown 16 GB judge cards)
 
-| Setting | Normal | Safe mode (`--safe-mode`) |
-|---|---|---|
-| `gpu_memory_utilization` | 0.80 (12.8 GB) | 0.70 (11.2 GB) |
-| `max_model_len` | 4096 | 4096 |
-| `max_num_seqs` | 16 | 4 |
+| Setting                    | Normal         | Safe mode (`--safe-mode`) |
+| -------------------------- | -------------- | --------------------------- |
+| `gpu_memory_utilization` | 0.80 (12.8 GB) | 0.70 (11.2 GB)              |
+| `max_model_len`          | 4096           | 4096                        |
+| `max_num_seqs`           | 16             | 4                           |
 
 Model weights (FP16): ~8 GB. KV cache budget in normal mode: ~4.3 GB.
 These settings are in `src/config.py`, `src/sc_policy.py`, and `configs/pipeline_config.yaml`.
@@ -67,17 +73,21 @@ These settings are in `src/config.py`, `src/sc_policy.py`, and `configs/pipeline
 ## Key files and what they do
 
 ### Config
+
 - `src/config.py` — LLM_MODEL, GPU_MEM_UTIL, FALLBACK, legacy constants
 - `src/sc_policy.py` — route-specific SC policy, margin thresholds, token budgets, option shuffle
 - `configs/pipeline_config.yaml` — vLLM settings, runner config, quantisation settings
 
 ### Runners (entry points)
-- `src/v02_gamma.py` — current best, wave-batched (the one to use)
+
+- `src/v02_gamma.py` — best scored logic (`v03_delta` state), wave-batched
+- `src/v03_epsilon.py` — delta-compatible runner with safer continuation chunking defaults for 16 GB deployment
 - `src/run.py` — S7 never-crash sequential runner with checkpoint/resume/always-emit
 - `src/v01_baseline.py`, `src/v02_alpha.py`, `src/v02_beta.py` — older versions, kept for eval comparison
 - `src/main.py` — S0 fallback runner (writes all FALLBACK, no model)
 
 ### Core pipeline
+
 - `src/wave_solver.py` — Wave1 (batch first passes) + Wave2 (batch SC escalations) + trace writer
 - `src/batch_extract.py` — batched guided-choice extraction via vLLM
 - `src/solve.py` — per-question solver (used by older runners, not v02_gamma)
@@ -86,11 +96,13 @@ These settings are in `src/config.py`, `src/sc_policy.py`, and `configs/pipeline
 - `src/extract.py` — single-question guided-choice extraction + logprob margin
 
 ### Model loading
+
 - `src/llm.py` — vLLM wrapper with Qwen thinking-mode support
 - `src/models.py` — model loading (vLLM or HuggingFace fallback)
 - `src/reasoning_agent.py` — high-level LLM interface used by solvers
 
 ### Infrastructure
+
 - `src/version_runner.py` — shared CLI args and agent loading for older runners
 - `src/data_loader.py` — load questions (JSON/CSV), write submission CSV
 - `src/normaliser.py` — answer normalisation
@@ -99,20 +111,20 @@ These settings are in `src/config.py`, `src/sc_policy.py`, and `configs/pipeline
 
 Run with: `python3.11 -m pytest tests/ -v -m "not slow"`
 
-| Test file | What it covers |
-|---|---|
-| `test_run.py` | S7 never-crash runner: G1-G4 guarantees, checkpoint/resume, SIGTERM |
-| `test_s0_io.py` | Config defaults, I/O contract, UTF-8, letter range |
-| `test_llm_s1.py` | vLLM wrapper constructor, batching, thinking-mode |
-| `test_adaptive_sc.py` | Adaptive SC depth, wave2 escalation (requires torch) |
-| `test_parser.py` | Question parsing, context splitting |
-| `test_extract.py` | Guided-choice extraction |
-| `test_guided_choice.py` | Label mapping and constrained decoding |
-| `test_normaliser.py` | Answer normalisation |
-| `test_route_prompts.py` | Router + prompt integration |
-| `test_solve_s4.py` | Per-question solver (requires torch) |
-| `test_vllm_label_map.py` | Label map edge cases |
-| `test_pipeline_smoke.py` | Output format smoke test |
+| Test file                  | What it covers                                                      |
+| -------------------------- | ------------------------------------------------------------------- |
+| `test_run.py`            | S7 never-crash runner: G1-G4 guarantees, checkpoint/resume, SIGTERM |
+| `test_s0_io.py`          | Config defaults, I/O contract, UTF-8, letter range                  |
+| `test_llm_s1.py`         | vLLM wrapper constructor, batching, thinking-mode                   |
+| `test_adaptive_sc.py`    | Adaptive SC depth, wave2 escalation (requires torch)                |
+| `test_parser.py`         | Question parsing, context splitting                                 |
+| `test_extract.py`        | Guided-choice extraction                                            |
+| `test_guided_choice.py`  | Label mapping and constrained decoding                              |
+| `test_normaliser.py`     | Answer normalisation                                                |
+| `test_route_prompts.py`  | Router + prompt integration                                         |
+| `test_solve_s4.py`       | Per-question solver (requires torch)                                |
+| `test_vllm_label_map.py` | Label map edge cases                                                |
+| `test_pipeline_smoke.py` | Output format smoke test                                            |
 
 ## Evaluation
 
@@ -125,6 +137,7 @@ Run with: `python3.11 -m pytest tests/ -v -m "not slow"`
 ## What is NOT used in final inference
 
 These exist in the repo for historical/analysis purposes but are banned by competition rules:
+
 - RAG / FAISS / retrieval (`faiss-cpu` is in requirements but not used at inference)
 - Embedding models (`sentence-transformers` is in requirements but not used at inference)
 - S5 semantic router (removed — required embedding model)
@@ -133,11 +146,46 @@ These exist in the repo for historical/analysis purposes but are banned by compe
 
 ## Recent changes (this session)
 
+### v03_epsilon: delta-compatible judge-safety hardening (not yet re-scored)
+
+`v03_epsilon` is not a new policy experiment anymore. It is now the safer
+deployment wrapper for the current `v03_delta` logic.
+
+What changed compared with `v03_delta`:
+
+- **Continuation microbatching** — `batch_score_continuations` in
+  `src/extract.py` no longer sends the full continuation-expanded extraction
+  wave to vLLM at once. It now chunks requests and merges scores back into the
+  exact same per-question label-score structure.
+- **Safer default runner** — `src/v03_epsilon.py` wraps the current
+  `run_v02_gamma(...)` / `v03_delta` behavior but defaults
+  `EXTRACT_CONTINUATION_CHUNK_SIZE=32` and writes epsilon-named outputs/traces.
+- **Duplicate vote canonicalization fix after shuffle** — in Wave 2 SC,
+  duplicate-option canonicalization now happens in original-label space after
+  unshuffling, which is the safer behavior for exact duplicate answer texts.
+
+What did **not** change:
+
+- Router policy
+- SC policy
+- Margin math
+- Guided-choice scoring logic
+- Public-set best score record (`v03_delta` remains the best scored run at 87.04%)
+
+Current stance:
+
+- Treat `v03_epsilon` as the **judge-safer deployment path** for 16 GB cards.
+- Expect accuracy to be the same or extremely close to `v03_delta`, because the
+  microbatching change preserves the underlying score computation.
+- Runtime is still expected to be much slower than `v03_gamma`; microbatching is
+  a safety fix first, not a throughput win.
+
 ### v03_delta: real margins + duplicate-option repair (score: 87.04%)
 
 `v03_delta` is the current best public-set run.
 
 Run summary:
+
 - Submission: `data/submissions/submission_v03_delta.csv`
 - Trace: `data/traces/trace_v03_delta.jsonl`
 - Routes: safety=7, reading=100, stem=201, knowledge=155
@@ -145,6 +193,7 @@ Run summary:
 - Runtime: 13066.0 s total, 12748.0 s inference loop, 27.53 s/question
 
 Key changes beyond `v03_gamma`:
+
 - **Real continuation-scored margins** — Wave extraction now scores each legal
   answer label directly instead of relying on the broken all-`1.0` margin path.
   This finally activates low-margin KNOWLEDGE SC and true adaptive STEM depth.
@@ -158,6 +207,7 @@ Key changes beyond `v03_gamma`:
   signal.
 
 Tradeoff:
+
 - Accuracy improved meaningfully, but extraction is now much heavier because
   each question is expanded into one continuation-score request per answer
   choice. This increases OOM risk and runtime on smaller / weaker judge-like
@@ -170,6 +220,7 @@ router improvements but changes the compute policy instead of reverting to the
 old broad `n_choices >= 8 -> STEM` route hack.
 
 Key changes:
+
 - **High-choice KNOWLEDGE recovery** — 8+ choice knowledge questions stay on
   the `knowledge` route but receive extra SC / think-mode treatment instead of
   being reclassified as STEM.
@@ -190,6 +241,7 @@ Net result: `v03_gamma` beats both `v02_gamma` (85.31%) and `v03_alpha`
 **Safety detection** — replaced 13 broad `_HARMFUL_TERMS` (generic words like
 "trộm", "vũ khí", "tấn công" that matched historical/encyclopedic content)
 with high-precision two-tier detection:
+
 - `_HARMFUL_INTENT_PHRASES` (26 actionable patterns like "cách hack", "làm thế
   nào để phá hoại", "hiệu quả nhất để")
 - `_HARMFUL_KEYWORDS` (7 specific dangerous terms like "chế tạo bom", "phát tán
@@ -205,6 +257,7 @@ Removed noisy "giá trị". Route counts: stem 216->201, knowledge 141->155.
 **Reading detection** — unchanged (already perfect 100/100).
 
 **Routing confusion matrix (new):**
+
 ```
               knowledge  reading  safety  stem
 knowledge          151        0       0     4    = 155
@@ -212,6 +265,7 @@ reading              0      100       0     0    = 100
 safety               1        0       6     0    =   7
 stem                 2        0       0   199    = 201
 ```
+
 7 mismatches vs true labels (was 13). All 7 mismatched items are currently
 answered correctly by v02_gamma.
 
@@ -237,12 +291,15 @@ multiples request count by `n_choices`. Large fully-batched extraction waves can
 therefore OOM even on a 24 GB card.
 
 Observed failure mode:
+
 - `torch.OutOfMemoryError` / `EngineDeadError` inside `batch_score_continuations`
 - Wave 1 extraction expands to thousands of continuation requests
 - Smaller / weaker GPUs suffer most; this is now the main judge-safety risk
 
-**This is the new #1 engineering blocker.** The intended fix is microbatching
-continuation scoring separately from Wave reasoning batches.
+This blocker is now **partially mitigated in code** via continuation
+microbatching (`src/extract.py`) and the `src/v03_epsilon.py` wrapper, but it
+should still be treated as a deployment risk until a full judge-like 16 GB run
+finishes cleanly.
 
 ### Error breakdown by route
 
@@ -253,12 +310,12 @@ runner.
 
 ### Historical baseline: v02_gamma error breakdown (44 errors / 463 questions)
 
-| Route | Errors | Total | Error Rate | SC fires? | Root cause |
-|---|---|---|---|---|---|
-| knowledge | **26** | 143 | **18.2%** | Never (margin bug) | No SC rescue; biggest leak |
-| stem | 13 | 216 | 6.0% | Always | 3 had correct first_answer broken by SC vote |
-| reading | 5 | 100 | 5.0% | Only 15 reason/purpose | Most reading errors get no SC |
-| safety | 0 | 4 | 0% | Forced answer | Perfect |
+| Route     | Errors       | Total | Error Rate      | SC fires?              | Root cause                                   |
+| --------- | ------------ | ----- | --------------- | ---------------------- | -------------------------------------------- |
+| knowledge | **26** | 143   | **18.2%** | Never (margin bug)     | No SC rescue; biggest leak                   |
+| stem      | 13           | 216   | 6.0%            | Always                 | 3 had correct first_answer broken by SC vote |
+| reading   | 5            | 100   | 5.0%            | Only 15 reason/purpose | Most reading errors get no SC                |
+| safety    | 0            | 4     | 0%              | Forced answer          | Perfect                                      |
 
 ### SC net impact
 
@@ -279,22 +336,18 @@ capability the model lacks, not a prompt tweak. See `reports/eval/persistent_fai
 
 **CRITICAL ORDER: make `v03_delta` safe, then push narrower accuracy gains.**
 
-1. **Microbatch continuation scoring** — keep real margins, but chunk
-   extraction requests so Wave 1 / Wave 2 extraction cannot OOM on 16 GB
-   judge-like GPUs.
-
-2. **Re-run failure analysis on `v03_delta`** — now that margins are real, the
+1. **Re-run failure analysis on `v03_delta` / `v03_epsilon`** — now that margins are real, the
    old `v02_gamma` / `v03_gamma` error mix is stale. Recompute route/path/error
    slices before adding more policy.
-
+2. **Validate full-run 16 GB safety** — microbatching is implemented, but we
+   still need one or more complete judge-like runs to know which chunk size
+   (`32` vs `16`) is the best deployment default.
 3. **Tune extraction throughput separately from reasoning throughput** — the
    continuation-scoring path is much heavier than free reasoning, so it needs
    its own smaller batch cap.
-
 4. **Only then consider extra knowledge heuristics** — elimination prompts,
    broader rescue, or more option-structure rules should come after memory
    safety and fresh error analysis.
-
 5. **Re-check reading SC coverage using `v03_delta` traces** — READING SC now
    fires much more often than in early runs, so any further broadening should be
    driven by fresh `trace_v03_delta.jsonl` error slices rather than the old
@@ -308,10 +361,10 @@ capability the model lacks, not a prompt tweak. See `reports/eval/persistent_fai
 
 ## Docs index
 
-| File | Purpose |
-|---|---|
-| `docs/status.md` | This file — current project state for AI context |
-| `docs/planning_v3.md` | Build spec: segments S0-S8, architecture, invariants |
-| `docs/version_results.md` | Score and runtime log per version |
-| `docs/note_v3.md` | Design rationale and decision log |
-| `docs/research_v3.md` | Evidence map for architectural choices |
+| File                        | Purpose                                              |
+| --------------------------- | ---------------------------------------------------- |
+| `docs/status.md`          | This file — current project state for AI context    |
+| `docs/planning_v3.md`     | Build spec: segments S0-S8, architecture, invariants |
+| `docs/version_results.md` | Score and runtime log per version                    |
+| `docs/note_v3.md`         | Design rationale and decision log                    |
+| `docs/research_v3.md`     | Evidence map for architectural choices               |

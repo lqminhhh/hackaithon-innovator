@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import os
 from typing import Any, Iterable
 
 
@@ -89,6 +90,7 @@ def batch_score_continuations(
     items: list[tuple[str, dict[int, str]]],
     *,
     sampling_params: Any | None = None,
+    chunk_size: int | None = None,
 ) -> list[dict[str, float]]:
     """Score every legal label by its prompt-logprob continuation."""
     scores: list[dict[str, float]] = [
@@ -112,12 +114,16 @@ def batch_score_continuations(
         if sampling_params is not None
         else _continuation_sampling_params(llm)
     )
-    raw_outputs = _raw_generate(llm, requests, params)
+    batch_size = _continuation_chunk_size(chunk_size)
+    for start in range(0, len(requests), batch_size):
+        request_chunk = requests[start : start + batch_size]
+        owner_chunk = owners[start : start + batch_size]
+        raw_outputs = _raw_generate(llm, request_chunk, params)
 
-    for output, (idx, label, token_id) in zip(raw_outputs, owners):
-        logprob = _continuation_logprob(output, token_id)
-        if logprob is not None:
-            scores[idx][label] = logprob
+        for output, (idx, label, token_id) in zip(raw_outputs, owner_chunk):
+            logprob = _continuation_logprob(output, token_id)
+            if logprob is not None:
+                scores[idx][label] = logprob
 
     return scores
 
@@ -214,6 +220,17 @@ def _continuation_sampling_params(llm):
     from vllm import SamplingParams
 
     return SamplingParams(**kwargs)
+
+
+def _continuation_chunk_size(chunk_size: int | None = None) -> int:
+    if chunk_size is not None and chunk_size > 0:
+        return chunk_size
+    raw = os.getenv("EXTRACT_CONTINUATION_CHUNK_SIZE", "128")
+    try:
+        value = int(raw)
+    except ValueError:
+        value = 128
+    return max(value, 1)
 
 
 def _raw_generate(llm, prompts, params):

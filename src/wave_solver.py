@@ -395,13 +395,17 @@ def run_wave2(
         try:
             raw = sc_raw[i]
             original_letter = reverse_map[raw.letter]
+            original_options = {
+                reverse_map.get(shuffled_label, shuffled_label): text
+                for shuffled_label, text in options.items()
+            }
             original_logprobs = {
                 reverse_map.get(shuffled_label, shuffled_label): logprob
                 for shuffled_label, logprob in raw.per_letter_logprob.items()
             }
             qid_choices[qid].append(
                 _canonicalize_choice_for_duplicates(
-                    options,
+                    original_options,
                     ChoiceResult(
                         letter=original_letter,
                         margin=raw.margin,

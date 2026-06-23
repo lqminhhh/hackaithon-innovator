@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.extract import (
     GuidedChoiceExtractor,
+    batch_score_continuations,
     safe_margin,
     best_label,
     build_choice_prompt,
@@ -131,6 +132,22 @@ def test_guided_choice_extractor_supports_eleven_choices():
     assert set(result.per_letter_logprob) == set(labels)
     assert llm.calls[0]["params"].kwargs["prompt_logprobs"] == 1
     assert len(llm.calls[0]["prompts"]) == 11
+
+
+def test_batch_score_continuations_chunks_requests():
+    scores = {"A": -3.0, "B": -0.2, "C": -1.5}
+    llm = _FakeLLM(scores)
+    token_map = {ord(label): label for label in scores}
+
+    results = batch_score_continuations(
+        llm,
+        llm.tokenizer,
+        [("Đáp án: ", token_map), ("Đáp án: ", token_map), ("Đáp án: ", token_map)],
+        chunk_size=4,
+    )
+
+    assert len(llm.calls) == 3
+    assert results == [scores, scores, scores]
 
 
 def test_guided_choice_extractor_requires_logprobs_not_output_text_parsing():
