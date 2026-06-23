@@ -21,8 +21,9 @@ Scored on a private set of ~2000 questions on a 16 GB VRAM GPU.
 **`v03_gamma`** — **85.96%** on the public 463-question set.
 
 > `v03_gamma` keeps the hardened `v03_alpha` router, restores useful compute for
-> hard KNOWLEDGE and READING cases, and adds length-safe Wave 2 extraction so
-> long-context SC does not overflow the 4096-token vLLM limit.
+> hard KNOWLEDGE and READING cases, adds length-safe extraction so long-context
+> reasoning does not overflow the 4096-token vLLM limit, and now wraps the
+> shipped runner in a stronger always-emit safety layer.
 >
 > We are choosing `v03_gamma` as the final submission candidate not because the
 > later real-margin idea was wrong, but because the later `v03_delta` /
@@ -43,7 +44,8 @@ Architecture:
    - READING: SC n=3 for reason/purpose questions
    - SAFETY: force refusal label when harmful + refusal option present
 5. Option shuffle de-bias across SC samples
-6. Checkpoint per wave; atexit writes submission on crash
+6. Checkpoint per wave; fallback-prefilled output plus atomic always-emit on
+   exception or signal
 
 ## Score progression
 

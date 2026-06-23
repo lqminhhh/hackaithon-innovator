@@ -8,7 +8,8 @@ Key traits of the final submission path:
 - STEM always runs SC, never skipped.
 - Route-aware compute recovery keeps hard KNOWLEDGE / READING cases from falling
   back to the cheapest direct path.
-- Per-wave checkpointing plus atexit emergency write preserves outputs on crash.
+- Per-wave checkpointing plus always-emit best-effort output preserves results
+  on exception or kill signal.
 - `--safe-mode` constrains vLLM for 16 GB judge-like cards.
 """
 
@@ -17,6 +18,8 @@ from __future__ import annotations
 import argparse
 import atexit
 import json
+import os
+import signal
 import sys
 import time
 from collections import Counter
@@ -25,7 +28,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.config import SAFE_GPU_MEM_UTIL, SAFE_MAX_MODEL_LEN, SAFE_MAX_NUM_SEQS
+from src.config import FALLBACK, SAFE_GPU_MEM_UTIL, SAFE_MAX_MODEL_LEN, SAFE_MAX_NUM_SEQS
 from src.sc_policy import (
     GAMMA_GPU_MEM_UTIL,
     GAMMA_MAX_MODEL_LEN,
@@ -136,10 +139,11 @@ def run_v03_gamma(
     max_model_len: int | None = None,
     max_num_seqs: int | None = None,
     adaptive_sc: bool = True,
+    install_handlers: bool = True,
 ) -> None:
     """Run the v03_gamma wave-batched pipeline."""
     from src.data_loader import load_questions
-    from src.parser import parse_question
+    from src.parser import ParsedQuestion, parse_question
     from src.wave_solver import (
         finalize_answers,
         path_counts,
@@ -163,73 +167,127 @@ def run_v03_gamma(
         chosen_max_len = chosen_max_len if chosen_max_len is not None else GAMMA_MAX_MODEL_LEN
         chosen_max_seqs = chosen_max_seqs if chosen_max_seqs is not None else 16
 
-    agent = _load_agent(
-        model_id=model_id,
-        gpu_memory_utilization=chosen_gpu_util,
-        max_model_len=chosen_max_len,
-        max_num_seqs=chosen_max_seqs,
-        t_start=t_start,
-    )
-
     questions = load_questions(input_path)
     if limit is not None:
         questions = questions[:limit]
-    parsed_list = [parse_question(q) for q in questions]
+    parsed_list: list[ParsedQuestion] = []
+    for question in questions:
+        try:
+            parsed_list.append(parse_question(question))
+        except Exception as exc:
+            qid = str(question.get("qid", question.get("id", "")))
+            print(f"[v03_gamma] qid={qid} parse failed -> FALLBACK shape: {exc}", flush=True)
+            options = question.get("options")
+            if not isinstance(options, dict) or not options:
+                options = {"A": ""}
+            raw_question = str(question.get("question", ""))
+            parsed_list.append(
+                ParsedQuestion(
+                    qid=qid,
+                    original_question=raw_question,
+                    query=raw_question,
+                    context=None,
+                    options=options,
+                    refusal_labels=(),
+                    n_choices=len(options),
+                    has_context=False,
+                    is_quantitative=False,
+                    is_legal=False,
+                    has_refusal_choice=False,
+                    is_harmful=False,
+                )
+            )
     print(f"Processing {len(parsed_list)} questions (v03_gamma)...", flush=True)
 
     output_path_obj = Path(output_path)
     ckpt_path = output_path_obj.with_suffix(".ckpt")
+    ckpt_answers = _load_ckpt(ckpt_path)
+    restored_qids = set(ckpt_answers)
+    prefilled_answers = {parsed.qid: FALLBACK for parsed in parsed_list}
+    prefilled_answers.update(ckpt_answers)
     state: dict[str, Any] = {
-        "answers": _load_ckpt(ckpt_path),
+        "answers": prefilled_answers,
         "parsed_list": parsed_list,
         "output_path": output_path,
     }
 
     def _emergency_write() -> None:
         try:
-            write_results(state["answers"], state["parsed_list"], state["output_path"])
+            _write_results_atomic(state["answers"], state["parsed_list"], state["output_path"])
         except Exception:
             pass
 
-    atexit.register(_emergency_write)
+    cleanup = _install_always_emit(_emergency_write) if install_handlers else (lambda: None)
 
     run_start = time.time()
-
-    print("Wave 1: batching all first passes...", flush=True)
-    wave1 = run_wave1(agent, parsed_list, set(state["answers"]))
-    state["answers"].update({r.qid: r.answer for r in wave1.values()})
-    _save_ckpt(ckpt_path, state["answers"])
-    print(f"Wave 1 complete ({len(wave1)} items).", flush=True)
-
-    print("Wave 2: batching all escalations...", flush=True)
-    wave2 = run_wave2(agent, parsed_list, wave1, adaptive_sc=adaptive_sc)
-    state["answers"].update({qid: w2.answer for qid, w2 in wave2.items()})
-    _save_ckpt(ckpt_path, state["answers"])
-    print(f"Wave 2 complete ({len(wave2)} escalated).", flush=True)
-
-    final = finalize_answers(parsed_list, wave1, wave2, state["answers"])
-    write_results(final, parsed_list, output_path)
-    write_traces(trace_output, parsed_list, wave1, wave2, final)
+    wave1: dict[str, Any] = {}
+    wave2: dict[str, Any] = {}
+    failed = False
+    succeeded = False
 
     try:
-        ckpt_path.unlink(missing_ok=True)
-    except Exception:
-        pass
+        agent = _load_agent(
+            model_id=model_id,
+            gpu_memory_utilization=chosen_gpu_util,
+            max_model_len=chosen_max_len,
+            max_num_seqs=chosen_max_seqs,
+            t_start=t_start,
+        )
 
-    route_counts: Counter[str] = Counter(r.route for r in wave1.values())
-    path_counts_summary = path_counts(parsed_list, wave1, wave2)
+        print("Wave 1: batching all first passes...", flush=True)
+        wave1 = run_wave1(agent, parsed_list, restored_qids)
+        state["answers"].update({r.qid: r.answer for r in wave1.values()})
+        _save_ckpt(ckpt_path, state["answers"])
+        print(f"Wave 1 complete ({len(wave1)} items).", flush=True)
 
-    total = time.time() - t_start
-    infer = time.time() - run_start
-    n = max(len(parsed_list), 1)
-    print(f"Written {len(final)} predictions to {output_path}", flush=True)
-    print(f"Route counts: {dict(route_counts)}", flush=True)
-    print(f"Path counts:  {dict(path_counts_summary)}", flush=True)
-    print(
-        f"Total time: {total:.1f}s "
-        f"(inference loop: {infer:.1f}s, {infer / n:.2f}s/question)",
-        flush=True,
-    )
+        print("Wave 2: batching all escalations...", flush=True)
+        wave2 = run_wave2(agent, parsed_list, wave1, adaptive_sc=adaptive_sc)
+        state["answers"].update({qid: w2.answer for qid, w2 in wave2.items()})
+        _save_ckpt(ckpt_path, state["answers"])
+        print(f"Wave 2 complete ({len(wave2)} escalated).", flush=True)
+
+        final = finalize_answers(parsed_list, wave1, wave2, state["answers"])
+        state["answers"].update(final)
+        _write_results_atomic(final, parsed_list, output_path)
+        write_traces(trace_output, parsed_list, wave1, wave2, final)
+
+        try:
+            ckpt_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        succeeded = True
+
+        route_counts: Counter[str] = Counter(r.route for r in wave1.values())
+        path_counts_summary = path_counts(parsed_list, wave1, wave2)
+
+        total = time.time() - t_start
+        infer = time.time() - run_start
+        n = max(len(parsed_list), 1)
+        print(f"Written {len(final)} predictions to {output_path}", flush=True)
+        print(f"Route counts: {dict(route_counts)}", flush=True)
+        print(f"Path counts:  {dict(path_counts_summary)}", flush=True)
+        print(
+            f"Total time: {total:.1f}s "
+            f"(inference loop: {infer:.1f}s, {infer / n:.2f}s/question)",
+            flush=True,
+        )
+    except Exception as exc:
+        failed = True
+        print(f"[v03_gamma] run degraded to checkpoint/fallback output: {exc}", flush=True)
+    finally:
+        if not succeeded:
+            try:
+                _save_ckpt(ckpt_path, state["answers"])
+            except Exception:
+                pass
+        _emergency_write()
+        cleanup()
+        if failed:
+            print(
+                f"[v03_gamma] wrote best-effort submission to {output_path} "
+                f"using checkpointed/fallback answers.",
+                flush=True,
+            )
 
 
 def _save_ckpt(path: Path, answers: dict[str, str]) -> None:
@@ -245,6 +303,47 @@ def _load_ckpt(path: Path) -> dict[str, str]:
         except Exception:
             return {}
     return {}
+
+
+def _write_results_atomic(answers: dict[str, str], parsed_list: list[Any], output_path: str) -> None:
+    from src.wave_solver import write_results
+
+    output_path_obj = Path(output_path)
+    output_path_obj.parent.mkdir(parents=True, exist_ok=True)
+    tmp = output_path_obj.with_name(output_path_obj.name + ".tmp")
+    write_results(answers, parsed_list, str(tmp))
+    os.replace(tmp, output_path_obj)
+
+
+def _install_always_emit(emitter) -> Any:
+    def _safe_emit() -> None:
+        try:
+            emitter()
+        except Exception:
+            pass
+
+    def _signal_handler(_signum, _frame) -> None:
+        _safe_emit()
+        os._exit(0)
+
+    atexit.register(_safe_emit)
+    previous: dict[int, Any] = {}
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            previous[sig] = signal.getsignal(sig)
+            signal.signal(sig, _signal_handler)
+        except (ValueError, OSError):
+            pass
+
+    def _cleanup() -> None:
+        atexit.unregister(_safe_emit)
+        for sig, handler in previous.items():
+            try:
+                signal.signal(sig, handler)
+            except (ValueError, OSError, TypeError):
+                pass
+
+    return _cleanup
 
 
 def _load_agent(

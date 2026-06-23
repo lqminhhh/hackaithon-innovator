@@ -92,7 +92,7 @@ The final path also includes:
 - option shuffling across SC samples
 - duplicate-option-safe vote remapping
 - length-safe extraction prompts
-- checkpointing plus emergency write behavior
+- checkpointing plus always-emit emergency write behavior
 
 ## Why `v03_gamma` Is the Final Branch
 
@@ -241,9 +241,11 @@ The official container contract should still be treated as
 The final runner is designed to avoid invalid submissions:
 
 - output is always written in `qid,answer` format
+- fallback answers are prefilled before inference starts
 - answers are normalized to valid choice labels
 - checkpointing reduces the chance of losing progress
-- emergency write logic helps preserve output on failure
+- atomic output writing helps avoid partial-file corruption
+- signal and exception handlers emit a best-effort complete submission on failure
 
 This does not mean the run is mathematically impossible to fail, but the code
 is intentionally shaped around completion reliability.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import json
 import sys
 from pathlib import Path
 
@@ -43,3 +45,69 @@ def test_run_sh_targets_v03_gamma_safe_mode():
 def test_v03_gamma_exports_main_runner():
     assert callable(v03_gamma.main)
     assert callable(v03_gamma.run_v03_gamma)
+
+
+def test_v03_gamma_writes_complete_fallback_submission_on_failure(tmp_path, monkeypatch):
+    input_path = tmp_path / "input.json"
+    output_path = tmp_path / "pred.csv"
+    trace_path = tmp_path / "trace.jsonl"
+    input_path.write_text(
+        json.dumps(
+            [
+                {"qid": "q1", "question": "2 + 2 = ?", "choices": ["3", "4"]},
+                {"qid": "q2", "question": "Thủ đô Việt Nam là?", "choices": ["Hà Nội", "Huế"]},
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(v03_gamma, "_load_agent", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    v03_gamma.run_v03_gamma(
+        input_path=str(input_path),
+        output_path=str(output_path),
+        trace_output=str(trace_path),
+        install_handlers=False,
+    )
+
+    assert output_path.exists()
+    with output_path.open(encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    assert rows == [
+        {"qid": "q1", "answer": "A"},
+        {"qid": "q2", "answer": "A"},
+    ]
+
+
+def test_v03_gamma_preserves_checkpoint_answers_on_failure(tmp_path, monkeypatch):
+    input_path = tmp_path / "input.json"
+    output_path = tmp_path / "pred.csv"
+    trace_path = tmp_path / "trace.jsonl"
+    input_path.write_text(
+        json.dumps(
+            [
+                {"qid": "q1", "question": "2 + 2 = ?", "choices": ["3", "4"]},
+                {"qid": "q2", "question": "Thủ đô Việt Nam là?", "choices": ["Hà Nội", "Huế"]},
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    output_path.with_suffix(".ckpt").write_text(json.dumps({"q1": "B"}), encoding="utf-8")
+
+    monkeypatch.setattr(v03_gamma, "_load_agent", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+
+    v03_gamma.run_v03_gamma(
+        input_path=str(input_path),
+        output_path=str(output_path),
+        trace_output=str(trace_path),
+        install_handlers=False,
+    )
+
+    with output_path.open(encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    assert rows == [
+        {"qid": "q1", "answer": "B"},
+        {"qid": "q2", "answer": "A"},
+    ]
