@@ -8,17 +8,17 @@ This repository is organized around a single final submission path:
 
 ## Submission Snapshot
 
-| Item | Value |
-| --- | --- |
-| Team name | `Cow` |
-| Team members | `Minh Le, Uyen Nguyen, Viet Nguyen` |
-| School / organization | `Denison University, The Ohio State University` |
-| GitHub repository | `https://github.com/lqminhhh/hackaithon-innovator/tree/final` |
-| Docker Hub image | |
-| Final runner | `src/v03_gamma.py` |
-| Primary model | `Qwen/Qwen3.5-4B` |
-| Inference mode | Offline, one-model only |
-| Target hardware | 16 GB VRAM |
+| Item                  | Value                                                           |
+| --------------------- | --------------------------------------------------------------- |
+| Team name             | `Cow`                                                         |
+| Team members          | `Minh Le, Uyen Nguyen, Viet Nguyen`                           |
+| School / organization | `Denison University, The Ohio State University`               |
+| GitHub repository     | `https://github.com/lqminhhh/hackaithon-innovator/tree/final` |
+| Docker Hub image      |                                                                 |
+| Final runner          | `src/v03_gamma.py`                                            |
+| Primary model         | `Qwen/Qwen3.5-4B`                                             |
+| Inference mode        | Offline, one-model only                                         |
+| Target hardware       | 16 GB VRAM                                                      |
 
 ## What This Submission Does
 
@@ -115,12 +115,12 @@ This is an efficiency-first final branch, not a fallback branch.
 
 Public-set results tracked in this repository:
 
-| Version | Score | Runtime |
-| --- | --- | --- |
-| `v02_gamma` | 85.31% | 12.77 s/question |
-| `v03_alpha` | 84.23% | 3.87 s/question |
-| `v03_gamma` | **85.96%** | 7.98 s/question |
-| `v03_delta` | 87.04% | 27.53 s/question |
+| Version       | Score            | Runtime          |
+| ------------- | ---------------- | ---------------- |
+| `v02_gamma` | 85.31%           | 12.77 s/question |
+| `v03_alpha` | 84.23%           | 3.87 s/question  |
+| `v03_gamma` | **85.96%** | 7.98 s/question  |
+| `v03_delta` | 87.04%           | 27.53 s/question |
 
 For the final submission, we prefer `v03_gamma` over `v03_delta` because judge
 reliability matters more than squeezing out a small public-set gain with a much
