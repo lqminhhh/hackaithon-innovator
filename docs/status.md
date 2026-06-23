@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-06-21. This file gives AI agents fast context on where
+> Last updated: 2026-06-23. This file gives AI agents fast context on where
 > the project stands. Read this before touching any code.
 
 ## What this project is
@@ -16,20 +16,29 @@ Scored on a private set of ~2000 questions on a 16 GB VRAM GPU.
 - No embedding model, reranker, RAG, or second LLM
 - Target hardware: 16 GB VRAM (unknown judge card, may have desktop/browser overhead)
 
-## Current best runner
+## Current final runner
 
 **`v03_gamma`** — **85.96%** on the public 463-question set.
 
 > `v03_gamma` keeps the hardened `v03_alpha` router, restores useful compute for
 > hard KNOWLEDGE and READING cases, and adds length-safe Wave 2 extraction so
 > long-context SC does not overflow the 4096-token vLLM limit.
+>
+> We are choosing `v03_gamma` as the final submission candidate not because the
+> later real-margin idea was wrong, but because the later `v03_delta` /
+> `v03_epsilon` experiments were much heavier operationally: about 4x slower on
+> the public run and still OOM-prone on 16 GB VRAM. On a private set of ~2000
+> questions, reliability matters more than squeezing out the last public-set
+> accuracy point.
 
 Architecture:
 1. Parse input JSON/CSV via `src/parser.py` + `src/data_loader.py`
 2. Route each question deterministically via `src/router.py` (READING / STEM / SAFETY / KNOWLEDGE)
 3. Two-pass guided-choice: reason freely, then constrain to a valid letter via `src/batch_extract.py`
 4. Wave-batched self-consistency escalation via `src/wave_solver.py` + `src/sc_policy.py`:
-   - STEM: always SC, adaptive depth n=3 (high margin) or n=7 (low margin)
+   - STEM: always SC; adaptive depth exists in the design, but in practice `v03_gamma`
+     behaves mostly as a route-driven extra-compute path because the cheap margin
+     proxy is not a faithful per-label confidence signal
    - KNOWLEDGE: SC n=5 when margin < 0.20
    - READING: SC n=3 for reason/purpose questions
    - SAFETY: force refusal label when harmful + refusal option present
@@ -45,7 +54,9 @@ Architecture:
 | v02_beta | `src/v02_beta.py` | 80.13% | 39.77 | |
 | v02_gamma | `src/v02_gamma.py` | 85.31% | 12.77 | Original wave-batched best |
 | v03_alpha | `src/v02_gamma.py` + new parser | 84.23% | 3.87 | Router regression; margin bug makes KNOWLEDGE SC dead |
-| v03_gamma | `src/v02_gamma.py` + hardened parser + compute/context fixes | **85.96%** | - | Current best |
+| v03_gamma | `src/v02_gamma.py` + hardened parser + compute/context fixes | **85.96%** | 7.98 | Final submission candidate; best speed/reliability tradeoff |
+| v03_delta | later experimental branch | **87.04%** | 27.53 | Higher public accuracy, but ~4x slower and not judge-safe on 16 GB |
+| v03_epsilon | later experimental branch | pending final score | similar to delta | Delta-compatible safety attempt; still hit OOM in late Wave 2 on 16 GB |
 
 Full details: `docs/version_results.md`
 
@@ -68,7 +79,7 @@ These settings are in `src/config.py`, `src/sc_policy.py`, and `configs/pipeline
 - `configs/pipeline_config.yaml` — vLLM settings, runner config, quantisation settings
 
 ### Runners (entry points)
-- `src/v02_gamma.py` — current best, wave-batched (the one to use)
+- `src/v02_gamma.py` — current final runner, wave-batched (the one to use)
 - `src/run.py` — S7 never-crash sequential runner with checkpoint/resume/always-emit
 - `src/v01_baseline.py`, `src/v02_alpha.py`, `src/v02_beta.py` — older versions, kept for eval comparison
 - `src/main.py` — S0 fallback runner (writes all FALLBACK, no model)
@@ -129,6 +140,33 @@ These exist in the repo for historical/analysis purposes but are banned by compe
 
 ## Recent changes (this session)
 
+### Final choice: why `v03_gamma` over `v03_delta` / `v03_epsilon`
+
+Later experiments after `v03_gamma` validated the original design idea:
+**real continuation-scored margins do help accuracy**. On the public set, that
+work reached `87.04%` in `v03_delta`.
+
+However, we are **not** choosing that branch as the final runner.
+
+Why:
+- **Runtime blew up** — the real-margin extraction path expanded each question
+  into one continuation-score request per legal answer label, pushing runtime to
+  about **27.53 s/question**, versus about **7.98 s/question** for `v03_gamma`.
+- **OOM risk remained real on 16 GB cards** — even after later safety work,
+  the delta-compatible path still ran into OOM during late Wave 2 on
+  judge-like hardware.
+- **Private-set risk is multiplicative** — the final evaluation set is ~2000
+  questions, so a branch that is already near the edge on 463 public questions
+  is not the conservative submission choice.
+
+How to frame `v03_gamma` correctly:
+- `v03_gamma` is **not a wrong design**; it is a faster, cheaper approximation
+  of the same broad route-aware compute-allocation idea.
+- The later delta work showed that exact margins can improve the policy, but
+  that exact version is substantially heavier and less reliable.
+- So `v03_gamma` should be described as the **final efficiency-first,
+  judge-safer operating point**, not as a failed or broken system.
+
 ### v03_gamma: hardened router + targeted compute recovery (score: 85.96%)
 
 `v03_gamma` is the current best public-set run. It keeps the `v03_alpha`
@@ -150,6 +188,14 @@ Key changes:
 
 Net result: `v03_gamma` beats both `v02_gamma` (85.31%) and `v03_alpha`
 (84.23%) on the public set while preserving the cleaner v3 router.
+
+Important framing:
+- `v03_gamma` still spends extra compute on STEM through route-based SC.
+- What it does **not** have is a fully faithful per-label margin like the later
+  delta experiment. In practice, gamma behaves more like a fast confidence pass
+  plus route-aware escalation than a true margin-calibrated adaptive system.
+- That was acceptable for the final branch because the exact-margin alternative
+  became too slow and too memory-fragile for judge deployment.
 
 ### v03_alpha: Router hardened for 2000-question private set (score: 84.23%)
 
@@ -195,20 +241,23 @@ of hardcoded `"votes": []`. Existing traces still have empty votes (pre-fix).
 
 ## Known bugs and accuracy blockers
 
-### BUG: All margins are 1.0 (broken margin computation)
+### LIMITATION: gamma margins are saturated (`~1.0`) in practice
 
-Every single question in v02_gamma traces has `margin=1.0` and `votes=[]`.
-The logprob margin extraction in the wave pipeline (`src/batch_extract.py` /
-`src/extract.py`) is returning 1.0 for everything. This means:
+In `v03_gamma`, the margin signal used by the wave pipeline is not a faithful
+continuation-scored per-label margin. In practice many traces show
+`margin=1.0`, which means:
 
 - **KNOWLEDGE SC never fires** — the `MARGIN_LOW_BY_ROUTE["KNOWLEDGE"] = 0.20`
   gate never triggers because margin is always 1.0 > 0.20.
 - **Adaptive STEM SC depth never adapts** — every STEM item looks "high margin"
   and gets n=3 instead of n=7 when it should be uncertain.
-- The entire margin-based adaptive system is flying blind.
+- The system is therefore better understood as **route-driven compute
+  allocation with a lightweight confidence proxy**, not as a fully calibrated
+  adaptive-margin design.
 
-**This is the #1 blocker.** Fixing margin computation would auto-activate
-KNOWLEDGE SC for uncertain items, covering the biggest error bucket (26 errors).
+This limitation is real, but we are accepting it in the final branch because
+the exact-margin fix was operationally too expensive for the 16 GB / 2000-question
+submission target.
 
 ### Error breakdown by route (v02_gamma, 44 errors / 463 questions)
 
