@@ -1,5 +1,7 @@
 # VietMind MCQ
 
+![alt text](/assets/image.png)
+
 #### _Read this in Vietnamese_ <kbd><a href="../../README.md"><img title="Tiếng Việt" alt="Tiếng Việt" src="https://cdn.jsdelivr.net/gh/hampusborgos/country-flags@main/svg/vn.svg" width="22"></a></kbd>
 
 An AI agent for Vietnamese multiple-choice questions, built around adaptive
@@ -10,11 +12,11 @@ VietMind MCQ is Team Cow's 🐄 final competition build. It runs fully inside th
 submission container, uses one local LLM, reads the test file from `/data`, and
 writes `/output/pred.csv`.
 
-## Architecture
+## I. Architecture
 
 ![VietMind MCQ architecture](../../assets/architecture/vietmind_architecture.png)
 
-## Submission Checklist
+## II. Submission Checklist
 
 | Requirement | Our Submission |
 | --- | --- |
@@ -33,7 +35,7 @@ writes `/output/pred.csv`.
 | Output columns | `qid,answer` |
 | Target GPU | Recommended NVIDIA RTX/A/L-series or A100, at least 16 GB VRAM |
 
-## What This Does
+## III. What This Does
 
 The pipeline parses Vietnamese multiple-choice questions, routes them into
 question types, runs route-aware reasoning with constrained answer extraction,
@@ -44,7 +46,7 @@ returning a clean submission file.
 The final branch is `v03_gamma`. We chose it because it is the best practical
 balance of public-set accuracy, runtime, and 16 GB VRAM reliability.
 
-## Core Idea
+## IV. Core Idea
 
 VietMind MCQ is built around adaptive reasoning: not every question deserves the
 same amount of computation. Some items are direct knowledge checks, some require
@@ -72,7 +74,7 @@ Each route is treated differently:
 - `SAFETY` questions can use deterministic refusal-option handling when the
   question asks for unsafe behavior
 
-## Results Summary
+## V. Results Summary
 
 | Version | Public Score | Runtime On Our GPU |
 | --- | --- | --- |
@@ -93,12 +95,12 @@ Docker/vLLM execution issues.
 
 Full version notes: [docs/version_results.md](../version_results.md)
 
-## Reports
+## VI. Reports
 
 - Vietnamese report: [docs/report/report_vi.md](../report/report_vi.md)
 - English report: [docs/report/report_en.md](../report/report_en.md)
 
-## Judge Run Instructions
+## VII. Judge Run Instructions
 
 ### Requirements
 
@@ -172,7 +174,7 @@ The container checks input files in this order:
 CSV input may use option columns such as `A,B,C,D,...`; questions with more
 than four choices are supported.
 
-## Developer Run Instructions
+## VIII. Developer Run Instructions
 
 Install dependencies:
 
@@ -205,7 +207,7 @@ Run tests:
 python3.11 -m pytest
 ```
 
-## Frequent Issues
+## IX. Frequent Issues
 
 See [docs/faq.md](../faq.md) for practical setup fixes, including:
 
@@ -216,7 +218,7 @@ See [docs/faq.md](../faq.md) for practical setup fixes, including:
 - `vLLM unavailable`
 - missing input file inside `/data`
 
-## Notes
+## X. Notes
 
 - The final path is offline at inference time.
 - The final path uses one open LLM only: `Qwen/Qwen3.5-4B`, under the 5B
@@ -226,7 +228,7 @@ See [docs/faq.md](../faq.md) for practical setup fixes, including:
 - Runtime settings live in
   [configs/pipeline_config.yaml](../../configs/pipeline_config.yaml).
 
-## Acknowledgements
+## XI. Acknowledgements
 
 Thank you to HackAIthon 2026, Hội Sinh Viên Việt Nam, VSDS, Vietcombank, and
 VNPT AI for creating this competition and giving students a place to build,

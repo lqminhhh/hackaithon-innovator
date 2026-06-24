@@ -1,5 +1,7 @@
 # Báo Cáo Phương Pháp VietMind MCQ
 
+![alt text](/assets/image.png)
+
 | Mục                   | Giá trị                                                                           |
 | ---------------------- | ----------------------------------------------------------------------------------- |
 | Đội thi              | Cow                                                                                 |
@@ -214,7 +216,37 @@ thành bài nộp tệ hơn trong môi trường thật. Quyết định cuối 
 tiên expected score dưới ràng buộc máy chấm, không chỉ public leaderboard
 maximum.
 
-## 10. Bài Nộp Cuối
+## 10. Hạn Chế Và Sẵn Sàng Triển Khai
+
+Hệ thống cuối được thiết kế theo đúng ràng buộc của cuộc thi, nhưng vẫn có
+những hạn chế rõ ràng. Một số câu hỏi kiến thức ngách vẫn vượt quá năng lực ổn
+định của mô hình 4B khi không dùng truy xuất hoặc mô hình lớn hơn. `v03_gamma`
+cũng dùng tín hiệu confidence nhẹ, chưa phải exact real-margin đầy đủ như thử
+nghiệm `v03_delta`, nên quyết định escalation được giữ đơn giản hơn. Self
+consistency giúp tăng độ chính xác ở câu khó, nhưng vẫn làm tăng runtime. Cuối
+cùng, public set nhỏ hơn private set nhiều, nên chúng tôi xem leaderboard là
+bằng chứng quan trọng, không phải một đảm bảo tuyệt đối.
+
+Những hạn chế này cũng là lý do thiết kế cuối được giữ thận trọng. Chúng tôi
+không dùng RAG, fine tuning, API bên ngoài, embedding model, reranker, hoặc LLM
+thứ hai. Điều này giúp hệ thống đúng luật, dễ tái lập hơn, và giảm rủi ro lỗi
+trên mục tiêu 16 GB VRAM.
+
+Hệ thống nộp cuối đã sẵn sàng triển khai theo các tiêu chí sau:
+
+| Mục sẵn sàng | Trạng thái |
+| --- | --- |
+| Docker inference offline | Mô hình và code được đóng gói để chạy trong container mà không cần internet lúc inference. |
+| Một mô hình duy nhất | Chỉ dùng `Qwen/Qwen3.5-4B`. |
+| I/O đúng yêu cầu cuộc thi | Đọc `/data/public_test.csv` hoặc `/data/private_test.csv` và ghi `/output/pred.csv`. |
+| Định dạng output | Luôn ghi hai cột `qid,answer`. |
+| Chống lỗi khi chạy | Có checkpoint, đáp án fallback, atomic write, và cơ chế best effort always emit. |
+| An toàn cho GPU 16 GB | Dùng `--safe-mode` với cấu hình vLLM thận trọng. |
+
+Tóm lại, nguyên tắc vận hành của VietMind MCQ là: nhanh với câu dễ, cẩn trọng
+với câu khó, và bền bỉ khi triển khai ngoại tuyến.
+
+## 11. Bài Nộp Cuối
 
 VietMind MCQ sử dụng `v03_gamma` làm bản nộp cuối.
 
@@ -235,7 +267,7 @@ rủi ro cao, ràng buộc đáp án, và luôn ghi một file nộp hợp lệ.
 suy luận thích ứng, batching, và deployment safety là đóng góp chính của
 VietMind MCQ.
 
-## 11. Lời Cảm Ơn
+## 12. Lời Cảm Ơn
 
 Chúng tôi xin cảm ơn HackAIthon 2026, VSDS, Vietcombank, VNPT AI, ban tổ chức,
 các nhà tài trợ, đội ngũ hỗ trợ kỹ thuật, mentor, và ban giám khảo đã tạo ra một

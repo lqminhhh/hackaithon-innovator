@@ -1,5 +1,7 @@
 # VietMind MCQ Method Report
 
+![alt text](/assets/image.png)
+
 | Field | Value |
 | --- | --- |
 | Team | Cow |
@@ -227,7 +229,37 @@ more accurate on the public set but much slower and less stable can become a
 worse submission in the real environment. Our final choice favors expected
 score under judge constraints, not only public leaderboard maximum.
 
-## 10. Final Submission
+## 10. Limitations And Deployment Readiness
+
+The final system is designed for the contest constraints, but it still has
+clear limitations. Some niche knowledge questions remain beyond the reliable
+capability of a 4B model without retrieval or a larger model. `v03_gamma` also
+uses a lightweight confidence signal rather than the exact real margin explored
+in `v03_delta`, so its escalation decisions are intentionally simpler. Self
+consistency improves difficult questions, but it still increases runtime. Finally,
+the public set is much smaller than the private set, so we treat leaderboard
+results as evidence, not a guarantee.
+
+These limitations are also why the final design stays conservative. We do not
+use RAG, fine tuning, external APIs, embedding models, rerankers, or a second
+LLM. This keeps the system compliant, easier to reproduce, and less likely to
+fail under the 16 GB VRAM target.
+
+The submitted system is deployment ready in the following sense:
+
+| Readiness Item | Status |
+| --- | --- |
+| Offline Docker inference | The model and code are packaged for container execution without runtime internet. |
+| Single model | Uses only `Qwen/Qwen3.5-4B`. |
+| Competition I/O | Reads `/data/public_test.csv` or `/data/private_test.csv` and writes `/output/pred.csv`. |
+| Output format | Always writes `qid,answer`. |
+| Fault tolerance | Uses checkpointing, fallback answers, atomic writes, and best effort always emit behavior. |
+| 16 GB GPU safety | Uses `--safe-mode` with conservative vLLM settings. |
+
+In short, the operating principle is: answer easy questions quickly, reason more
+carefully on risky questions, and remain robust during offline deployment.
+
+## 11. Final Submission
 
 VietMind MCQ ships `v03_gamma`.
 
@@ -248,7 +280,7 @@ high, constrain the answer, and always write a valid submission. That balance of
 adaptive reasoning, batching, and deployment safety is the main contribution of
 VietMind MCQ.
 
-## 11. Acknowledgements
+## 12. Acknowledgements
 
 We would like to thank HackAIthon 2026, VSDS, Vietcombank, VNPT AI, the
 organizers, sponsors, technical supporters, mentors, and judges for creating a
