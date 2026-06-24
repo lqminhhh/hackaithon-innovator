@@ -1,8 +1,6 @@
 # VietMind MCQ
 
-#### _Read this in Vietnamese._
-
-<kbd>[<img title="Tiếng Việt" alt="Tiếng Việt" src="https://cdn.jsdelivr.net/gh/hampusborgos/country-flags@main/svg/vn.svg" width="22">](docs/translations/README_vi.md)</kbd>
+#### _Read this in Vietnamese_ `<kbd>`[`<img title="Tiếng Việt" alt="Tiếng Việt" src="https://cdn.jsdelivr.net/gh/hampusborgos/country-flags@main/svg/vn.svg" width="22">`](docs/translations/README_vi.md)`</kbd>`
 
 An AI agent for Vietnamese multiple-choice questions, built around adaptive
 reasoning for **HackAIthon 2026 - Track C (Innovator)**.
@@ -73,12 +71,12 @@ Each route is treated differently:
 
 ## Results Summary
 
-| Version       | Public Score | Runtime On Our GPU |
-| ------------- | ------------ | ------------------ |
-| `v02_gamma`  | 85.31%       | 12.77 s/question   |
-| `v03_alpha`  | 84.23%       | 3.87 s/question    |
-| `v03_gamma`  | **85.96%**   | 7.98 s/question    |
-| `v03_delta`  | 87.04%       | 27.53 s/question   |
+| Version       | Public Score     | Runtime On Our GPU |
+| ------------- | ---------------- | ------------------ |
+| `v02_gamma` | 85.31%           | 12.77 s/question   |
+| `v03_alpha` | 84.23%           | 3.87 s/question    |
+| `v03_gamma` | **85.96%** | 7.98 s/question    |
+| `v03_delta` | 87.04%           | 27.53 s/question   |
 
 `v03_delta` scored higher on the public set, but it was much heavier and still
 showed OOM risk on 16 GB competition-like runs. The submitted branch is therefore
