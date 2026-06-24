@@ -33,7 +33,7 @@ COPY run.sh ./
 RUN chmod +x run.sh
 
 # Bake the single v3 model into the image so inference needs no internet.
-# The image runs on CUDA 12.4; host machines need a compatible NVIDIA driver.
+# The image runs on CUDA 12.9.1; host machines need a compatible NVIDIA driver.
 # (Switch to an AWQ repo here if you decide to ship 4-bit for a small/unknown card.)
 RUN python -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen3.5-4B')"
 

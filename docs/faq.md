@@ -75,12 +75,33 @@ Likely causes:
 Quick check:
 
 ```bash
-docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+docker run --rm --gpus all nvidia/cuda:12.9.1-base-ubuntu22.04 nvidia-smi
 ```
 
 If this fails, the GPU container runtime is not ready yet.
 
-## 4. `vLLM unavailable`
+## 4. Not enough disk space to pull or run the image
+
+The Docker image is approximately 16.2 GB. We recommend at least 25 GB free
+disk space so Docker has room for the image, extracted layers, cache, and output
+files.
+
+Check available space:
+
+```bash
+df -h .
+docker system df
+```
+
+If space is low, remove unused Docker data only if it is safe for your machine:
+
+```bash
+docker system prune
+```
+
+Do not run prune if you need to keep unused local images or containers.
+
+## 5. `vLLM unavailable`
 
 This message usually means the fast GPU backend failed to initialize.
 
@@ -93,7 +114,7 @@ Common causes:
 If you are using the official Docker image, prefer debugging the host GPU setup
 first before changing the repository code.
 
-## 5. The container starts but says no input file was found
+## 6. The container starts but says no input file was found
 
 The submission entrypoint expects one of:
 
@@ -110,7 +131,7 @@ Make sure the host mount is correct:
 
 And make sure the file inside `data/` uses one of the names above.
 
-## 6. Where is the output written?
+## 7. Where is the output written?
 
 The submission container writes:
 
