@@ -1,6 +1,6 @@
 # VietMind MCQ
 
-#### _Read this in Vietnamese_ `<kbd>`[`<img title="Tiếng Việt" alt="Tiếng Việt" src="https://cdn.jsdelivr.net/gh/hampusborgos/country-flags@main/svg/vn.svg" width="22">`](docs/translations/README_vi.md)`</kbd>`
+#### _Read this in Vietnamese_ <kbd><a href="docs/translations/README_vi.md"><img title="Tiếng Việt" alt="Tiếng Việt" src="https://cdn.jsdelivr.net/gh/hampusborgos/country-flags@main/svg/vn.svg" width="22"></a></kbd>
 
 An AI agent for Vietnamese multiple-choice questions, built around adaptive
 reasoning for **HackAIthon 2026 - Track C (Innovator)**.
