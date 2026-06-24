@@ -68,7 +68,7 @@ This is an environment setup issue, not a submission-specific requirement.
 
 Likely causes:
 
-- NVIDIA Container Toolkit is not installed
+- the `nvidia-container-toolkit` package is not installed
 - Docker is running, but GPU passthrough is not configured
 - the machine does not expose the NVIDIA GPU to Docker
 
@@ -80,7 +80,60 @@ docker run --rm --gpus all nvidia/cuda:12.9.1-base-ubuntu22.04 nvidia-smi
 
 If this fails, the GPU container runtime is not ready yet.
 
-## 4. Not enough disk space to pull or run the image
+On Linux hosts, make sure the NVIDIA driver works first:
+
+```bash
+nvidia-smi
+```
+
+Then make sure Docker can see the GPU:
+
+```bash
+docker run --rm --gpus all nvidia/cuda:12.9.1-base-ubuntu22.04 nvidia-smi
+```
+
+If host `nvidia-smi` works but Docker `nvidia-smi` fails, the usual missing
+piece is `nvidia-container-toolkit` or Docker's NVIDIA runtime configuration.
+After installing or reconfiguring the toolkit, restart Docker before rerunning
+the preflight check.
+
+## 4. Which GPUs are supported?
+
+Officially supported:
+
+- NVIDIA Ampere or newer CUDA GPUs with at least 16 GB VRAM
+- examples: RTX 3090/4090, RTX 4080 16 GB, RTX A5000/A6000, A100, L4, or
+  similar CUDA capable GPUs
+
+Technically supported but not recommended:
+
+- Tesla T4 16 GB
+
+We ask judges not to use T4 for the official run. T4 can be too slow, too close
+to the memory limit, and more likely to show Docker/vLLM runtime mismatch or
+execution issues. If T4 is the only available GPU, allocate much more runtime
+and run the preflight checks carefully before starting the full private set.
+
+## 5. Why can a 2000 question run take 30 hours or more?
+
+The final runner uses conservative settings because the exact judge GPU is
+unknown. On our tested 16 GB VRAM GPU, a private set around 2000 questions can
+take 30 hours or more, especially when many questions enter Wave 2
+self-consistency.
+
+This does not necessarily mean the container is stuck. Wave 2 is slower because
+it repeats reasoning on harder questions. On 16 GB hardware, batching is also
+more conservative to avoid OOM.
+
+Practical advice:
+
+- allocate at least 30 hours for a 2000 question run on 16 GB VRAM
+- use a GPU with more VRAM if available
+- avoid T4 for official judging
+- keep the output directory mounted so partial/final `pred.csv` writes are
+  preserved
+
+## 6. Not enough disk space to pull or run the image
 
 The Docker image is approximately 16.2 GB. We recommend at least 25 GB free
 disk space so Docker has room for the image, extracted layers, cache, and output
@@ -101,7 +154,7 @@ docker system prune
 
 Do not run prune if you need to keep unused local images or containers.
 
-## 5. `vLLM unavailable`
+## 7. `vLLM unavailable`
 
 This message usually means the fast GPU backend failed to initialize.
 
@@ -110,11 +163,14 @@ Common causes:
 - unsupported or fragile GPU/backend combination
 - incompatible driver/runtime environment
 - broken local Python environment outside Docker
+- missing Docker GPU passthrough because `nvidia-container-toolkit` is not
+  installed or not configured
+- using a technically supported but fragile GPU such as T4
 
 If you are using the official Docker image, prefer debugging the host GPU setup
 first before changing the repository code.
 
-## 6. The container starts but says no input file was found
+## 8. The container starts but says no input file was found
 
 The submission entrypoint expects one of:
 
@@ -131,7 +187,7 @@ Make sure the host mount is correct:
 
 And make sure the file inside `data/` uses one of the names above.
 
-## 7. Where is the output written?
+## 9. Where is the output written?
 
 The submission container writes:
 

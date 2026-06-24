@@ -33,7 +33,7 @@ writes `/output/pred.csv`.
 | Input | `/data/private_test.csv` or `/data/public_test.csv` |
 | Output | `/output/pred.csv` |
 | Output columns | `qid,answer` |
-| Target GPU | Recommended NVIDIA RTX/A/L-series or A100, at least 16 GB VRAM |
+| Target GPU | Officially supported NVIDIA Ampere or newer, at least 16 GB VRAM |
 
 ## III. What This Does
 
@@ -93,25 +93,31 @@ We do not recommend using NVIDIA T4 for official judging because T4 has very
 tight memory margins, much slower inference, and may cause runtime mismatch or
 Docker/vLLM execution issues.
 
+**Important note:** We tested the conservative run path on our 16 GB VRAM GPU.
+For a private set of around 2000 questions, runtime can be **30 hours or more**.
+Please allocate enough wall-clock time, or use a GPU with more VRAM if possible.
+We run conservative defaults because the exact judge GPU is unknown.
+
 Full version notes: [docs/version_results.md](../version_results.md)
 
 ## VI. Reports
 
 - Vietnamese report: [docs/report/report_vi.md](../report/report_vi.md)
 - English report: [docs/report/report_en.md](../report/report_en.md)
+- Presentation slides: [docs/report/presentation_slide.pdf](../report/presentation_slide.pdf)
 
 ## VII. Judge Run Instructions
 
 ### Requirements
 
 - **NVIDIA CUDA GPU** with at least **16 GB** VRAM
-  - Recommended examples: RTX 3090/4090, RTX 4080 16 GB, RTX A5000/A6000,
-    A100, L4, or similar CUDA-capable GPUs
-  - Please do not use NVIDIA T4 for official judging. T4 16 GB can be too slow,
-    too close to the memory limit, or cause Docker/vLLM runtime mismatch or
-    execution failures
+  - Officially supported: NVIDIA Ampere or newer, for example RTX 3090/4090,
+    RTX 4080 16 GB, RTX A5000/A6000, A100, L4, or similar CUDA-capable GPUs
+  - Technically supported but not recommended: Tesla T4 16 GB. Please do not
+    use T4 for official judging because it can be too slow, too close to the
+    memory limit, or cause Docker/vLLM runtime mismatch or execution failures
 - Docker
-- NVIDIA Container Toolkit, so `docker run --gpus all` works
+- The `nvidia-container-toolkit` package, so `docker run --gpus all` works
 - At least 25 GB free disk space recommended for the ~16.2 GB image plus
   extracted layers, cache, and output files
 
