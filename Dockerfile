@@ -1,6 +1,6 @@
 # v3 image: single model (Qwen3.5-4B) on vLLM, offline at run time.
 # No RAG / embedding / reranker models — those were removed in v3 (illegal + measured to hurt).
-FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+FROM nvidia/cuda:12.9.1-devel-ubuntu22.04
 
 # HF_HUB_ENABLE_HF_TRANSFER=0: hf_transfer breaks downloads unless installed (see handoff notes).
 ENV HF_HUB_ENABLE_HF_TRANSFER=0 \
