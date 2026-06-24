@@ -16,22 +16,22 @@ writes `/output/pred.csv`.
 
 ## Submission Checklist
 
-| Requirement    | Our Submission                                          |
-| -------------- | ------------------------------------------------------- |
-| Team           | `Cow` 🐄                                              |
-| Members        | `Minh Le, Uyen Nguyen, Viet Nguyen`                   |
-| Organization   | `Denison University, The Ohio State University`       |
-| Competition    | [HackAIthon 2026](https://hackaithon.vsds.vn/)             |
-| Model          | `Qwen/Qwen3.5-4B`                                     |
-| Model limit    | One open LLM under 5B parameters                        |
-| Inference      | Offline, one model only                                 |
-| Docker image   | `powato/hackaithon-cow:latest`                        |
-| Image size     | ~16.2 GB                                                |
-| Final runner   | `src/v03_gamma.py`                                    |
-| Input          | `/data/private_test.csv` or `/data/public_test.csv` |
-| Output         | `/output/pred.csv`                                    |
-| Output columns | `qid,answer`                                          |
-| Target GPU     | Recommended NVIDIA RTX/A/L-series or A100, at least 16 GB VRAM |
+| Requirement | Our Submission |
+| --- | --- |
+| Team | `Cow` 🐄 |
+| Members | `Minh Le, Uyen Nguyen, Viet Nguyen` |
+| Organization | `Denison University, The Ohio State University` |
+| Competition | [HackAIthon 2026](https://hackaithon.vsds.vn/) |
+| Model | `Qwen/Qwen3.5-4B` |
+| Model limit | One open LLM under 5B parameters |
+| Inference | Offline, one model only |
+| Docker image | `powato/hackaithon-cow:latest` |
+| Image size | ~16.2 GB |
+| Final runner | `src/v03_gamma.py` |
+| Input | `/data/private_test.csv` or `/data/public_test.csv` |
+| Output | `/output/pred.csv` |
+| Output columns | `qid,answer` |
+| Target GPU | Recommended NVIDIA RTX/A/L-series or A100, at least 16 GB VRAM |
 
 ## What This Does
 
@@ -74,12 +74,12 @@ Each route is treated differently:
 
 ## Results Summary
 
-| Version       | Public Score     | Runtime On Our GPU |
-| ------------- | ---------------- | ------------------ |
-| `v02_gamma` | 85.31%           | 12.77 s/question   |
-| `v03_alpha` | 84.23%           | 3.87 s/question    |
-| `v03_gamma` | **85.96%** | 7.98 s/question    |
-| `v03_delta` | 87.04%           | 27.53 s/question   |
+| Version | Public Score | Runtime On Our GPU |
+| --- | --- | --- |
+| `v02_gamma` | 85.31% | 12.77 s/question |
+| `v03_alpha` | 84.23% | 3.87 s/question |
+| `v03_gamma` | **85.96%** | 7.98 s/question |
+| `v03_delta` | 87.04% | 27.53 s/question |
 
 `v03_delta` scored higher on the public set, but it was much heavier and still
 showed OOM risk on 16 GB competition-like runs. The submitted branch is therefore
@@ -219,10 +219,15 @@ See [docs/faq.md](../faq.md) for practical setup fixes, including:
 ## Notes
 
 - The final path is offline at inference time.
-- The final path uses one open LLM only: `Qwen/Qwen3.5-4B`, under the 5B parameter limit.
-- No RAG, embedding model, reranker, semantic-router model, or second LLM is used.
-- Runtime settings live in [configs/pipeline_config.yaml](../../configs/pipeline_config.yaml).
+- The final path uses one open LLM only: `Qwen/Qwen3.5-4B`, under the 5B
+  parameter limit.
+- No RAG, embedding model, reranker, semantic-router model, or second LLM is
+  used.
+- Runtime settings live in
+  [configs/pipeline_config.yaml](../../configs/pipeline_config.yaml).
 
 ## Acknowledgements
 
-Thank you to HackAIthon 2026, Hội Sinh Viên Việt Nam, VSDS, Vietcombank, and VNPT AI for creating this competition and giving students a place to build, test, and learn about AI Agent.
+Thank you to HackAIthon 2026, Hội Sinh Viên Việt Nam, VSDS, Vietcombank, and
+VNPT AI for creating this competition and giving students a place to build,
+test, and learn about AI Agent.
