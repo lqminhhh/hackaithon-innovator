@@ -1,4 +1,4 @@
-# VietMind MCQ
+# VietMind MCQ - HackAIThon 2026
 
 ![alt text](/assets/image.png)
 
