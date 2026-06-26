@@ -202,7 +202,7 @@ score, not just for engineering neatness.
 | Optimization | Effect |
 | --- | --- |
 | Wave batching | Groups first pass and escalation calls so vLLM can use the GPU more efficiently. |
-| Safe mode | Uses conservative vLLM settings for the 32 GB VRAM target. |
+| Safe mode | Uses conservative vLLM settings for the 16 GB VRAM target. |
 | Constrained extraction | Reduces invalid answers and keeps labels inside the legal option set. |
 | Option shuffle voting | Reduces answer position bias during self consistency. |
 | Warmup pass | Primes vLLM kernels to reduce first run latency spikes. |
@@ -254,7 +254,7 @@ The submitted system is deployment ready in the following sense:
 | Competition I/O | Reads `/code/private_test.json` and writes `/code/submission.csv` plus `/code/submission_time.csv`. |
 | Output format | Writes `qid,answer` and `qid,answer,time`. |
 | Fault tolerance | Uses checkpointing, fallback answers, atomic writes, and best effort always emit behavior. |
-| 32 GB GPU safety | Uses `--safe-mode` with conservative vLLM settings. |
+| 16 GB GPU safety | Uses `--safe-mode` with conservative vLLM settings. |
 
 In short, the operating principle is: answer easy questions quickly, reason more
 carefully on risky questions, and remain robust during offline deployment.
@@ -272,7 +272,7 @@ VietMind MCQ ships `v03_gamma`.
 | Inference | Offline, one model only |
 | Input | `/code/private_test.json` |
 | Output | `/code/submission.csv` and `/code/submission_time.csv` |
-| Target GPU | NVIDIA CUDA GPU with at least 32 GB VRAM |
+| Target GPU | NVIDIA CUDA GPU with at least 16 GB VRAM |
 
 Our final design is not simply a prompt. It is an exam taking system around a
 small LLM: parse the problem, identify the route, spend compute where risk is

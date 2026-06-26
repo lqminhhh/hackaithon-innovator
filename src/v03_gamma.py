@@ -10,7 +10,7 @@ Key traits of the final submission path:
   back to the cheapest direct path.
 - Per-wave checkpointing plus always-emit best-effort output preserves results
   on exception or kill signal.
-- `--safe-mode` uses conservative vLLM settings for the final 32 GB target.
+- `--safe-mode` uses conservative vLLM settings for the final 16 GB target.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ def add_common_args(parser: argparse.ArgumentParser, *, default_output: str, def
         "--safe-mode",
         action="store_true",
         default=False,
-        help="Use conservative vLLM settings for the final 32GB VRAM target.",
+        help="Use conservative vLLM settings for the final 16GB VRAM target.",
     )
     parser.add_argument(
         "--gpu-memory-utilization",

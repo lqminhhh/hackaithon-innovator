@@ -101,21 +101,22 @@ the preflight check.
 
 Officially supported:
 
-- NVIDIA Ampere or newer CUDA GPUs with at least 32 GB VRAM
-- examples: RTX 3090/4090, RTX A5000/A6000, A100, L40/L40S, or
-  similar CUDA capable GPUs
+- NVIDIA Ampere or newer CUDA GPUs with at least 16 GB VRAM
+- examples: RTX 4080 16 GB, RTX 3090/4090, RTX A4000/A5000/A6000,
+  A100, L4/L40/L40S, or similar CUDA capable GPUs
 
 Technically supported but not recommended:
 
 - Tesla T4 16 GB
 
-We ask judges not to use T4 for the official run. T4 does not meet the final
-32 GB VRAM target, can be too slow, too close to the memory limit, and more
-likely to show Docker/vLLM runtime mismatch or execution issues.
+We ask judges not to use T4 for the official run if another GPU is available.
+T4 is technically a 16 GB CUDA GPU, but it can be too slow, too close to the
+memory limit, and more likely to show Docker/vLLM runtime mismatch or execution
+issues.
 
 ## 5. Why can a 2000 question run still take many hours?
 
-The final runner uses conservative settings for the 32 GB target. A private set
+The final runner uses conservative settings for the 16 GB target. A private set
 around 2000 questions can still take many hours, especially when many questions
 enter Wave 2 self-consistency.
 
@@ -125,8 +126,8 @@ it repeats reasoning on harder questions.
 Practical advice:
 
 - allocate enough wall-clock time for a 2000 question run
-- use a 32 GB or larger Ampere-or-newer GPU
-- avoid T4 or any GPU below 32 GB VRAM for official judging
+- use a 16 GB or larger Ampere-or-newer GPU
+- avoid T4 when a stronger 16 GB+ GPU is available
 - keep the output path available so partial/final `submission.csv` writes are
   preserved
 

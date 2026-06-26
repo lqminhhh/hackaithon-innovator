@@ -34,7 +34,7 @@ submission container, uses one local LLM, reads the test file from
 | Official input | `/code/private_test.json` |
 | Official output | `/code/submission.csv` and `/code/submission_time.csv` |
 | Output columns | `submission.csv`: `qid,answer`; `submission_time.csv`: `qid,answer,time` |
-| Target GPU | Officially supported NVIDIA Ampere or newer, at least 32 GB VRAM |
+| Target GPU | NVIDIA CUDA GPU with at least 16 GB VRAM |
 
 ## III. What This Does
 
@@ -45,7 +45,7 @@ tries to spend extra thinking where it helps, then stays disciplined about
 returning a clean submission file.
 
 The final branch is `v03_gamma`. We chose it because it is the best practical
-balance of public-set accuracy, runtime, and 32 GB VRAM reliability.
+balance of public-set accuracy, runtime, and 16 GB VRAM reliability.
 
 ## IV. Core Idea
 
@@ -94,11 +94,10 @@ We do not recommend using NVIDIA T4 for official judging because T4 has very
 tight memory margins, much slower inference, and may cause runtime mismatch or
 Docker/vLLM execution issues.
 
-**Important note:** The final submission settings are now adjusted for a 32 GB
-VRAM GPU. For a private set of around 2000 questions, runtime can still take
-many hours because Wave 2 uses self-consistency for harder questions. Please
-allocate enough wall-clock time and avoid GPUs below 32 GB VRAM for official
-judging.
+**Important note:** The final submission settings are now adjusted for a 16 GB
+VRAM GPU. For a private set of around 2000 questions, runtime can be very long,
+especially on T4 or slower 16 GB GPUs. Please allocate enough wall-clock time;
+if possible, use a GPU with more VRAM to reduce risk and runtime.
 
 Full version notes: [docs/version_results.md](../version_results.md)
 
@@ -112,12 +111,13 @@ Full version notes: [docs/version_results.md](../version_results.md)
 
 ### Requirements
 
-- **NVIDIA CUDA GPU** with at least **32 GB** VRAM
+- **NVIDIA CUDA GPU** with at least **16 GB** VRAM
   - Officially supported: NVIDIA Ampere or newer, for example RTX 3090/4090,
-    RTX A5000/A6000, A100, L40/L40S, or similar CUDA-capable GPUs
+    RTX 4080 16 GB, RTX A4000/A5000/A6000, A100, L4/L40/L40S,
+    or similar CUDA-capable GPUs
   - Technically supported but not recommended: Tesla T4 16 GB. Please do not
-    use T4 for official judging because it does not meet the 32 GB VRAM target,
-    can be too slow, too close to the memory limit, or cause Docker/vLLM runtime
+    use T4 for official judging if another GPU is available, because it can be
+    too slow, too close to the memory limit, or cause Docker/vLLM runtime
     mismatch or execution failures
 - Docker
 - The `nvidia-container-toolkit` package, so `docker run --gpus all` works

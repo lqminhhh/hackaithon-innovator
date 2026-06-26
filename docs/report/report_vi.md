@@ -189,7 +189,7 @@ là phần kỹ thuật phụ.
 | Tối ưu                           | Tác dụng                                                                          |
 | ---------------------------------- | ----------------------------------------------------------------------------------- |
 | Wave batching                      | Gom first pass và escalation calls để vLLM dùng GPU hiệu quả hơn.            |
-| Safe mode                          | Dùng thiết lập vLLM thận trọng cho mục tiêu 32 GB VRAM.                       |
+| Safe mode                          | Dùng thiết lập vLLM thận trọng cho mục tiêu 16 GB VRAM.                       |
 | Constrained extraction             | Giảm đáp án không hợp lệ và giữ nhãn trong tập lựa chọn hợp lệ.      |
 | Option shuffle voting              | Giảm thiên lệch vị trí đáp án trong self consistency.                       |
 | Warmup pass                        | Prime vLLM kernels để giảm first run latency spikes.                             |
@@ -241,7 +241,7 @@ Hệ thống nộp cuối đã sẵn sàng triển khai theo các tiêu chí sau
 | I/O đúng yêu cầu cuộc thi | Đọc `/code/private_test.json` và ghi `/code/submission.csv` cùng `/code/submission_time.csv`. |
 | Định dạng output | Ghi `qid,answer` và `qid,answer,time`. |
 | Chống lỗi khi chạy | Có checkpoint, đáp án fallback, atomic write, và cơ chế best effort always emit. |
-| An toàn cho GPU 32 GB | Dùng `--safe-mode` với cấu hình vLLM thận trọng. |
+| An toàn cho GPU 16 GB | Dùng `--safe-mode` với cấu hình vLLM thận trọng. |
 
 Tóm lại, nguyên tắc vận hành của VietMind MCQ là: nhanh với câu dễ, cẩn trọng
 với câu khó, và bền bỉ khi triển khai ngoại tuyến.
@@ -259,7 +259,7 @@ VietMind MCQ sử dụng `v03_gamma` làm bản nộp cuối.
 | Inference            | Offline, chỉ dùng một mô hình                         |
 | Input                | `/code/private_test.json`                                |
 | Output               | `/code/submission.csv` và `/code/submission_time.csv` |
-| GPU mục tiêu       | NVIDIA CUDA GPU có ít nhất 32 GB VRAM                   |
+| GPU mục tiêu       | NVIDIA CUDA GPU có ít nhất 16 GB VRAM                   |
 
 Thiết kế cuối của chúng tôi không chỉ là một prompt. Nó là một hệ thống làm bài
 thi quanh một LLM nhỏ: phân tích đề, nhận diện route, dành compute cho nơi có
