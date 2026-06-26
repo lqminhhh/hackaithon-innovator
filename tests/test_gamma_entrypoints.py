@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import src.v02_gamma as v02_gamma
 import src.v03_gamma as v03_gamma
+import predict
 
 
 def test_v02_gamma_shim_forwards_to_v03_gamma(monkeypatch):
@@ -35,11 +36,33 @@ def test_v02_gamma_shim_forwards_to_v03_gamma(monkeypatch):
 def test_run_sh_targets_v03_gamma_safe_mode():
     run_sh = (Path(__file__).resolve().parent.parent / "run.sh").read_text(encoding="utf-8")
 
-    assert "src.v03_gamma" in run_sh
-    assert "--safe-mode" in run_sh
-    assert "/output/pred.csv" in run_sh
+    assert "predict.py" in run_sh
+    assert "/code/private_test.json" in run_sh
+    assert "/code/submission.csv" in run_sh
+    assert "/code/submission_time.csv" in run_sh
     assert "/data/private_test.csv" in run_sh
     assert "/data/public_test.csv" in run_sh
+
+
+def test_inference_sh_targets_predict_py():
+    inference_sh = (Path(__file__).resolve().parent.parent / "inference.sh").read_text(encoding="utf-8")
+
+    assert "predict.py" in inference_sh
+
+
+def test_predict_writes_submission_time(tmp_path):
+    submission = tmp_path / "submission.csv"
+    timing = tmp_path / "submission_time.csv"
+    submission.write_text("qid,answer\nq1,A\nq2,B\n", encoding="utf-8")
+
+    predict._write_submission_time(str(submission), str(timing), elapsed=4.0)
+
+    with timing.open(encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    assert rows == [
+        {"qid": "q1", "answer": "A", "time": "2.000000"},
+        {"qid": "q2", "answer": "B", "time": "2.000000"},
+    ]
 
 
 def test_v03_gamma_exports_main_runner():

@@ -1,7 +1,7 @@
 # Core GPU inference stack.
 # Notes:
 # - vLLM is required for the intended submission path.
-# - This repo's Docker image targets NVIDIA CUDA 12.9.1; CUDA 13 is not required.
+# - This repo's Docker image targets NVIDIA CUDA 12.2 per BTC guidance.
 # - If vLLM is "unavailable" on a machine, the usual causes are missing package
 #   install, unsupported/no NVIDIA GPU, or an incompatible host driver.
 torch==2.11.0

@@ -15,7 +15,7 @@ final_inference:
   allow_reranker_model: false
   allow_rag: false
   max_model_params_b: 5
-  target_vram_gb: 16
+  target_vram_gb: 32
 
 inference:
   max_new_tokens: 512
@@ -73,9 +73,9 @@ vllm:
   enable_prefix_caching: true
 
 safe_vllm:
-  gpu_memory_utilization: 0.70
+  gpu_memory_utilization: 0.80
   max_model_len: 4096
-  max_num_seqs: 4
+  max_num_seqs: 16
 
 runner:
   checkpoint_path: checkpoint.json

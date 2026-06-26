@@ -17,9 +17,9 @@
 ## 1. Bài Toán Và Yêu Cầu Nộp Bài
 
 Track C yêu cầu mỗi đội nộp một Docker container offline, đọc file test từ
-`/data` và ghi `/output/pred.csv` với đúng hai cột: `qid,answer`. Private test
-dự kiến lớn hơn public set nhiều, nên hệ thống của chúng tôi được thiết kế
-quanh ba mục tiêu:
+`/code/private_test.json` và ghi `/code/submission.csv` cùng
+`/code/submission_time.csv`. Private test dự kiến lớn hơn public set nhiều, nên
+hệ thống của chúng tôi được thiết kế quanh ba mục tiêu:
 
 | Mục tiêu          | Vì sao quan trọng                                                                                                                            |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -81,7 +81,7 @@ một nhãn.
 ## 4. Vì Sao Chọn Qwen3.5 4B
 
 Giới hạn cuộc thi và phần cứng mục tiêu khiến lựa chọn mô hình phải thực tế, chứ
-không chỉ là lý thuyết. Chúng tôi cần một mô hình đủ nhỏ cho 16 GB VRAM, đủ mạnh
+không chỉ là lý thuyết. Chúng tôi cần một mô hình đủ nhỏ cho GPU mục tiêu, đủ mạnh
 cho suy luận tiếng Việt, và phù hợp với đường chạy Docker offline đơn giản.
 
 `Qwen/Qwen3.5-4B` cho chúng tôi điểm cân bằng tốt nhất. Mô hình đủ nhỏ để phù
@@ -112,12 +112,12 @@ so sánh phiên bản, không phải điểm leaderboard chính thức.
 | `v03_alpha` | 84.23% | 89.42%, 414 / 463 | Có thể làm router tổng quát hơn cho private data không? | Router sạch hơn là hướng đúng, nhưng một số câu knowledge khó bị mất compute. |
 | `v03_gamma` | 85.96% | 91.58%, 424 / 463 | Có thể giữ router sạch hơn và khôi phục compute hữu ích không? | Có. Targeted compute recovery tăng accuracy trong khi runtime vẫn thực tế. |
 | `v03_delta` | 87.04% | 92.22%, 427 / 463 | Exact continuation scored margins có giúp không? | Có cho accuracy, nhưng phương pháp chậm hơn khoảng 4 lần và mong manh hơn về bộ nhớ. |
-| `v03_epsilon` | Không chọn làm bản cuối | Không có trong các file submission local | Có thể làm delta an toàn hơn bằng microbatching không? | Có giảm một phần rủi ro, nhưng vẫn gặp OOM trên chạy giống môi trường 16 GB. |
+| `v03_epsilon` | Không chọn làm bản cuối | Không có trong các file submission local | Có thể làm delta an toàn hơn bằng microbatching không? | Có giảm một phần rủi ro, nhưng vẫn gặp OOM trên chạy giống môi trường bộ nhớ nhỏ hơn. |
 
 Lịch sử này định hình quyết định cuối. `v03_delta` chứng minh rằng exact margins
 có thể cải thiện public accuracy, nhưng cũng cho thấy chi phí của việc biến mọi
 quyết định confidence thành một phép tính đắt. Với public set 463 câu, tradeoff
-này có vẻ hấp dẫn. Với private set 2000 câu trên phần cứng 16 GB chưa biết
+này có vẻ hấp dẫn. Với private set 2000 câu trên phần cứng giới hạn chưa biết
 trước, lựa chọn đó quá rủi ro.
 
 Chúng tôi chọn `v03_gamma` vì đây là điểm vận hành tốt nhất: mạnh hơn các phiên
@@ -147,7 +147,7 @@ phù hợp với đường nộp một mô hình cuối. Tool based code reasoni
 chọn vì nó cần thêm một hệ thống thực thi nữa và quá rủi ro cho contest
 container. Naive fine tuning không được chọn vì chúng tôi không xác nhận được
 gain held out đáng tin cậy so với base model. Exact continuation scored margins
-có ích, nhưng quá đắt cho mục tiêu 16 GB cuối.
+có ích, nhưng quá đắt cho mục tiêu triển khai cuối.
 
 Quá trình nghiên cứu này giúp chúng tôi tránh một lỗi phổ biến: thêm các thành
 phần nhìn có vẻ ấn tượng nhưng làm hệ thống cuối chậm hơn, kém tuân thủ hơn,
@@ -189,15 +189,15 @@ là phần kỹ thuật phụ.
 | Tối ưu                           | Tác dụng                                                                          |
 | ---------------------------------- | ----------------------------------------------------------------------------------- |
 | Wave batching                      | Gom first pass và escalation calls để vLLM dùng GPU hiệu quả hơn.            |
-| Safe mode                          | Dùng thiết lập vLLM thận trọng cho 16 GB VRAM.                                 |
+| Safe mode                          | Dùng thiết lập vLLM thận trọng cho mục tiêu 32 GB VRAM.                       |
 | Constrained extraction             | Giảm đáp án không hợp lệ và giữ nhãn trong tập lựa chọn hợp lệ.      |
 | Option shuffle voting              | Giảm thiên lệch vị trí đáp án trong self consistency.                       |
 | Warmup pass                        | Prime vLLM kernels để giảm first run latency spikes.                             |
-| Fallback prefill và atomic writes | Giúp đảm bảo`pred.csv` vẫn đầy đủ nếu run bị interrupt hoặc degraded. |
+| Fallback prefill và atomic writes | Giúp đảm bảo `submission.csv` vẫn đầy đủ nếu run bị interrupt hoặc degraded. |
 | CSV và JSON loader                | Hỗ trợ cả hai kiểu input chính thức và câu hỏi có hơn bốn lựa chọn.   |
 
 Chúng tôi cũng không ship RAG, embedding models, rerankers, hoặc mô hình thứ
-hai. Điều này giữ hệ thống đúng luật và tránh cạnh tranh bộ nhớ trên máy 16 GB.
+hai. Điều này giữ hệ thống đúng luật và tránh cạnh tranh bộ nhớ trên GPU mục tiêu.
 
 ## 9. Vì Sao Không Chọn Phiên Bản Public Score Cao Nhất
 
@@ -208,7 +208,7 @@ signal tốt hơn có thể tăng accuracy.
 
 Tuy nhiên, `v03_delta` mất khoảng 27.53 giây mỗi câu, so với khoảng 7.98 giây
 mỗi câu của `v03_gamma` trên GPU RTX 24 GB của nhóm. Nó cũng vẫn có rủi ro OOM
-trên phần cứng 16 GB trong các lần chạy dài.
+trên phần cứng nhỏ hơn trong các lần chạy dài.
 
 Với private set cuối, chúng tôi kỳ vọng khoảng 2000 câu. Một phương pháp chính
 xác hơn trên public set nhưng chậm hơn nhiều và kém ổn định hơn có thể trở
@@ -230,7 +230,7 @@ bằng chứng quan trọng, không phải một đảm bảo tuyệt đối.
 Những hạn chế này cũng là lý do thiết kế cuối được giữ thận trọng. Chúng tôi
 không dùng RAG, fine tuning, API bên ngoài, embedding model, reranker, hoặc LLM
 thứ hai. Điều này giúp hệ thống đúng luật, dễ tái lập hơn, và giảm rủi ro lỗi
-trên mục tiêu 16 GB VRAM.
+trên mục tiêu VRAM cuối.
 
 Hệ thống nộp cuối đã sẵn sàng triển khai theo các tiêu chí sau:
 
@@ -238,10 +238,10 @@ Hệ thống nộp cuối đã sẵn sàng triển khai theo các tiêu chí sau
 | --- | --- |
 | Docker inference offline | Mô hình và code được đóng gói để chạy trong container mà không cần internet lúc inference. |
 | Một mô hình duy nhất | Chỉ dùng `Qwen/Qwen3.5-4B`. |
-| I/O đúng yêu cầu cuộc thi | Đọc `/data/public_test.csv` hoặc `/data/private_test.csv` và ghi `/output/pred.csv`. |
-| Định dạng output | Luôn ghi hai cột `qid,answer`. |
+| I/O đúng yêu cầu cuộc thi | Đọc `/code/private_test.json` và ghi `/code/submission.csv` cùng `/code/submission_time.csv`. |
+| Định dạng output | Ghi `qid,answer` và `qid,answer,time`. |
 | Chống lỗi khi chạy | Có checkpoint, đáp án fallback, atomic write, và cơ chế best effort always emit. |
-| An toàn cho GPU 16 GB | Dùng `--safe-mode` với cấu hình vLLM thận trọng. |
+| An toàn cho GPU 32 GB | Dùng `--safe-mode` với cấu hình vLLM thận trọng. |
 
 Tóm lại, nguyên tắc vận hành của VietMind MCQ là: nhanh với câu dễ, cẩn trọng
 với câu khó, và bền bỉ khi triển khai ngoại tuyến.
@@ -257,9 +257,9 @@ VietMind MCQ sử dụng `v03_gamma` làm bản nộp cuối.
 | Mô hình            | `Qwen/Qwen3.5-4B`                                        |
 | Giới hạn mô hình | Một LLM mở, dưới 5B tham số                           |
 | Inference            | Offline, chỉ dùng một mô hình                         |
-| Input                | `/data/private_test.csv` hoặc `/data/public_test.csv` |
-| Output               | `/output/pred.csv`                                       |
-| GPU mục tiêu       | NVIDIA CUDA GPU có ít nhất 16 GB VRAM                   |
+| Input                | `/code/private_test.json`                                |
+| Output               | `/code/submission.csv` và `/code/submission_time.csv` |
+| GPU mục tiêu       | NVIDIA CUDA GPU có ít nhất 32 GB VRAM                   |
 
 Thiết kế cuối của chúng tôi không chỉ là một prompt. Nó là một hệ thống làm bài
 thi quanh một LLM nhỏ: phân tích đề, nhận diện route, dành compute cho nơi có

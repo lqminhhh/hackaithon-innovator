@@ -75,7 +75,7 @@ Likely causes:
 Quick check:
 
 ```bash
-docker run --rm --gpus all nvidia/cuda:12.9.1-base-ubuntu22.04 nvidia-smi
+docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu20.04 nvidia-smi
 ```
 
 If this fails, the GPU container runtime is not ready yet.
@@ -89,7 +89,7 @@ nvidia-smi
 Then make sure Docker can see the GPU:
 
 ```bash
-docker run --rm --gpus all nvidia/cuda:12.9.1-base-ubuntu22.04 nvidia-smi
+docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu20.04 nvidia-smi
 ```
 
 If host `nvidia-smi` works but Docker `nvidia-smi` fails, the usual missing
@@ -101,36 +101,33 @@ the preflight check.
 
 Officially supported:
 
-- NVIDIA Ampere or newer CUDA GPUs with at least 16 GB VRAM
-- examples: RTX 3090/4090, RTX 4080 16 GB, RTX A5000/A6000, A100, L4, or
+- NVIDIA Ampere or newer CUDA GPUs with at least 32 GB VRAM
+- examples: RTX 3090/4090, RTX A5000/A6000, A100, L40/L40S, or
   similar CUDA capable GPUs
 
 Technically supported but not recommended:
 
 - Tesla T4 16 GB
 
-We ask judges not to use T4 for the official run. T4 can be too slow, too close
-to the memory limit, and more likely to show Docker/vLLM runtime mismatch or
-execution issues. If T4 is the only available GPU, allocate much more runtime
-and run the preflight checks carefully before starting the full private set.
+We ask judges not to use T4 for the official run. T4 does not meet the final
+32 GB VRAM target, can be too slow, too close to the memory limit, and more
+likely to show Docker/vLLM runtime mismatch or execution issues.
 
-## 5. Why can a 2000 question run take 30 hours or more?
+## 5. Why can a 2000 question run still take many hours?
 
-The final runner uses conservative settings because the exact judge GPU is
-unknown. On our tested 16 GB VRAM GPU, a private set around 2000 questions can
-take 30 hours or more, especially when many questions enter Wave 2
-self-consistency.
+The final runner uses conservative settings for the 32 GB target. A private set
+around 2000 questions can still take many hours, especially when many questions
+enter Wave 2 self-consistency.
 
 This does not necessarily mean the container is stuck. Wave 2 is slower because
-it repeats reasoning on harder questions. On 16 GB hardware, batching is also
-more conservative to avoid OOM.
+it repeats reasoning on harder questions.
 
 Practical advice:
 
-- allocate at least 30 hours for a 2000 question run on 16 GB VRAM
-- use a GPU with more VRAM if available
-- avoid T4 for official judging
-- keep the output directory mounted so partial/final `pred.csv` writes are
+- allocate enough wall-clock time for a 2000 question run
+- use a 32 GB or larger Ampere-or-newer GPU
+- avoid T4 or any GPU below 32 GB VRAM for official judging
+- keep the output path available so partial/final `submission.csv` writes are
   preserved
 
 ## 6. Not enough disk space to pull or run the image
@@ -174,35 +171,30 @@ first before changing the repository code.
 
 The submission entrypoint expects one of:
 
+- `/code/private_test.json`
+- `/code/private_test.csv`
 - `/data/private_test.csv`
 - `/data/public_test.csv`
 - `/data/private_test.json`
 - `/data/public_test.json`
 
-Make sure the host mount is correct:
+For the official BTC path, mount the test file directly:
 
 ```bash
--v "$PWD/data:/data"
+-v "$PWD/private_test.json:/code/private_test.json"
 ```
 
-And make sure the file inside `data/` uses one of the names above.
+Do not mount a whole directory over `/code`, because that would hide the source
+code already inside the image.
 
 ## 9. Where is the output written?
 
 The submission container writes:
 
 ```text
-/output/pred.csv
+/code/submission.csv
+/code/submission_time.csv
 ```
 
-Make sure the host output mount exists:
-
-```bash
-mkdir -p output
-```
-
-And run with:
-
-```bash
--v "$PWD/output:/output"
-```
+The compatibility runner can also write to custom paths if you call `run.sh`
+directly with explicit output arguments.

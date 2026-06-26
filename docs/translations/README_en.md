@@ -9,8 +9,9 @@ reasoning for **[HackAIthon 2026](https://hackaithon.vsds.vn/) - Track C
 (Innovator)**.
 
 VietMind MCQ is Team Cow's 🐄 final competition build. It runs fully inside the
-submission container, uses one local LLM, reads the test file from `/data`, and
-writes `/output/pred.csv`.
+submission container, uses one local LLM, reads the test file from
+`/code/private_test.json`, and writes `/code/submission.csv` plus
+`/code/submission_time.csv`.
 
 ## I. Architecture
 
@@ -30,10 +31,10 @@ writes `/output/pred.csv`.
 | Docker image | `powato/hackaithon-cow:latest` |
 | Image size | ~16.2 GB |
 | Final runner | `src/v03_gamma.py` |
-| Input | `/data/private_test.csv` or `/data/public_test.csv` |
-| Output | `/output/pred.csv` |
-| Output columns | `qid,answer` |
-| Target GPU | Officially supported NVIDIA Ampere or newer, at least 16 GB VRAM |
+| Official input | `/code/private_test.json` |
+| Official output | `/code/submission.csv` and `/code/submission_time.csv` |
+| Output columns | `submission.csv`: `qid,answer`; `submission_time.csv`: `qid,answer,time` |
+| Target GPU | Officially supported NVIDIA Ampere or newer, at least 32 GB VRAM |
 
 ## III. What This Does
 
@@ -44,7 +45,7 @@ tries to spend extra thinking where it helps, then stays disciplined about
 returning a clean submission file.
 
 The final branch is `v03_gamma`. We chose it because it is the best practical
-balance of public-set accuracy, runtime, and 16 GB VRAM reliability.
+balance of public-set accuracy, runtime, and 32 GB VRAM reliability.
 
 ## IV. Core Idea
 
@@ -84,7 +85,7 @@ Each route is treated differently:
 | `v03_delta` | 87.04% | 27.53 s/question |
 
 `v03_delta` scored higher on the public set, but it was much heavier and still
-showed OOM risk on 16 GB competition-like runs. The submitted branch is therefore
+showed OOM risk on long smaller-memory runs. The submitted branch is therefore
 `v03_gamma`.
 
 Runtime numbers above were measured on our local 24 GB RTX-class GPU setup, so
@@ -93,10 +94,11 @@ We do not recommend using NVIDIA T4 for official judging because T4 has very
 tight memory margins, much slower inference, and may cause runtime mismatch or
 Docker/vLLM execution issues.
 
-**Important note:** We tested the conservative run path on our 16 GB VRAM GPU.
-For a private set of around 2000 questions, runtime can be **30 hours or more**.
-Please allocate enough wall-clock time, or use a GPU with more VRAM if possible.
-We run conservative defaults because the exact judge GPU is unknown.
+**Important note:** The final submission settings are now adjusted for a 32 GB
+VRAM GPU. For a private set of around 2000 questions, runtime can still take
+many hours because Wave 2 uses self-consistency for harder questions. Please
+allocate enough wall-clock time and avoid GPUs below 32 GB VRAM for official
+judging.
 
 Full version notes: [docs/version_results.md](../version_results.md)
 
@@ -110,12 +112,13 @@ Full version notes: [docs/version_results.md](../version_results.md)
 
 ### Requirements
 
-- **NVIDIA CUDA GPU** with at least **16 GB** VRAM
+- **NVIDIA CUDA GPU** with at least **32 GB** VRAM
   - Officially supported: NVIDIA Ampere or newer, for example RTX 3090/4090,
-    RTX 4080 16 GB, RTX A5000/A6000, A100, L4, or similar CUDA-capable GPUs
+    RTX A5000/A6000, A100, L40/L40S, or similar CUDA-capable GPUs
   - Technically supported but not recommended: Tesla T4 16 GB. Please do not
-    use T4 for official judging because it can be too slow, too close to the
-    memory limit, or cause Docker/vLLM runtime mismatch or execution failures
+    use T4 for official judging because it does not meet the 32 GB VRAM target,
+    can be too slow, too close to the memory limit, or cause Docker/vLLM runtime
+    mismatch or execution failures
 - Docker
 - The `nvidia-container-toolkit` package, so `docker run --gpus all` works
 - At least 25 GB free disk space recommended for the ~16.2 GB image plus
@@ -133,7 +136,7 @@ Before running the submission, these checks should pass:
 
 ```bash
 docker version
-docker run --rm --gpus all nvidia/cuda:12.9.1-base-ubuntu22.04 nvidia-smi
+docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu20.04 nvidia-smi
 df -h .
 ```
 
@@ -145,21 +148,29 @@ Expected:
 
 ### Run
 
-Put the test file in a local `data/` folder:
+Mount the official test file to `/code/private_test.json` inside the container.
+Do not mount a whole directory over `/code`, because that would hide the source
+code already inside the image.
 
 ```bash
-mkdir -p data output
-cp private_test.csv data/
-docker run --rm --gpus all \
-  -v "$PWD/data:/data" \
-  -v "$PWD/output:/output" \
+docker run --name cow-vietmind-run --gpus all --ipc=host \
+  -v "$PWD/private_test.json:/code/private_test.json" \
   powato/hackaithon-cow:latest
 ```
 
 After the run:
 
 ```text
-output/pred.csv
+/code/submission.csv
+/code/submission_time.csv
+```
+
+For a local run, copy the files out and then remove the container:
+
+```bash
+docker cp cow-vietmind-run:/code/submission.csv ./submission.csv
+docker cp cow-vietmind-run:/code/submission_time.csv ./submission_time.csv
+docker rm cow-vietmind-run
 ```
 
 should exist and contain:
@@ -168,17 +179,24 @@ should exist and contain:
 qid,answer
 ```
 
+```csv
+qid,answer,time
+```
+
 ### Accepted Input Names
 
 The container checks input files in this order:
 
-1. `/data/private_test.csv`
-2. `/data/public_test.csv`
-3. `/data/private_test.json`
-4. `/data/public_test.json`
+1. `/code/private_test.json`
+2. `/code/private_test.csv`
+3. `/data/private_test.csv`
+4. `/data/public_test.csv`
+5. `/data/private_test.json`
+6. `/data/public_test.json`
 
-CSV input may use option columns such as `A,B,C,D,...`; questions with more
-than four choices are supported.
+The official BTC path is `/code/private_test.json`. The `/data/...` paths are
+kept for older local compatibility. CSV input may use option columns such as
+`A,B,C,D,...`; questions with more than four choices are supported.
 
 ## VIII. Developer Run Instructions
 
@@ -203,8 +221,7 @@ python src/v03_gamma.py \
 Run the same entrypoint style as Docker:
 
 ```bash
-mkdir -p output
-./run.sh data/private_test.csv output/pred.csv
+./run.sh data/private_test.csv output/submission.csv output/trace.jsonl output/submission_time.csv
 ```
 
 Run tests:

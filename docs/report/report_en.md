@@ -17,9 +17,9 @@
 ## 1. Problem And Submission Contract
 
 Track C asks each team to submit an offline Docker container that reads a test
-file from `/data` and writes `/output/pred.csv` with exactly two columns:
-`qid,answer`. The final private test is expected to be much larger than the
-public set, so our system was designed around three goals:
+file from `/code/private_test.json` and writes `/code/submission.csv` plus
+`/code/submission_time.csv`. The final private test is expected to be much
+larger than the public set, so our system was designed around three goals:
 
 | Goal | Why It Matters |
 | --- | --- |
@@ -68,7 +68,7 @@ Input CSV or JSON
   -> constrained answer extraction
   -> targeted self consistency wave
   -> vote merge and fallback repair
-  -> /output/pred.csv
+  -> /code/submission.csv and /code/submission_time.csv
 ```
 
 The router assigns each question to one of four routes:
@@ -92,7 +92,7 @@ answer in the same slot.
 ## 4. Why We Chose Qwen3.5 4B
 
 The competition limit and hardware target made the model choice practical, not
-only theoretical. We needed a model small enough for 16 GB VRAM, strong enough
+only theoretical. We needed a model small enough for the target GPU, strong enough
 for Vietnamese reasoning, and compatible with a simple offline Docker path.
 
 `Qwen/Qwen3.5-4B` gave us the best balance. It is small enough to fit the target
@@ -124,12 +124,12 @@ while iterating.
 | `v03_alpha` | 84.23% | 89.42%, 414 / 463 | Can we make the router more general for private data? | The cleaner router was directionally right, but some hard knowledge questions lost compute. |
 | `v03_gamma` | 85.96% | 91.58%, 424 / 463 | Can we keep the cleaner router and restore useful compute? | Yes. Targeted compute recovery improved accuracy while keeping runtime realistic. |
 | `v03_delta` | 87.04% | 92.22%, 427 / 463 | Do exact continuation scored margins help? | Yes for accuracy, but the method became about 4 times slower and more memory fragile. |
-| `v03_epsilon` | Not promoted | Not available in local submission files | Can delta be made safe with microbatching? | It reduced some risk, but still hit OOM in judge like 16 GB runs. |
+| `v03_epsilon` | Not promoted | Not available in local submission files | Can delta be made safe with microbatching? | It reduced some risk, but still hit OOM in smaller-memory judge-like runs. |
 
 This history shaped the final decision. `v03_delta` proved that exact margins
 can improve public accuracy, but it also showed the cost of making every
 confidence decision expensive. For a 463 question public set that trade can look
-attractive. For a 2000 question private set on unknown 16 GB hardware, it is too
+attractive. For a 2000 question private set on constrained hardware, it is too
 risky.
 
 We chose `v03_gamma` because it is the best operating point: stronger than the
@@ -159,7 +159,7 @@ submission path. Tool based code reasoning was not chosen because it would add
 another execution subsystem and was too risky for a contest container. Naive
 fine tuning was not chosen because we did not validate a reliable held out gain
 over the base model. Exact continuation scored margins were useful, but too
-expensive for the final 16 GB target.
+expensive for the final deployment target.
 
 This research process helped us avoid a common trap: adding impressive
 components that look creative but make the final system slower, less compliant,
@@ -202,16 +202,16 @@ score, not just for engineering neatness.
 | Optimization | Effect |
 | --- | --- |
 | Wave batching | Groups first pass and escalation calls so vLLM can use the GPU more efficiently. |
-| Safe mode | Uses conservative vLLM settings for 16 GB VRAM. |
+| Safe mode | Uses conservative vLLM settings for the 32 GB VRAM target. |
 | Constrained extraction | Reduces invalid answers and keeps labels inside the legal option set. |
 | Option shuffle voting | Reduces answer position bias during self consistency. |
 | Warmup pass | Primes vLLM kernels to reduce first run latency spikes. |
-| Fallback prefill and atomic writes | Helps guarantee that `pred.csv` is still complete if the run is interrupted or degraded. |
+| Fallback prefill and atomic writes | Helps guarantee that `submission.csv` is still complete if the run is interrupted or degraded. |
 | CSV and JSON loader | Supports both official input styles and questions with more than four choices. |
 
 We also chose not to ship RAG, embedding models, rerankers, or a second model.
 This keeps the system compliant with the rules and avoids memory contention on
-the 16 GB target machine.
+the target GPU.
 
 ## 9. Why Not The Highest Public Score Version
 
@@ -222,7 +222,7 @@ confidence signals can improve accuracy.
 
 However, `v03_delta` took about 27.53 seconds per question, compared with about
 7.98 seconds per question for `v03_gamma` on our local 24 GB RTX class setup.
-It also remained OOM prone on 16 GB hardware during long runs.
+It also remained OOM prone on smaller hardware during long runs.
 
 For the final private set, we expect around 2000 questions. A method that is
 more accurate on the public set but much slower and less stable can become a
@@ -243,7 +243,7 @@ results as evidence, not a guarantee.
 These limitations are also why the final design stays conservative. We do not
 use RAG, fine tuning, external APIs, embedding models, rerankers, or a second
 LLM. This keeps the system compliant, easier to reproduce, and less likely to
-fail under the 16 GB VRAM target.
+fail under the VRAM target.
 
 The submitted system is deployment ready in the following sense:
 
@@ -251,10 +251,10 @@ The submitted system is deployment ready in the following sense:
 | --- | --- |
 | Offline Docker inference | The model and code are packaged for container execution without runtime internet. |
 | Single model | Uses only `Qwen/Qwen3.5-4B`. |
-| Competition I/O | Reads `/data/public_test.csv` or `/data/private_test.csv` and writes `/output/pred.csv`. |
-| Output format | Always writes `qid,answer`. |
+| Competition I/O | Reads `/code/private_test.json` and writes `/code/submission.csv` plus `/code/submission_time.csv`. |
+| Output format | Writes `qid,answer` and `qid,answer,time`. |
 | Fault tolerance | Uses checkpointing, fallback answers, atomic writes, and best effort always emit behavior. |
-| 16 GB GPU safety | Uses `--safe-mode` with conservative vLLM settings. |
+| 32 GB GPU safety | Uses `--safe-mode` with conservative vLLM settings. |
 
 In short, the operating principle is: answer easy questions quickly, reason more
 carefully on risky questions, and remain robust during offline deployment.
@@ -270,9 +270,9 @@ VietMind MCQ ships `v03_gamma`.
 | Model | `Qwen/Qwen3.5-4B` |
 | Model constraint | One open LLM under 5B parameters |
 | Inference | Offline, one model only |
-| Input | `/data/private_test.csv` or `/data/public_test.csv` |
-| Output | `/output/pred.csv` |
-| Target GPU | NVIDIA CUDA GPU with at least 16 GB VRAM |
+| Input | `/code/private_test.json` |
+| Output | `/code/submission.csv` and `/code/submission_time.csv` |
+| Target GPU | NVIDIA CUDA GPU with at least 32 GB VRAM |
 
 Our final design is not simply a prompt. It is an exam taking system around a
 small LLM: parse the problem, identify the route, spend compute where risk is
