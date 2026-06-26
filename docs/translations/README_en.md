@@ -136,7 +136,7 @@ Before running the submission, these checks should pass:
 
 ```bash
 docker version
-docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu20.04 nvidia-smi
+docker run --rm --gpus all nvidia/cuda:12.9.1-base-ubuntu22.04 nvidia-smi
 df -h .
 ```
 

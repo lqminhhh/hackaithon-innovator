@@ -75,7 +75,7 @@ Likely causes:
 Quick check:
 
 ```bash
-docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu20.04 nvidia-smi
+docker run --rm --gpus all nvidia/cuda:12.9.1-base-ubuntu22.04 nvidia-smi
 ```
 
 If this fails, the GPU container runtime is not ready yet.
@@ -89,7 +89,7 @@ nvidia-smi
 Then make sure Docker can see the GPU:
 
 ```bash
-docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu20.04 nvidia-smi
+docker run --rm --gpus all nvidia/cuda:12.9.1-base-ubuntu22.04 nvidia-smi
 ```
 
 If host `nvidia-smi` works but Docker `nvidia-smi` fails, the usual missing
