@@ -72,7 +72,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--trace-output",
-        default="/code/trace_v03_gamma.jsonl",
+        default="/tmp/trace_v03_gamma.jsonl",
         help="Optional trace JSONL path.",
     )
     parser.add_argument("--model-id", default=None)

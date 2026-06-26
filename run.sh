@@ -24,7 +24,7 @@ else
 fi
 
 OUTPUT=${2:-/code/submission.csv}
-TRACE_OUTPUT=${3:-/code/trace_v03_gamma.jsonl}
+TRACE_OUTPUT=${3:-/tmp/trace_v03_gamma.jsonl}
 TIME_OUTPUT=${4:-/code/submission_time.csv}
 
 mkdir -p "$(dirname "$OUTPUT")" "$(dirname "$TRACE_OUTPUT")" "$(dirname "$TIME_OUTPUT")"

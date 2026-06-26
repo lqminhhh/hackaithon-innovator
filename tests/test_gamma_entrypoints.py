@@ -40,6 +40,7 @@ def test_run_sh_targets_v03_gamma_safe_mode():
     assert "/code/private_test.json" in run_sh
     assert "/code/submission.csv" in run_sh
     assert "/code/submission_time.csv" in run_sh
+    assert "/tmp/trace_v03_gamma.jsonl" in run_sh
     assert "/data/private_test.csv" in run_sh
     assert "/data/public_test.csv" in run_sh
 
