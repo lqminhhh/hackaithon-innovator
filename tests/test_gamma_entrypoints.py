@@ -66,6 +66,26 @@ def test_predict_writes_submission_time(tmp_path):
     ]
 
 
+def test_predict_writes_per_qid_submission_time_when_available(tmp_path):
+    submission = tmp_path / "submission.csv"
+    timing = tmp_path / "submission_time.csv"
+    submission.write_text("qid,answer\nq1,A\nq2,B\n", encoding="utf-8")
+
+    predict._write_submission_time(
+        str(submission),
+        str(timing),
+        elapsed=10.0,
+        timings={"q1": 1.25, "q2": 3.5},
+    )
+
+    with timing.open(encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    assert rows == [
+        {"qid": "q1", "answer": "A", "time": "1.250000"},
+        {"qid": "q2", "answer": "B", "time": "3.500000"},
+    ]
+
+
 def test_v03_gamma_exports_main_runner():
     assert callable(v03_gamma.main)
     assert callable(v03_gamma.run_v03_gamma)

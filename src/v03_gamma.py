@@ -149,7 +149,7 @@ def run_v03_gamma(
     adaptive_sc: bool = True,
     install_handlers: bool = True,
     warmup: bool = True,
-) -> None:
+) -> dict[str, float] | None:
     """Run the v03_gamma wave-batched pipeline."""
     from src.data_loader import load_questions
     from src.parser import ParsedQuestion, parse_question
@@ -207,6 +207,7 @@ def run_v03_gamma(
                 )
             )
     print(f"Processing {len(parsed_list)} questions (v03_gamma)...", flush=True)
+    timings: dict[str, float] = {parsed.qid: 0.0 for parsed in parsed_list}
 
     output_path_obj = Path(output_path)
     ckpt_path = output_path_obj.with_suffix(".ckpt")
@@ -218,6 +219,7 @@ def run_v03_gamma(
         "answers": prefilled_answers,
         "parsed_list": parsed_list,
         "output_path": output_path,
+        "timings": timings,
     }
 
     def _emergency_write() -> None:
@@ -246,13 +248,17 @@ def run_v03_gamma(
             _warmup_agent(agent)
 
         print("Wave 1: batching all first passes...", flush=True)
+        wave1_start = time.perf_counter()
         wave1 = run_wave1(agent, parsed_list, restored_qids)
+        _add_elapsed_share(timings, wave1.keys(), time.perf_counter() - wave1_start)
         state["answers"].update({r.qid: r.answer for r in wave1.values()})
         _save_ckpt(ckpt_path, state["answers"])
         print(f"Wave 1 complete ({len(wave1)} items).", flush=True)
 
         print("Wave 2: batching all escalations...", flush=True)
+        wave2_start = time.perf_counter()
         wave2 = run_wave2(agent, parsed_list, wave1, adaptive_sc=adaptive_sc)
+        _add_elapsed_share(timings, wave2.keys(), time.perf_counter() - wave2_start)
         state["answers"].update({qid: w2.answer for qid, w2 in wave2.items()})
         _save_ckpt(ckpt_path, state["answers"])
         print(f"Wave 2 complete ({len(wave2)} escalated).", flush=True)
@@ -299,6 +305,7 @@ def run_v03_gamma(
                 f"using checkpointed/fallback answers.",
                 flush=True,
             )
+    return timings
 
 
 def _save_ckpt(path: Path, answers: dict[str, str]) -> None:
@@ -324,6 +331,19 @@ def _write_results_atomic(answers: dict[str, str], parsed_list: list[Any], outpu
     tmp = output_path_obj.with_name(output_path_obj.name + ".tmp")
     write_results(answers, parsed_list, str(tmp))
     os.replace(tmp, output_path_obj)
+
+
+def _add_elapsed_share(
+    timings: dict[str, float],
+    qids: Any,
+    elapsed: float,
+) -> None:
+    qid_list = list(qids)
+    if not qid_list:
+        return
+    share = max(elapsed, 0.0) / len(qid_list)
+    for qid in qid_list:
+        timings[str(qid)] = timings.get(str(qid), 0.0) + share
 
 
 def _install_always_emit(emitter) -> Any:

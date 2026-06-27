@@ -35,7 +35,12 @@ def _find_input(explicit: str | None) -> str:
     raise FileNotFoundError(f"No input file found. Expected one of: {joined}")
 
 
-def _write_submission_time(submission_path: str, time_path: str, elapsed: float) -> None:
+def _write_submission_time(
+    submission_path: str,
+    time_path: str,
+    elapsed: float,
+    timings: dict[str, float] | None = None,
+) -> None:
     submission = Path(submission_path)
     target = Path(time_path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -50,14 +55,17 @@ def _write_submission_time(submission_path: str, time_path: str, elapsed: float)
         rows = list(csv.DictReader(f))
 
     per_sample_time = elapsed / len(rows) if rows else 0.0
+    timings = timings or {}
     with target.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["qid", "answer", "time"])
         writer.writeheader()
         for row in rows:
+            qid = row.get("qid", row.get("id", ""))
+            sample_time = timings.get(qid, per_sample_time)
             writer.writerow({
-                "qid": row.get("qid", row.get("id", "")),
+                "qid": qid,
                 "answer": row.get("answer", ""),
-                "time": f"{per_sample_time:.6f}",
+                "time": f"{sample_time:.6f}",
             })
 
 
@@ -83,7 +91,7 @@ def main() -> None:
 
     input_path = _find_input(args.input)
     start = time.perf_counter()
-    run_v03_gamma(
+    timings = run_v03_gamma(
         input_path=input_path,
         output_path=args.output,
         trace_output=args.trace_output,
@@ -93,7 +101,7 @@ def main() -> None:
         warmup=not args.no_warmup,
     )
     elapsed = time.perf_counter() - start
-    _write_submission_time(args.output, args.time_output, elapsed)
+    _write_submission_time(args.output, args.time_output, elapsed, timings)
     print(f"Written timing file to {args.time_output}", flush=True)
 
 

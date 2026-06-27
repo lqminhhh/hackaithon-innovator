@@ -7,7 +7,8 @@
 
 Vietnamese multiple-choice QA system for HackAIthon 2026 Bang C.
 Input: JSON or CSV of questions with choices. Competition output:
-`/output/pred.csv` (`qid,answer`).
+`/code/submission.csv` (`qid,answer`) and `/code/submission_time.csv`
+(`qid,answer,time`).
 Scored on a private set of ~2000 questions on a 16 GB VRAM GPU.
 
 ## Competition constraints (non-negotiable)
