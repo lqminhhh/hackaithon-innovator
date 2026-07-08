@@ -286,8 +286,14 @@ work diagnosable on judge hardware.
 - vLLM init now retries across a headroom ladder before any HuggingFace fallback
 - Wave-level OOM-like failures now trigger one more conservative vLLM reload and
   resume instead of degrading immediately
-- Next planned work: Phase 1b mechanical runtime cleanup, then per-route token
-  budgets from measured Phase 0 traces
+- **Phase 1b.4:** done
+- vLLM construction now enables chunked prefill through the shared wrapper and
+  runtime metadata records whether chunked prefill was effectively enabled
+- Repo sanity after the change: `python3.11 -m py_compile src/*.py predict.py`,
+  `python3.11 -m pytest tests/ -q`, `python3.11 -m src.v03_gamma --help`, and
+  `python3.11 predict.py --help` all passed
+- Next planned work: remaining Phase 1b mechanical cleanup, then per-route
+  token budgets from measured Phase 0 traces
 
 ## Known bugs and accuracy blockers
 
