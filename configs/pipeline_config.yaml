@@ -69,13 +69,21 @@ quantisation:
 vllm:
   gpu_memory_utilization: 0.80
   max_model_len: 4096
-  max_num_seqs: 16
+  max_num_seqs: 32
   enable_prefix_caching: true
+  enable_chunked_prefill: true
 
 safe_vllm:
   gpu_memory_utilization: 0.70
   max_model_len: 4096
-  max_num_seqs: 4
+  max_num_seqs: 32
+  dynamic_headroom_gb: 1.0
+  headroom_ladder_gb:
+    - 1.0
+    - 2.0
+    - 3.0
+  utilization_clamp_min: 0.50
+  utilization_clamp_max: 0.92
 
 runner:
   checkpoint_path: checkpoint.json

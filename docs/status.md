@@ -280,9 +280,14 @@ work diagnosable on judge hardware.
 ### Current speed-plan state
 
 - **Phase 0:** done
-- **Phase 1:** not landed yet in this branch
-- Next planned work: dynamic free-VRAM sizing for vLLM, louder backend fallback
-  visibility, and a headroom retry ladder before any HuggingFace fallback
+- **Phase 1:** done
+- Dynamic free-VRAM sizing now computes effective `gpu_memory_utilization`
+  from `torch.cuda.mem_get_info()` unless the user explicitly overrides it
+- vLLM init now retries across a headroom ladder before any HuggingFace fallback
+- Wave-level OOM-like failures now trigger one more conservative vLLM reload and
+  resume instead of degrading immediately
+- Next planned work: Phase 1b mechanical runtime cleanup, then per-route token
+  budgets from measured Phase 0 traces
 
 ## Known bugs and accuracy blockers
 
@@ -346,7 +351,7 @@ capability the model lacks, not a prompt tweak. See `reports/eval/persistent_fai
 ## Remaining work
 
 - Docker image / entrypoint should stay aligned with `src/v03_gamma.py` + `--safe-mode`
-- Phase 1 of `docs/speed_optimization_plan.md` is still pending: dynamic VRAM sizing, headroom retry ladder, and higher safe batching without changing answer logic
+- Phase 1b of `docs/speed_optimization_plan.md` is still pending: merged wave generation batches, cheaper prompt-fit tokenization, chunked prefill validation, and prefix-caching verification
 - Private test set is ~2000 questions (~4.3x public set); conservative 16 GB judge-style runs can take far longer than the old public-set extrapolation. Recent safe-mode reports suggest planning for very long wall-clock runs, potentially on the order of 30+ hours on a slow 16 GB setup
 
 ## Docs index

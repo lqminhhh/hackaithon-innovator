@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.config import GPU_MEM_UTIL, LLM_MODEL
+from src.config import ENABLE_CHUNKED_PREFILL, GPU_MEM_UTIL, LLM_MODEL
 from src.llm import LLM
 from src.models import load_vllm_primary
 
@@ -69,6 +69,7 @@ def test_llm_constructor_uses_s1_vllm_defaults():
     assert "quantization" not in _FakeEngineCls.last_kwargs
     assert _FakeEngineCls.last_kwargs["gpu_memory_utilization"] == GPU_MEM_UTIL
     assert _FakeEngineCls.last_kwargs["enable_prefix_caching"] is True
+    assert _FakeEngineCls.last_kwargs["enable_chunked_prefill"] == ENABLE_CHUNKED_PREFILL
     assert _FakeEngineCls.last_kwargs["trust_remote_code"] is True
 
 
@@ -140,6 +141,7 @@ def test_load_vllm_primary_uses_s1_wrapper_defaults(monkeypatch):
     assert captured["quantization"] is None
     assert captured["gpu_memory_utilization"] == GPU_MEM_UTIL
     assert captured["enable_prefix_caching"] is True
+    assert captured["enable_chunked_prefill"] == ENABLE_CHUNKED_PREFILL
 
 
 def test_load_vllm_primary_uses_awq_only_for_awq_model_names(monkeypatch):

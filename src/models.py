@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 
 from src.config import (
+    ENABLE_CHUNKED_PREFILL,
     ENABLE_PREFIX_CACHING,
     GPU_MEM_UTIL,
     LLM_MODEL,
@@ -118,4 +119,5 @@ def load_vllm_primary(
             max_num_seqs if max_num_seqs is not None else vllm_cfg.get("max_num_seqs")
         ),
         enable_prefix_caching=vllm_cfg.get("enable_prefix_caching", ENABLE_PREFIX_CACHING),
+        enable_chunked_prefill=vllm_cfg.get("enable_chunked_prefill", ENABLE_CHUNKED_PREFILL),
     )

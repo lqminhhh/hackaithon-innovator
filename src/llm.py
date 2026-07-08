@@ -10,7 +10,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from src.config import ENABLE_PREFIX_CACHING, GPU_MEM_UTIL, LLM_MODEL, MAX_MODEL_LEN
+from src.config import (
+    ENABLE_CHUNKED_PREFILL,
+    ENABLE_PREFIX_CACHING,
+    GPU_MEM_UTIL,
+    LLM_MODEL,
+    MAX_MODEL_LEN,
+)
 
 ThinkingMode = Literal["think", "no_think"]
 
@@ -36,6 +42,7 @@ class LLM:
         max_num_seqs: int | None = None,
         quantization: str | None = None,
         enable_prefix_caching: bool = ENABLE_PREFIX_CACHING,
+        enable_chunked_prefill: bool = ENABLE_CHUNKED_PREFILL,
         dtype: str = "half",
         trust_remote_code: bool = True,
         engine: Any | None = None,
@@ -48,6 +55,7 @@ class LLM:
         self.max_num_seqs = max_num_seqs
         self.quantization = quantization
         self.enable_prefix_caching = enable_prefix_caching
+        self.enable_chunked_prefill = enable_chunked_prefill
         self.dtype = dtype
         self.trust_remote_code = trust_remote_code
         self._sampling_params_cls = sampling_params_cls
@@ -58,6 +66,7 @@ class LLM:
             "gpu_memory_utilization": gpu_memory_utilization,
             "max_model_len": max_model_len,
             "enable_prefix_caching": enable_prefix_caching,
+            "enable_chunked_prefill": enable_chunked_prefill,
             "trust_remote_code": trust_remote_code,
         }
         if max_num_seqs is not None:

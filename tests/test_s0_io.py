@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.main import run as run_s0
 from src.config import (
+    ENABLE_CHUNKED_PREFILL,
     FALLBACK,
     GPU_MEM_UTIL,
     LLM_MODEL,
@@ -35,6 +36,7 @@ def test_config_constants_are_loaded_from_pipeline_yaml():
     assert LLM_MODEL == cfg["models"]["primary"]
     assert FALLBACK == cfg["submission"]["fallback_answer"]
     assert GPU_MEM_UTIL == cfg["vllm"]["gpu_memory_utilization"]
+    assert ENABLE_CHUNKED_PREFILL == cfg["vllm"]["enable_chunked_prefill"]
     assert SAFE_GPU_MEM_UTIL == cfg["safe_vllm"]["gpu_memory_utilization"]
     assert MAX_CHOICES == cfg["question_parsing"]["max_choices"]
 
