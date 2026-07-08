@@ -1,6 +1,6 @@
 # Project Status
 
-> Last updated: 2026-06-23. This file gives AI agents fast context on where
+> Last updated: 2026-07-07. This file gives AI agents fast context on where
 > the project stands. Read this before touching any code.
 
 ## What this project is
@@ -246,6 +246,44 @@ answered correctly by v02_gamma.
 `write_traces` outputs real `votes` list and `escalation_reason` field instead
 of hardcoded `"votes": []`. Existing traces still have empty votes (pre-fix).
 
+### Phase 0 speed instrumentation landed
+
+We completed the first phase of `docs/speed_optimization_plan.md` without
+changing answer policy:
+
+- `src/llm.py` now records generated-token counts in `GenerationOutput`
+  (`num_generated_tokens`) so token spend can be measured directly.
+- `src/reasoning_agent.py` can now return structured generation outputs in
+  addition to plain text, while keeping the old text-only path for existing
+  callers.
+- `src/wave_solver.py` now measures and writes per-question compute metadata:
+  - `gen_tokens_wave1`
+  - `gen_tokens_wave2`
+  - `wave2_sample_tokens`
+  - `sc_n`
+  - `wave1_time_share`
+  - `wave2_time_share`
+  - `attributed_time_seconds`
+  - backend/runtime metadata in `runtime_info`
+- `src/v03_gamma.py` now logs the effective runtime environment at startup:
+  safe mode, chosen engine settings, GPU name/VRAM, CUDA capability, vLLM
+  version, prefix-caching status, backend loaded, and fallback reason if vLLM
+  did not load.
+- `predict.py` now writes per-question `time` values into
+  `submission_time.csv` using trace-attributed runtime instead of a flat
+  average copied across all rows.
+
+This was intentionally a measurement-only pass: it should not change routing,
+SC policy, prompts, or nominal accuracy. Its purpose is to make later speed
+work diagnosable on judge hardware.
+
+### Current speed-plan state
+
+- **Phase 0:** done
+- **Phase 1:** not landed yet in this branch
+- Next planned work: dynamic free-VRAM sizing for vLLM, louder backend fallback
+  visibility, and a headroom retry ladder before any HuggingFace fallback
+
 ## Known bugs and accuracy blockers
 
 ### LIMITATION: gamma margins are saturated (`~1.0`) in practice
@@ -308,14 +346,19 @@ capability the model lacks, not a prompt tweak. See `reports/eval/persistent_fai
 ## Remaining work
 
 - Docker image / entrypoint should stay aligned with `src/v03_gamma.py` + `--safe-mode`
-- Private test set is ~2000 questions (~4.3x public set); wall-clock estimate: 2-4 hours on judge GPU
+- Phase 1 of `docs/speed_optimization_plan.md` is still pending: dynamic VRAM sizing, headroom retry ladder, and higher safe batching without changing answer logic
+- Private test set is ~2000 questions (~4.3x public set); conservative 16 GB judge-style runs can take far longer than the old public-set extrapolation. Recent safe-mode reports suggest planning for very long wall-clock runs, potentially on the order of 30+ hours on a slow 16 GB setup
 
 ## Docs index
 
 | File | Purpose |
 |---|---|
 | `docs/status.md` | This file — current project state for AI context |
-| `docs/planning_v3.md` | Build spec: segments S0-S8, architecture, invariants |
 | `docs/version_results.md` | Score and runtime log per version |
-| `docs/note_v3.md` | Design rationale and decision log |
+| `docs/speed_optimization_plan.md` | Current throughput and judge-runtime optimization roadmap |
 | `docs/research_v3.md` | Evidence map for architectural choices |
+| `docs/faq.md` | Runtime setup notes and common environment issues |
+| `docs/report/report_vi.md` | Main Vietnamese report for judges |
+| `docs/report/report_en.md` | English report |
+| `docs/report/presentation_slide.pdf` | Presentation deck |
+| `docs/translations/README_en.md` | English README mirror of the main Vietnamese README |
