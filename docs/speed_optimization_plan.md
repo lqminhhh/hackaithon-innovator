@@ -27,11 +27,12 @@ The judges' GPU is now known, which pins down several assumptions:
   silent HF fallback (Diagnosis #6), so the Phase 0 backend/arch logging
   (`torch.cuda.get_arch_list()`, device name, a tiny CUDA op at startup) stays
   mandatory to prove vLLM actually ran on the judge machine.
-- **VRAM: 16 GB dedicated (confirmed).** Exactly the target the safe-mode settings
-  and the Phase 1 ladder were designed for — the ladder rungs
-  (12 seqs / 0.78 util → 8 / 0.74 → 4 / 0.70) stand as planned. Note that if the
-  judge machine runs a desktop session, ~1–2 GB of that 16 GB is already taken by
-  the OS/display; the ladder's retry-downward behavior absorbs this automatically.
+- **VRAM: 16 GB dedicated (confirmed).** Exactly the target the safe-mode design
+  assumes. If the judge machine runs a desktop session, ~1–2 GB is already taken by
+  the OS/display — which is precisely why Phase 1 sizes VRAM **dynamically from
+  free memory** (`torch.cuda.mem_get_info()`) instead of using a fixed fraction of
+  total: the pipeline takes whatever is actually available minus a cushion, on any
+  machine.
 - **Memory bandwidth: 448 GB/s GDDR7 — roughly HALF of our 24 GB dev card**
   (3090/4090-class ≈ 930–1000 GB/s). Decode is bandwidth-bound, so expect judge
   s/question ≈ **~2× our dev numbers at identical settings**. This makes the
@@ -116,19 +117,36 @@ judge-machine run can be diagnosed after the fact:
 
 ### Phase 1 — Zero-accuracy-risk throughput (biggest wall-clock win)
 
-- Raise safe-mode concurrency **with an OOM fallback ladder**:
-  try `max_num_seqs=12`, `gpu_memory_utilization=0.78` first; on CUDA OOM at engine
-  init or mid-wave, tear down and retry at `8 / 0.74`, then the current `4 / 0.70`.
-  Implement in `src/v03_gamma.py` around engine construction and the wave loop —
-  per-wave checkpointing already exists, so a mid-run retry resumes from checkpoint
-  and never loses answers.
+- **Dynamic VRAM sizing — use everything actually free, minus a cushion.**
+  vLLM's `gpu_memory_utilization` is a fraction of *total* VRAM, not *free* VRAM,
+  so any fixed value both wastes headroom on a clean machine and risks OOM on a
+  machine where the desktop already holds 1–2 GB. Instead, compute it at startup
+  in `_load_agent`:
+  1. `free, total = torch.cuda.mem_get_info()`
+  2. `gpu_memory_utilization = (free − HEADROOM) / total`, with `HEADROOM = 1 GB`,
+     clamped to `[0.50, 0.92]`
+  3. Log free/total/chosen-util in the Phase 0 startup trace.
+  The headroom cushion stays necessary for activation spikes during long prefills
+  and for other processes grabbing VRAM after init (vLLM only measures once, at
+  startup).
+- **`max_num_seqs` needs no ladder — let the scheduler self-limit.** vLLM
+  pre-allocates the KV cache inside its budget and only admits sequences while
+  free KV blocks exist, so a generous `max_num_seqs=32` cannot itself cause OOM;
+  actual concurrency adapts to whatever KV space the dynamic sizing produced.
+- **OOM retry ladder becomes a headroom ladder (fallback only):** if engine init
+  or a wave still OOMs, tear down and retry with `HEADROOM` = 2 GB, then 3 GB
+  (i.e., progressively more conservative), instead of stepping through fixed util
+  values. Implement in `src/v03_gamma.py` around engine construction and the wave
+  loop — per-wave checkpointing already exists, so a mid-run retry resumes from
+  checkpoint and never loses answers.
 - **The ladder replaces the current single-shot vLLM try → silent HF fallback**
   (`v03_gamma.py:430-447`, Diagnosis #6). Today ONE vLLM failure sends the entire
   2000-question run to sequential HuggingFace. After this change, vLLM is retried
   down the whole ladder first; HuggingFace remains only as the very last resort and
   must announce itself loudly in stdout and the trace so a degraded judge run is
   diagnosable afterward.
-- Config ladder lives in `configs/pipeline_config.yaml` (`safe_vllm`).
+- Config (headroom values, clamp range, `max_num_seqs=32`) lives in
+  `configs/pipeline_config.yaml` (`safe_vllm` section repurposed).
 - Keep `max_model_len=4096` unchanged.
 - Answers are expected to be identical (temperature-0 wave 1, unchanged SC seeds) —
   verify with an answer diff against `data/submissions/submission_v03_gamma.csv`.
@@ -169,12 +187,12 @@ parameter, or answer.
    - For the remainder, use one **batched** `tokenizer(...)` call (HF fast
      tokenizers parallelize in Rust) instead of a Python loop.
    Byte-identical outputs either way.
-3. **Raise the non-safe `max_num_seqs` and treat the safe ladder as a floor.**
+3. **Remove the hardcoded non-safe `max_num_seqs=16`.**
    Non-safe mode hardcodes `max_num_seqs=16` (`v03_gamma.py:177`); vLLM's own
    default is 256 and it budgets KV-cache blocks under `gpu_memory_utilization`
-   anyway, so the ceiling can go much higher without extra OOM exposure. The
-   Phase 1 ladder values (12/8/4) are conservative floors — measure whether 16–32
-   fits in safe mode on 16 GB.
+   anyway, so the ceiling adds no OOM protection — it only caps throughput. With
+   Phase 1's dynamic VRAM sizing + self-limiting scheduler, both modes converge on
+   a generous `max_num_seqs=32` and let KV-block availability set real concurrency.
 4. **Enable chunked prefill.**
    Long reading-passage prefills (up to ~4k tokens) stall decode iterations for the
    whole running batch. `enable_chunked_prefill=True` in the engine kwargs
@@ -260,8 +278,8 @@ same accuracy gate as Phases 2–3. But the payoff is large enough to justify te
 - **What:** AWQ INT4 weights for `Qwen3.5-4B`. FP16 weights are ~8 GB; INT4 ≈
   ~2.6–3 GB. On a 16 GB card that frees ~5 GB for KV cache, and 4B-scale decode is
   memory-bandwidth-bound, so expect roughly **1.5–2× faster decode** plus much
-  higher safe concurrency (reinvest the freed VRAM through the Phase 1 ladder —
-  `max_num_seqs` can go far higher).
+  higher safe concurrency — Phase 1's dynamic VRAM sizing reinvests the freed
+  ~5 GB into KV cache automatically, no retuning needed.
 - **AWQ vs FP8 on the known judge card:** the RTX 5060 Ti (Blackwell) supports
   both. **AWQ INT4 is still the better fit** because the 5060 Ti's bottleneck is
   its 448 GB/s memory bandwidth — INT4 weights cut weight traffic ~4× vs FP16
@@ -283,11 +301,136 @@ same accuracy gate as Phases 2–3. But the payoff is large enough to justify te
   as Phases 2–3). MCQ tasks typically lose 0–0.5 pt from AWQ INT4; if the drop is
   larger, ship without it — Phases 0–3 stand on their own.
 
+### Phase 5 — Accuracy reinvestment (after speed phases land; each item gated)
+
+Phase 3 frees ~60% of SC samples. Instead of pocketing all of it as speed, reinvest
+part of that budget where the error data says it matters (v02_gamma error slice:
+26 knowledge / 13 stem / 5 reading of 44 errors). All items are rule-compliant
+(same single LLM, no RAG, no second model, offline) and exclude fine-tuning.
+Ordered by expected value:
+
+1. **Promote the margin fix from stretch to core (accuracy framing).**
+   KNOWLEDGE is the biggest error bucket (18.2% error rate) precisely because the
+   `margin < 0.20 → SC n=5` rescue gate has never fired (margins saturated at 1.0).
+   With real margins (Phase 3 stretch, same guardrails — zero extra requests,
+   `logprobs=20` cap), low-confidence knowledge questions finally get their rescue
+   pass and STEM's adaptive n=7 activates for genuinely uncertain items.
+2. **Reinvest early-consensus savings into deeper SC on disagreements.**
+   In two-stage Wave 2, when the two probe samples DISAGREE with wave-1, escalate
+   deeper than today (n=3 → 5–7 by route). Disagreement is the best uncertainty
+   signal available; this targets compute exactly where votes are split, at
+   roughly zero net cost vs the pre-plan baseline.
+3. **Disable option shuffle for high-choice questions (≥8 labels).**
+   SC broke 3 correct first answers (`test_0222`, `test_0227`, `test_0432`), and
+   the project's own analysis flags ≥8-choice items as vulnerable to shuffle/remap
+   confusion. Keep SC, skip the shuffle: `shuffle_options`
+   (`sc_policy.py:184-205`) already returns an identity map when disabled — add an
+   `n_choices >= 8` condition. Remap-confusion risk outweighs position-bias risk
+   at 10 labels.
+4. **Detect truncated think drafts and fall back to direct choice.**
+   Protects Phase 2's budget cuts: when a think draft hits `max_tokens` without a
+   closing `</think>`, extraction conditions on an incomplete draft. Detect
+   truncation and use the plain direct guided-choice prompt for that question
+   instead of the reasoning-conditioned extraction.
+5. **Count the wave-1 answer as a full vote in `_vote`.**
+   The temperature-0, unshuffled first pass is the most reliable single sample;
+   today it is only a tie-breaker (`solve.py:200-242`). Counting it as a vote
+   protects correct first answers from being outvoted by noisy SC samples — the
+   exact "SC broke 3 correct answers" failure mode.
+6. **Cheap A/B experiments (optional, each individually gated):**
+   SC temperature 0.6 → ~0.8 (more diverse reasoning paths, which self-consistency
+   theory prefers), and carefully validated route-specific few-shot exemplars —
+   the ONE sanctioned exception to the "never touch prompts" rule, allowed only
+   with its own full public-set gate, since it is the only lever that could move
+   any of the 21 persistent failures that stem from format rather than knowledge.
+
+Not worth pursuing: the 21 persistent failures as a group (wrong across all
+versions v01→v03; almost certainly capability limits of a 4B model without
+retrieval, and retrieval is banned).
+
+Acceptance: each item lands separately and must improve or hold proxy accuracy
+(≥ 424/463 to adopt an accuracy item — improvements are the goal, not breakeven)
+without raising s/question above the post-Phase-3 level by more than ~10%.
+
 ### What we deliberately do NOT touch
 
-Router rules, prompts, model choice, extraction mechanism, option-shuffle voting,
-checkpoint/always-emit safety layer — all accuracy-bearing and organizer-praised.
-No pipeline replacement, per the organizer's note.
+Router rules, model choice, extraction mechanism, checkpoint/always-emit safety
+layer — all accuracy-bearing and organizer-praised. No pipeline replacement, per
+the organizer's note. Prompts stay untouched throughout the speed phases (0–4);
+the only sanctioned prompt experiment is Phase 5 item 6, behind its own full
+public-set gate. Option-shuffle voting stays, except the targeted ≥8-choice
+exemption in Phase 5 item 3.
+
+## Risk ratings per phase
+
+| Phase | Risk | Why | Worst case |
+|---|---|---|---|
+| 0 (instrumentation) | Low | Additive logging only; no policy change | Slightly larger trace files |
+| 1 (dynamic VRAM) | Medium-low | Sizing mistake is caught by the headroom retry ladder; floor = today's settings | No speedup, never a lost run |
+| 1b (mechanical fixes) | Low-medium | Each is output-preserving *if implemented exactly*; chat-template pitfall below | Answer diffs caught by the zero-diff gate |
+| 2 (route budgets) | Medium | Truncation can clip a draft that mattered; budgets set from measured p95, gated | ≤1 question drop or revert budgets |
+| 3 (two-stage SC) | Medium | Changes escalation policy; evidence-based (66% wasted confirmations), gated | Revert to single-stage SC |
+| 4 (AWQ) | Medium-high | Changes model numerics; biggest gated item | Ship without it; Phases 0–3 stand alone |
+| 5 (accuracy reinvestment) | Medium | Each item changes answer policy; all individually gated | Drop any item that fails its gate |
+
+Nothing in the plan is unrecoverable: every phase either preserves outputs exactly
+or passes through the public-set accuracy gate before adoption, and the
+checkpoint/always-emit layer is never touched.
+
+## Implementation order, done criteria, and pitfalls (for the executing agent)
+
+**Order:** Phase 0 → 1 → 1b → 2 → 3 → (4) → (5). Dependencies: Phase 2 requires
+Phase 1b.1 (per-request params carry the budgets); Phase 2 budgets require
+Phase 0's measured token distributions; Phase 3 is independent of Phase 2 but
+should be measured after it so savings attribute cleanly. Phase 5 comes only
+after the speed phases land (items 1–2 spend the budget Phase 3 frees; item 4
+protects Phase 2's cuts) and its items land one at a time, each with its own
+public-set gate.
+
+**Done criteria per phase:**
+
+- **Phase 0:** a public-set run produces a trace where every question has route,
+  sc_n, think flag, gen-token counts, and time shares; per-question `time` values
+  in `submission_time.csv` are non-uniform and sum ≈ total wall time; startup log
+  shows backend, GPU name, free/total VRAM, chosen util, prefix-caching status.
+- **Phase 1:** engine starts with dynamically computed util; forced-OOM test (set
+  clamp max artificially high) triggers the headroom retry and completes from
+  checkpoint; HF fallback only reachable after the full ladder and announces
+  itself in stdout + trace.
+- **Phase 1b:** public-set answers identical to the pre-1b run (see Verification
+  for the numerics tolerance); wall-clock strictly lower; unit test proves the
+  byte-length fast path never underestimates token counts on Vietnamese samples.
+- **Phase 2:** trace shows no route exceeding its budget; proxy accuracy ≥ 423/463.
+- **Phase 3:** trace shows `_early_consensus` vs `_full_sc` reasons; SC sample
+  count drops ≥50%; proxy accuracy ≥ 423/463.
+- **Phase 4:** model loads quantized inside the CUDA 12.9.1 container; proxy
+  accuracy ≥ 423/463; s/question improves vs Phase 3 result.
+
+**Known pitfalls:**
+
+1. **Chat-template equivalence (Phase 1b.1 — the trap that silently breaks
+   "byte-identical").** `llm.generate_text` currently calls `engine.chat(...)`,
+   which applies the model's chat template internally. The merged path must
+   pre-render with `tokenizer.apply_chat_template([{"role":"user",...}],
+   tokenize=False, add_generation_prompt=True, enable_thinking=...)` and produce
+   the EXACT same final prompt string. Add a startup assertion comparing both
+   renderings on a sample prompt before trusting the merged path; fall back to
+   the old two-call path if they differ.
+2. **CUDA context before `mem_get_info` (Phase 1).** `torch.cuda.mem_get_info()`
+   requires an initialized CUDA context on the right device — call
+   `torch.cuda.init()` / select device first, or the reading can be wrong.
+3. **Byte-length bound, not char-length (Phase 1b.2).** Vietnamese diacritics are
+   multi-byte; only `len(text.encode("utf-8"))` upper-bounds byte-level BPE token
+   count. Using `len(text)` reintroduces silent context overflows.
+4. **Do not touch prompt text in any speed phase (0–4)** — prompts are
+   accuracy-bearing (this is also why stop sequences were rejected). The single
+   exception is the Phase 5 item 6 few-shot experiment, behind its own gate.
+5. **`SC_SEED`-driven shuffles must not change in Phase 3.** Wave 2a must use
+   `sample_idx` 0..1 and Wave 2b must continue 2..n-1 so shuffle sequences match
+   the single-stage run for gate comparability.
+6. **Confirm actual per-route budgets against `TOKENS_BY_ROUTE` keys** — the
+   config uses uppercase route keys ("STEM") while `Wave1Result.route` is
+   lowercase ("stem"); normalize once at the boundary or budgets silently miss.
 
 ## Files to modify
 
@@ -298,8 +441,9 @@ No pipeline replacement, per the organizer's note.
 | `src/reasoning_agent.py`                           | thread token counts / per-request params through `generate_freeform`                                                                |
 | `src/v03_gamma.py`                                 | vLLM retry ladder replacing silent HF fallback, engine/GPU/backend + prefix-caching status logging, remove hardcoded `max_num_seqs=16`                                |
 | `predict.py`                                       | real per-question`time` in `submission_time.csv` from trace attribution                                                                     |
-| `configs/pipeline_config.yaml` + `src/config.py` | budget values, safe-mode ladder, stage-1 SC constants                                                                                           |
-| `src/sc_policy.py`                                 | two-stage SC constants/helpers                                                                                                                  |
+| `configs/pipeline_config.yaml` + `src/config.py` | budget values, dynamic-VRAM headroom ladder + clamp range, stage-1 SC constants                                                                 |
+| `src/sc_policy.py`                                 | two-stage SC constants/helpers; Phase 5: high-choice shuffle exemption, disagreement-depth policy                                               |
+| `src/solve.py`                                     | Phase 5: `_vote` counts wave-1 answer as a full vote; truncated-draft detection helper                                                          |
 | `src/models.py` + `configs/pipeline_config.yaml`   | Phase 4: quantized model id (AWQ hook at `models.py:105` already exists)                                                                        |
 | `tests/`                                           | new unit tests: batch grouping picks correct budgets; two-stage consensus logic; time attribution sums to wave totals; OOM ladder retry         |
 
