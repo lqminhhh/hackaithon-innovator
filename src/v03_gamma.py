@@ -233,6 +233,12 @@ def run_v03_gamma(
     wave2: dict[str, Any] = {}
     failed = False
     succeeded = False
+    runtime_info = _build_runtime_info(
+        safe_mode=safe_mode,
+        gpu_memory_utilization=chosen_gpu_util,
+        max_model_len=chosen_max_len,
+        max_num_seqs=chosen_max_seqs,
+    )
 
     try:
         agent = _load_agent(
@@ -242,6 +248,8 @@ def run_v03_gamma(
             max_num_seqs=chosen_max_seqs,
             t_start=t_start,
         )
+        runtime_info.update(getattr(agent, "_backend_info", {}))
+        _log_runtime_info(runtime_info)
         if warmup:
             _warmup_agent(agent)
 
@@ -260,7 +268,14 @@ def run_v03_gamma(
         final = finalize_answers(parsed_list, wave1, wave2, state["answers"])
         state["answers"].update(final)
         _write_results_atomic(final, parsed_list, output_path)
-        write_traces(trace_output, parsed_list, wave1, wave2, final)
+        write_traces(
+            trace_output,
+            parsed_list,
+            wave1,
+            wave2,
+            final,
+            runtime_info=runtime_info,
+        )
 
         try:
             ckpt_path.unlink(missing_ok=True)
@@ -415,6 +430,61 @@ def _warmup_agent(agent: Any) -> None:
     print(f"[v03_gamma] Warmup complete in {time.time() - t0:.1f}s", flush=True)
 
 
+def _build_runtime_info(
+    *,
+    safe_mode: bool,
+    gpu_memory_utilization: float | None,
+    max_model_len: int | None,
+    max_num_seqs: int | None,
+) -> dict[str, Any]:
+    runtime_info: dict[str, Any] = {
+        "safe_mode": safe_mode,
+        "gpu_memory_utilization": gpu_memory_utilization,
+        "max_model_len": max_model_len,
+        "max_num_seqs": max_num_seqs,
+        "enable_prefix_caching_requested": True,
+    }
+    try:
+        import torch
+
+        runtime_info["torch_version"] = getattr(torch, "__version__", None)
+        runtime_info["cuda_available"] = bool(torch.cuda.is_available())
+        runtime_info["torch_cuda_version"] = getattr(torch.version, "cuda", None)
+        if torch.cuda.is_available():
+            device_index = torch.cuda.current_device()
+            props = torch.cuda.get_device_properties(device_index)
+            runtime_info["gpu_name"] = props.name
+            runtime_info["gpu_total_vram_gb"] = round(props.total_memory / (1024 ** 3), 2)
+            runtime_info["gpu_capability"] = f"{props.major}.{props.minor}"
+            runtime_info["cuda_arch_list"] = list(torch.cuda.get_arch_list())
+            try:
+                probe = torch.zeros(1, device=f"cuda:{device_index}")
+                runtime_info["cuda_smoke_test"] = float((probe + 1).item()) == 1.0
+            except Exception as exc:
+                runtime_info["cuda_smoke_test"] = False
+                runtime_info["cuda_smoke_test_error"] = str(exc)
+    except Exception as exc:
+        runtime_info["runtime_probe_error"] = str(exc)
+
+    try:
+        import vllm
+
+        runtime_info["vllm_version"] = getattr(vllm, "__version__", None)
+    except Exception as exc:
+        runtime_info["vllm_version"] = None
+        runtime_info["vllm_probe_error"] = str(exc)
+
+    return runtime_info
+
+
+def _log_runtime_info(runtime_info: dict[str, Any]) -> None:
+    print(
+        "[v03_gamma] Runtime info: "
+        + json.dumps(runtime_info, ensure_ascii=False, sort_keys=True),
+        flush=True,
+    )
+
+
 def _load_agent(
     *,
     model_id: str | None,
@@ -437,14 +507,31 @@ def _load_agent(
                 max_num_seqs=max_num_seqs,
             )
             print(f"Model loaded (vLLM) in {time.time() - t_start:.1f}s", flush=True)
-            return ReasoningAgent(llm=llm)
+            agent = ReasoningAgent(llm=llm)
+            agent._backend_info = {
+                "backend": "vllm",
+                "backend_reason": "loaded_vllm",
+                "model_id": getattr(llm, "model", model_id),
+                "enable_prefix_caching_effective": getattr(llm, "enable_prefix_caching", None),
+            }
+            return agent
         except Exception as exc:
             print(f"vLLM unavailable ({exc}), falling back to HuggingFace", flush=True)
+            fallback_reason = str(exc)
+    else:
+        fallback_reason = "cuda_unavailable"
 
     print("Loading primary model with HuggingFace...", flush=True)
     model, tokenizer = load_primary_model(model_id=model_id)
     print(f"Model loaded (HF) in {time.time() - t_start:.1f}s", flush=True)
-    return ReasoningAgent(model=model, tokenizer=tokenizer)
+    agent = ReasoningAgent(model=model, tokenizer=tokenizer)
+    agent._backend_info = {
+        "backend": "huggingface",
+        "backend_reason": fallback_reason,
+        "model_id": model_id,
+        "enable_prefix_caching_effective": False,
+    }
+    return agent
 
 
 if __name__ == "__main__":

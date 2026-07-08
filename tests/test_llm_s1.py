@@ -42,6 +42,7 @@ class _FakeEngine:
                     SimpleNamespace(
                         text=f"out-{i}",
                         logprobs=[{"A": -0.1}],
+                        token_ids=[101, 102, 103],
                     )
                 ]
             )
@@ -86,6 +87,7 @@ def test_generate_text_batches_prompts_and_passes_thinking_flag():
 
     assert [o.text for o in outputs] == ["out-0", "out-1"]
     assert outputs[0].logprobs == [{"A": -0.1}]
+    assert outputs[0].num_generated_tokens == 3
     assert len(engine.calls) == 1
     call = engine.calls[0]
     assert call["kwargs"]["chat_template_kwargs"] == {"enable_thinking": True}

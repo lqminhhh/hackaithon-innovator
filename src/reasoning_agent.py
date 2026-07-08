@@ -13,6 +13,7 @@ import yaml
 
 from src.config import load_project_config
 from src.extract import ChoiceResult, GuidedChoiceExtractor, best_label, softmax_margin
+from src.llm import GenerationOutput
 
 _PROMPTS_PATH = Path(__file__).resolve().parent.parent / "configs" / "prompts.yaml"
 
@@ -20,6 +21,8 @@ _PROMPTS_PATH = Path(__file__).resolve().parent.parent / "configs" / "prompts.ya
 def _load_prompts() -> dict[str, str]:
     with open(_PROMPTS_PATH) as f:
         return yaml.safe_load(f)
+
+
 class ReasoningAgent:
     """Unified reasoning agent supporting vLLM and HuggingFace backends."""
 
@@ -145,7 +148,8 @@ class ReasoningAgent:
         max_tokens: int | None = None,
         temperature: float | None = None,
         top_p: float | None = None,
-    ) -> list[str]:
+        return_outputs: bool = False,
+    ) -> list[str] | list[GenerationOutput]:
         """Generate unconstrained text for reasoning/escalation passes."""
         temp = temperature if temperature is not None else self.cfg["temperature_deterministic"]
         max_new = max_tokens if max_tokens is not None else self.cfg["max_new_tokens"]
@@ -158,15 +162,23 @@ class ReasoningAgent:
                 temperature=temp,
                 top_p=top_p,
             )
+            if return_outputs:
+                return outputs
             return [output.text for output in outputs]
 
         tagged = [self._tag_mode(prompt, mode) for prompt in prompts]
         if self.is_vllm:
-            return self._vllm_batch(tagged, temp, max_tokens=max_new, top_p=top_p)
-        return [
-            self._hf_generate(prompt, temp, max_tokens=max_new, top_p=top_p)
+            outputs = self._vllm_batch_outputs(tagged, temp, max_tokens=max_new, top_p=top_p)
+            if return_outputs:
+                return outputs
+            return [output.text for output in outputs]
+        outputs = [
+            self._hf_generate_output(prompt, temp, max_tokens=max_new, top_p=top_p)
             for prompt in tagged
         ]
+        if return_outputs:
+            return outputs
+        return [output.text for output in outputs]
 
     def _vllm_batch(
         self,
@@ -188,6 +200,33 @@ class ReasoningAgent:
         outputs = self._llm.chat(conversations, params)
         return [o.outputs[0].text for o in outputs]
 
+    def _vllm_batch_outputs(
+        self,
+        prompts: list[str],
+        temperature: float | None,
+        *,
+        max_tokens: int | None = None,
+        top_p: float | None = None,
+    ) -> list[GenerationOutput]:
+        from vllm import SamplingParams
+
+        temp = temperature if temperature is not None else self.cfg["temperature_deterministic"]
+        params = SamplingParams(
+            temperature=temp,
+            max_tokens=max_tokens if max_tokens is not None else self.cfg["max_new_tokens"],
+            top_p=top_p if top_p is not None else (0.9 if temp > 0 else 1.0),
+        )
+        conversations = [[{"role": "user", "content": p}] for p in prompts]
+        outputs = self._llm.chat(conversations, params)
+        return [
+            GenerationOutput(
+                text=output.outputs[0].text,
+                logprobs=getattr(output.outputs[0], "logprobs", None),
+                num_generated_tokens=_generated_token_count(output.outputs[0]),
+            )
+            for output in outputs
+        ]
+
     def _hf_generate(
         self,
         prompt: str,
@@ -196,6 +235,21 @@ class ReasoningAgent:
         max_tokens: int | None = None,
         top_p: float | None = None,
     ) -> str:
+        return self._hf_generate_output(
+            prompt,
+            temperature,
+            max_tokens=max_tokens,
+            top_p=top_p,
+        ).text
+
+    def _hf_generate_output(
+        self,
+        prompt: str,
+        temperature: float | None,
+        *,
+        max_tokens: int | None = None,
+        top_p: float | None = None,
+    ) -> GenerationOutput:
         import torch
 
         temp = temperature if temperature is not None else self.cfg["temperature_deterministic"]
@@ -220,7 +274,10 @@ class ReasoningAgent:
             output_ids = self._model.generate(**inputs, **gen_kwargs)
 
         new_tokens = output_ids[0][inputs["input_ids"].shape[1]:]
-        return self._tokenizer.decode(new_tokens, skip_special_tokens=True)
+        return GenerationOutput(
+            text=self._tokenizer.decode(new_tokens, skip_special_tokens=True),
+            num_generated_tokens=int(new_tokens.shape[0]),
+        )
 
     @staticmethod
     def _tag_mode(prompt: str, mode: str) -> str:
@@ -366,3 +423,13 @@ class ReasoningAgent:
         """Run CoT for a single question."""
         prompt = self.build_prompt(question, options)
         return self.generate_batch([prompt], temperature)[0]
+
+
+def _generated_token_count(output) -> int | None:
+    token_ids = getattr(output, "token_ids", None)
+    if token_ids is None:
+        return None
+    try:
+        return len(token_ids)
+    except TypeError:
+        return None

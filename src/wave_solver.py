@@ -8,11 +8,13 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+import time
 
 from src.batch_extract import batch_extract
 from src.config import FALLBACK, MAX_MODEL_LEN
 from src.data_loader import write_submission
 from src.extract import ChoiceResult
+from src.llm import GenerationOutput
 from src.parser import ParsedQuestion
 from src.reasoning_agent import ReasoningAgent
 from src.router import get_forced_answer, route_question
@@ -81,6 +83,9 @@ class Wave1Result:
     error: str | None = None
     reasoning_prompt: str = ""
     per_letter_logprob: dict[str, float] = field(default_factory=dict)
+    gen_tokens_wave1: int = 0
+    wave1_time_share: float = 0.0
+    wave1_think: bool = False
 
 
 @dataclass
@@ -90,6 +95,11 @@ class Wave2Result:
     answer: str
     votes: list[str] = field(default_factory=list)
     escalation_reason: str = ""
+    gen_tokens_wave2: int = 0
+    wave2_sample_tokens: list[int] = field(default_factory=list)
+    wave2_time_share: float = 0.0
+    wave2_think: bool = False
+    sc_n: int = 0
 
 
 def _build_compact_extraction_prompt(
@@ -196,6 +206,39 @@ def _fit_extraction_prompt(
     return base_prompt
 
 
+def _normalize_generation_outputs(outputs: list[object]) -> list[GenerationOutput]:
+    normalized: list[GenerationOutput] = []
+    for output in outputs:
+        if isinstance(output, GenerationOutput):
+            normalized.append(output)
+        else:
+            normalized.append(GenerationOutput(text=str(output)))
+    return normalized
+
+
+def _allocate_time_shares(
+    qids: list[str],
+    token_counts: list[int],
+    total_elapsed: float,
+) -> dict[str, float]:
+    if not qids:
+        return {}
+
+    per_qid_tokens: dict[str, int] = defaultdict(int)
+    for qid, token_count in zip(qids, token_counts):
+        per_qid_tokens[qid] += max(token_count, 0)
+
+    total_tokens = sum(per_qid_tokens.values())
+    if total_tokens > 0:
+        return {
+            qid: total_elapsed * (count / total_tokens)
+            for qid, count in per_qid_tokens.items()
+        }
+
+    even_share = total_elapsed / len(per_qid_tokens)
+    return {qid: even_share for qid in per_qid_tokens}
+
+
 def run_wave1(
     agent: ReasoningAgent,
     parsed_list: list[ParsedQuestion],
@@ -224,6 +267,7 @@ def run_wave1(
     if not pending:
         return results
 
+    wave_start = time.perf_counter()
     reasoning_prompts = [_build_reasoning_prompt(parsed, route) for parsed, route in pending]
     think_idx = [
         i for i, (parsed, route) in enumerate(pending)
@@ -234,29 +278,41 @@ def run_wave1(
         if not should_use_think_mode(parsed, route, stage="wave1")
     ]
 
-    reasonings = [""] * len(pending)
+    reasoning_outputs = [GenerationOutput(text="")] * len(pending)
 
     if think_idx:
-        outputs = batch_generate(
-            agent,
-            [reasoning_prompts[i] for i in think_idx],
-            mode="think",
-            max_tokens=TOKENS_BY_ROUTE["STEM"],
-            temperature=0.0,
+        outputs = _normalize_generation_outputs(
+            batch_generate(
+                agent,
+                [reasoning_prompts[i] for i in think_idx],
+                mode="think",
+                max_tokens=TOKENS_BY_ROUTE["STEM"],
+                temperature=0.0,
+            )
         )
         for pos, idx in enumerate(think_idx):
-            reasonings[idx] = outputs[pos]
+            reasoning_outputs[idx] = outputs[pos]
 
     if other_idx:
-        outputs = batch_generate(
-            agent,
-            [reasoning_prompts[i] for i in other_idx],
-            mode="no_think",
-            max_tokens=TOKENS_BY_ROUTE["READING"],
-            temperature=0.0,
+        outputs = _normalize_generation_outputs(
+            batch_generate(
+                agent,
+                [reasoning_prompts[i] for i in other_idx],
+                mode="no_think",
+                max_tokens=TOKENS_BY_ROUTE["READING"],
+                temperature=0.0,
+            )
         )
         for pos, idx in enumerate(other_idx):
-            reasonings[idx] = outputs[pos]
+            reasoning_outputs[idx] = outputs[pos]
+
+    reasonings = [output.text for output in reasoning_outputs]
+    token_counts = [output.num_generated_tokens or 0 for output in reasoning_outputs]
+    time_shares = _allocate_time_shares(
+        [parsed.qid for parsed, _route in pending],
+        token_counts,
+        time.perf_counter() - wave_start,
+    )
 
     extract_prompts = [
         _fit_extraction_prompt(
@@ -281,6 +337,9 @@ def run_wave1(
                 margin=choice.margin,
                 reasoning_prompt=reasoning_prompts[i],
                 per_letter_logprob=choice.per_letter_logprob,
+                gen_tokens_wave1=token_counts[i],
+                wave1_time_share=time_shares.get(parsed.qid, 0.0),
+                wave1_think=i in think_idx,
             )
         except Exception as exc:
             results[parsed.qid] = Wave1Result(
@@ -290,6 +349,9 @@ def run_wave1(
                 margin=None,
                 error=str(exc),
                 reasoning_prompt=reasoning_prompts[i],
+                gen_tokens_wave1=token_counts[i],
+                wave1_time_share=time_shares.get(parsed.qid, 0.0),
+                wave1_think=i in think_idx,
             )
 
     return results
@@ -332,6 +394,7 @@ def run_wave2(
     if not escalated:
         return {}
 
+    wave_start = time.perf_counter()
     flat_sc: list[
         tuple[str, str, str, str, dict[str, str], dict[str, str], bool]
     ] = []
@@ -355,31 +418,43 @@ def run_wave2(
     think_sc_idx = [i for i, item in enumerate(flat_sc) if item[6]]
     other_sc_idx = [i for i, item in enumerate(flat_sc) if not item[6]]
 
-    sc_reasonings = [""] * len(flat_sc)
+    sc_outputs = [GenerationOutput(text="")] * len(flat_sc)
 
     if think_sc_idx:
-        outputs = batch_generate(
-            agent,
-            [flat_sc[i][3] for i in think_sc_idx],
-            mode="think",
-            max_tokens=TOKENS_BY_ROUTE["STEM"],
-            temperature=SC_TEMP,
-            top_p=SC_TOP_P,
+        outputs = _normalize_generation_outputs(
+            batch_generate(
+                agent,
+                [flat_sc[i][3] for i in think_sc_idx],
+                mode="think",
+                max_tokens=TOKENS_BY_ROUTE["STEM"],
+                temperature=SC_TEMP,
+                top_p=SC_TOP_P,
+            )
         )
         for pos, idx in enumerate(think_sc_idx):
-            sc_reasonings[idx] = outputs[pos]
+            sc_outputs[idx] = outputs[pos]
 
     if other_sc_idx:
-        outputs = batch_generate(
-            agent,
-            [flat_sc[i][3] for i in other_sc_idx],
-            mode="no_think",
-            max_tokens=TOKENS_BY_ROUTE["READING"],
-            temperature=SC_TEMP,
-            top_p=SC_TOP_P,
+        outputs = _normalize_generation_outputs(
+            batch_generate(
+                agent,
+                [flat_sc[i][3] for i in other_sc_idx],
+                mode="no_think",
+                max_tokens=TOKENS_BY_ROUTE["READING"],
+                temperature=SC_TEMP,
+                top_p=SC_TOP_P,
+            )
         )
         for pos, idx in enumerate(other_sc_idx):
-            sc_reasonings[idx] = outputs[pos]
+            sc_outputs[idx] = outputs[pos]
+
+    sc_reasonings = [output.text for output in sc_outputs]
+    sample_token_counts = [output.num_generated_tokens or 0 for output in sc_outputs]
+    wave2_time_shares = _allocate_time_shares(
+        [item[0] for item in flat_sc],
+        sample_token_counts,
+        time.perf_counter() - wave_start,
+    )
 
     sc_extract_prompts = [
         _fit_extraction_prompt(
@@ -424,14 +499,26 @@ def run_wave2(
         except Exception:
             pass
 
+    qid_sample_tokens: dict[str, list[int]] = defaultdict(list)
+    for i, (qid, _route, _query, _prompt, _options, _reverse_map, _use_think) in enumerate(flat_sc):
+        qid_sample_tokens[qid].append(sample_token_counts[i])
+
     wave2: dict[str, Wave2Result] = {}
     for parsed, _route, w1, _sc_n, esc_reason in escalated:
         choices = qid_choices.get(parsed.qid, [])
+        use_think = should_use_think_mode(parsed, w1.route, stage="wave2")
+        sample_tokens = qid_sample_tokens.get(parsed.qid, [])
+        total_tokens = sum(sample_tokens)
         if not choices:
             wave2[parsed.qid] = Wave2Result(
                 answer=w1.answer,
                 votes=[],
                 escalation_reason=esc_reason,
+                gen_tokens_wave2=total_tokens,
+                wave2_sample_tokens=sample_tokens,
+                wave2_time_share=wave2_time_shares.get(parsed.qid, 0.0),
+                wave2_think=use_think,
+                sc_n=_sc_n,
             )
             continue
         first_choice: ChoiceResult | None = None
@@ -446,6 +533,11 @@ def run_wave2(
             answer=vote.letter,
             votes=vote.votes,
             escalation_reason=esc_reason,
+            gen_tokens_wave2=total_tokens,
+            wave2_sample_tokens=sample_tokens,
+            wave2_time_share=wave2_time_shares.get(parsed.qid, 0.0),
+            wave2_think=use_think,
+            sc_n=_sc_n,
         )
 
     return wave2
@@ -463,13 +555,15 @@ def batch_generate(
     """Generate a batch of free-form reasoning completions."""
     if not prompts:
         return []
-    return agent.generate_freeform(
+    outputs = agent.generate_freeform(
         prompts,
         mode=mode,
         max_tokens=max_tokens,
         temperature=temperature,
         top_p=top_p,
+        return_outputs=True,
     )
+    return _normalize_generation_outputs(outputs)
 
 
 def finalize_answers(
@@ -530,6 +624,7 @@ def write_traces(
     wave1: dict[str, Wave1Result],
     wave2: dict[str, Wave2Result],
     final: dict[str, str],
+    runtime_info: dict[str, object] | None = None,
 ) -> None:
     with _trace_writer(trace_output) as write_trace:
         for parsed in parsed_list:
@@ -537,32 +632,55 @@ def write_traces(
             w1 = wave1.get(qid)
             w2 = wave2.get(qid)
             answer = final.get(qid, FALLBACK)
+            runtime = dict(runtime_info or {})
 
             if w1 is None:
                 path = "ckpt_restored"
                 route = None
                 margin = None
                 error = None
+                gen_tokens_wave1 = 0
+                wave1_time_share = 0.0
+                wave1_think = None
             elif w1.forced:
                 path = "forced_safety"
                 route = w1.route
                 margin = None
                 error = None
+                gen_tokens_wave1 = 0
+                wave1_time_share = 0.0
+                wave1_think = False
             elif w1.error:
                 path = "fallback"
                 route = w1.route
                 margin = None
                 error = w1.error
+                gen_tokens_wave1 = w1.gen_tokens_wave1
+                wave1_time_share = w1.wave1_time_share
+                wave1_think = w1.wave1_think
             elif w2 is not None:
                 path = f"wave_{w1.route}_sc"
                 route = w1.route
                 margin = w1.margin
                 error = None
+                gen_tokens_wave1 = w1.gen_tokens_wave1
+                wave1_time_share = w1.wave1_time_share
+                wave1_think = w1.wave1_think
             else:
                 path = "wave_direct"
                 route = w1.route
                 margin = w1.margin
                 error = None
+                gen_tokens_wave1 = w1.gen_tokens_wave1
+                wave1_time_share = w1.wave1_time_share
+                wave1_think = w1.wave1_think
+
+            gen_tokens_wave2 = w2.gen_tokens_wave2 if w2 else 0
+            wave2_time_share = w2.wave2_time_share if w2 else 0.0
+            wave2_think = w2.wave2_think if w2 else None
+            sc_n = w2.sc_n if w2 else 0
+            think = wave2_think if w2 is not None else wave1_think
+            attributed_time_seconds = wave1_time_share + wave2_time_share
 
             write_trace(
                 {
@@ -581,5 +699,18 @@ def write_traces(
                     "rag_used": False,
                     "rag_top_score": None,
                     "error": error,
+                    "gen_tokens_wave1": gen_tokens_wave1,
+                    "gen_tokens_wave2": gen_tokens_wave2,
+                    "wave2_sample_tokens": w2.wave2_sample_tokens if w2 else [],
+                    "sc_n": sc_n,
+                    "think": think,
+                    "wave1_think": wave1_think,
+                    "wave2_think": wave2_think,
+                    "wave1_time_share": round(wave1_time_share, 6),
+                    "wave2_time_share": round(wave2_time_share, 6),
+                    "attributed_time_seconds": round(attributed_time_seconds, 6),
+                    "backend": runtime.get("backend"),
+                    "backend_reason": runtime.get("backend_reason"),
+                    "runtime_info": runtime,
                 }
             )

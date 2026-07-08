@@ -66,6 +66,37 @@ def test_predict_writes_submission_time(tmp_path):
     ]
 
 
+def test_predict_writes_submission_time_from_trace(tmp_path):
+    submission = tmp_path / "submission.csv"
+    timing = tmp_path / "submission_time.csv"
+    trace = tmp_path / "trace.jsonl"
+    submission.write_text("qid,answer\nq1,A\nq2,B\n", encoding="utf-8")
+    trace.write_text(
+        "\n".join(
+            [
+                json.dumps({"qid": "q1", "attributed_time_seconds": 1.25}),
+                json.dumps({"qid": "q2", "attributed_time_seconds": 2.75}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    predict._write_submission_time(
+        str(submission),
+        str(timing),
+        elapsed=10.0,
+        trace_path=str(trace),
+    )
+
+    with timing.open(encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    assert rows == [
+        {"qid": "q1", "answer": "A", "time": "1.250000"},
+        {"qid": "q2", "answer": "B", "time": "2.750000"},
+    ]
+
+
 def test_v03_gamma_exports_main_runner():
     assert callable(v03_gamma.main)
     assert callable(v03_gamma.run_v03_gamma)

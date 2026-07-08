@@ -21,6 +21,7 @@ class GenerationOutput:
 
     text: str
     logprobs: Any | None = None
+    num_generated_tokens: int | None = None
 
 
 class LLM:
@@ -118,6 +119,7 @@ class LLM:
             GenerationOutput(
                 text=o.outputs[0].text,
                 logprobs=getattr(o.outputs[0], "logprobs", None),
+                num_generated_tokens=_generated_token_count(o.outputs[0]),
             )
             for o in raw_outputs
         ]
@@ -164,3 +166,13 @@ class LLM:
 
     def generate(self, *args: Any, **kwargs: Any):
         return self.engine.generate(*args, **kwargs)
+
+
+def _generated_token_count(output: Any) -> int | None:
+    token_ids = getattr(output, "token_ids", None)
+    if token_ids is None:
+        return None
+    try:
+        return len(token_ids)
+    except TypeError:
+        return None
