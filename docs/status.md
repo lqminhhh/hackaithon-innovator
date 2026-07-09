@@ -6,8 +6,12 @@
 ## What this project is
 
 Vietnamese multiple-choice QA system for HackAIthon 2026 Bang C.
-Input: JSON or CSV of questions with choices. Competition output:
-`/output/pred.csv` (`qid,answer`).
+Shipped container entrypoint: `inference.sh` -> `predict.py`.
+Competition input: `/code/private_test.json` by default, with CSV/legacy
+fallbacks also supported.
+Competition outputs:
+- `/code/submission.csv` (`qid,answer`)
+- `/code/submission_time.csv` (`qid,answer,time`)
 Scored on a private set of ~2000 questions on a 16 GB VRAM GPU.
 
 ## Competition constraints (non-negotiable)
