@@ -135,6 +135,11 @@ risky.
 We chose `v03_gamma` because it is the best operating point: stronger than the
 older fast versions, much faster than delta, and safer for a full private run.
 
+After locking that branch, we still kept improving the repo from the deployment
+side. The goal was not to change the architecture, but to make the same
+`v03_gamma` path easier to judge, easier to diagnose, and more robust during
+long container runs.
+
 ## 6. Research And Evidence Behind The Agent
 
 Our design was guided by a research and evidence map, not only by trial and
@@ -194,6 +199,28 @@ This is important because it shows the final model was not tuned by blindly
 adding more tokens everywhere. We added compute where the question structure
 made mistakes more likely.
 
+After locking `v03_gamma`, we also added a final hardening layer to the current
+repo:
+
+| Post-final hardening | Why it matters |
+| --- | --- |
+| Per-question compute logging | The trace now records route, path, backend, token usage, and compute attribution for real runs. |
+| `submission_time.csv` from trace attribution | Each question gets a derived time value instead of a flat average. |
+| Dynamic VRAM sizing | The runner reads free VRAM and chooses `gpu_memory_utilization` from what is actually available. |
+| Headroom retry ladder | If vLLM hits an OOM-like failure, the system retries with more headroom before degrading. |
+| Chunked prefill | This reduces mechanical pressure from long prompts, especially reading and self consistency waves. |
+| Wave-level chunk fallback | If a large wave fails in an OOM-like way, the runner can retry that wave in smaller chunks. |
+| Always-emit path | The run still writes the best available submission if it is interrupted. |
+
+We treat these changes as part of submission quality, because on a large private
+set, a system that is hard to run or hard to debug can be worse than one that
+scores slightly lower on the public set but finishes reliably.
+
+We also ran this hardened path on an approximately 2000 question dataset that
+we built ourselves to simulate the pressure of a larger private run. The main
+point of that test was not the score, but the fact that the pipeline was able
+to finish the run and emit complete output instead of failing in the middle.
+
 ## 8. Optimization And Reliability
 
 The final system includes several practical optimizations that matter for the
@@ -203,9 +230,13 @@ score, not just for engineering neatness.
 | --- | --- |
 | Wave batching | Groups first pass and escalation calls so vLLM can use the GPU more efficiently. |
 | Safe mode | Uses conservative vLLM settings for the 16 GB VRAM target. |
+| Dynamic VRAM sizing | Chooses GPU utilization from actually free VRAM instead of one fixed value. |
+| Retry ladder and wave chunk fallback | Reduces the chance that one small OOM-like event ruins the whole long run. |
 | Constrained extraction | Reduces invalid answers and keeps labels inside the legal option set. |
 | Option shuffle voting | Reduces answer position bias during self consistency. |
 | Warmup pass | Primes vLLM kernels to reduce first run latency spikes. |
+| Chunked prefill | Reduces mechanical stalls from long reasoning prompts. |
+| Per-question trace and timing | Makes both the trace and `submission_time.csv` reflect actual per-question compute. |
 | Fallback prefill and atomic writes | Helps guarantee that `submission.csv` is still complete if the run is interrupted or degraded. |
 | CSV and JSON loader | Supports both official input styles and questions with more than four choices. |
 
@@ -228,6 +259,12 @@ For the final private set, we expect around 2000 questions. A method that is
 more accurate on the public set but much slower and less stable can become a
 worse submission in the real environment. Our final choice favors expected
 score under judge constraints, not only public leaderboard maximum.
+
+We also tested an AWQ branch to see whether quantization would create a better
+balance for smaller hardware. Our conclusion was that the tradeoff was not good
+enough: accuracy dropped clearly, while the speed and deployment benefits were
+not strong enough to justify replacing the main full precision
+`Qwen/Qwen3.5-4B` path.
 
 ## 10. Limitations And Deployment Readiness
 
@@ -253,8 +290,9 @@ The submitted system is deployment ready in the following sense:
 | Single model | Uses only `Qwen/Qwen3.5-4B`. |
 | Competition I/O | Reads `/code/private_test.json` and writes `/code/submission.csv` plus `/code/submission_time.csv`. |
 | Output format | Writes `qid,answer` and `qid,answer,time`. |
+| Long private-like run | Finished on an approximately 2000 question dataset that we built to stress the full pipeline. |
 | Fault tolerance | Uses checkpointing, fallback answers, atomic writes, and best effort always emit behavior. |
-| 16 GB GPU safety | Uses `--safe-mode` with conservative vLLM settings. |
+| 16 GB GPU safety | Uses `--safe-mode`, dynamic VRAM sizing, a retry ladder, and wave-level chunk fallback. |
 
 In short, the operating principle is: answer easy questions quickly, reason more
 carefully on risky questions, and remain robust during offline deployment.

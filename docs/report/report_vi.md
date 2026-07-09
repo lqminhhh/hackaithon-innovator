@@ -124,6 +124,9 @@ Chúng tôi chọn `v03_gamma` vì đây là điểm vận hành tốt nhất: m
 bản nhanh cũ, nhanh hơn delta rất nhiều, và an toàn hơn cho một lần chạy
 private đầy đủ.
 
+Sau khi chốt nhánh này, chúng tôi vẫn tiếp tục hoàn thiện repo theo nhận xét của BTC. Mục tiêu không phải đổi kiến trúc, mà là làm cho cùng `v03_gamma` dễ chấm
+hơn, dễ chẩn đoán hơn, và bền hơn khi chạy dài trong container.
+
 ## 6. Nghiên Cứu Và Bằng Chứng Đằng Sau Agent
 
 Thiết kế của chúng tôi được dẫn dắt bởi bằng chứng, không chỉ bởi thử sai. Chúng
@@ -181,6 +184,27 @@ Thay vào đó, chúng tôi thay đổi chính sách phân bổ compute.
 token một cách mù quáng ở mọi nơi. Chúng tôi thêm compute ở những nơi cấu trúc
 câu hỏi làm lỗi dễ xảy ra hơn.
 
+Sau khi chốt `v03_gamma`, chúng tôi còn thêm một lớp hardening cho repo hiện tại:
+
+| Hoàn thiện sau khi chốt nhánh cuối | Ý nghĩa |
+| --- | --- |
+| Logging compute theo câu hỏi | Trace ghi route, path, backend, token usage, và compute attribution để phân tích run thực tế. |
+| `submission_time.csv` từ trace | Mỗi câu có thời gian được suy ra từ trace thay vì dùng một giá trị trung bình phẳng. |
+| Dynamic VRAM sizing | Runner đọc free VRAM và chọn `gpu_memory_utilization` theo bộ nhớ còn trống. |
+| Retry ladder theo headroom | Nếu vLLM gặp OOM like failure, hệ thống thử lại với headroom lớn hơn trước khi degrade. |
+| Chunked prefill | Giảm áp lực từ các prompt dài, nhất là reading và self consistency. |
+| Chunk fallback theo wave | Nếu một wave lớn gặp lỗi giống OOM, runner có thể chia wave thành chunk nhỏ hơn để tiếp tục. |
+| Always emit path | Giữ best effort submission ngay cả khi run bị gián đoạn. |
+
+Chúng tôi xem các thay đổi này là một phần của chất lượng bài nộp, vì với
+private set lớn, một hệ thống khó chấm hoặc khó debug có thể kém hơn một hệ
+thống điểm public thấp hơn một chút nhưng hoàn thành ổn định.
+
+Chúng tôi cũng đã thử đường chạy này trên một bộ dữ liệu khoảng 2000 câu do
+nhóm tự dựng để mô phỏng áp lực của private set lớn hơn. Điều quan trọng nhất
+không phải là điểm trên bộ này, mà là việc pipeline có thể đi hết toàn bộ run
+và xuất file đầy đủ thay vì dừng giữa chừng.
+
 ## 8. Tối Ưu Và Độ Ổn Định
 
 Hệ thống cuối có nhiều tối ưu thực tế ảnh hưởng trực tiếp đến điểm số, không chỉ
@@ -190,9 +214,13 @@ là phần kỹ thuật phụ.
 | ---------------------------------- | ----------------------------------------------------------------------------------- |
 | Wave batching                      | Gom first pass và escalation calls để vLLM dùng GPU hiệu quả hơn.            |
 | Safe mode                          | Dùng thiết lập vLLM thận trọng cho mục tiêu 16 GB VRAM.                       |
+| Dynamic VRAM sizing                | Chọn mức sử dụng GPU từ lượng VRAM còn trống thay vì một giá trị tĩnh duy nhất. |
+| Retry ladder và wave chunk fallback | Giảm khả năng một lỗi OOM like nhỏ làm hỏng cả bài chạy dài. |
 | Constrained extraction             | Giảm đáp án không hợp lệ và giữ nhãn trong tập lựa chọn hợp lệ.      |
 | Option shuffle voting              | Giảm thiên lệch vị trí đáp án trong self consistency.                       |
 | Warmup pass                        | Prime vLLM kernels để giảm first run latency spikes.                             |
+| Chunked prefill                    | Giảm nghẽn cơ học với prompt dài trong các wave reasoning. |
+| Per question trace và timing       | Giúp trace và `submission_time.csv` phản ánh compute thực tế của từng câu. |
 | Fallback prefill và atomic writes | Giúp đảm bảo `submission.csv` vẫn đầy đủ nếu run bị interrupt hoặc degraded. |
 | CSV và JSON loader                | Hỗ trợ cả hai kiểu input chính thức và câu hỏi có hơn bốn lựa chọn.   |
 
@@ -215,6 +243,12 @@ xác hơn trên public set nhưng chậm hơn nhiều và kém ổn định hơn
 thành bài nộp tệ hơn trong môi trường thật. Quyết định cuối của chúng tôi ưu
 tiên expected score dưới ràng buộc máy chấm, không chỉ public leaderboard
 maximum.
+
+Chúng tôi cũng đã thử một nhánh AWQ để xem liệu lượng tử hóa có tạo ra một điểm
+cân bằng tốt hơn cho phần cứng nhỏ hơn hay không. Kết luận của chúng tôi là
+trade off đó chưa đủ tốt: accuracy giảm rõ ràng, còn lợi ích về tốc độ và độ
+an toàn triển khai không đủ lớn để biện minh cho việc thay thế đường chạy chính
+`Qwen/Qwen3.5-4B` full precision.
 
 ## 10. Hạn Chế Và Sẵn Sàng Triển Khai
 
@@ -240,8 +274,9 @@ Hệ thống nộp cuối đã sẵn sàng triển khai theo các tiêu chí sau
 | Một mô hình duy nhất | Chỉ dùng `Qwen/Qwen3.5-4B`. |
 | I/O đúng yêu cầu cuộc thi | Đọc `/code/private_test.json` và ghi `/code/submission.csv` cùng `/code/submission_time.csv`. |
 | Định dạng output | Ghi `qid,answer` và `qid,answer,time`. |
+| Chạy dài kiểu private | Đã chạy hết trên bộ khoảng 2000 câu do nhóm tự dựng để kiểm tra độ bền của pipeline. |
 | Chống lỗi khi chạy | Có checkpoint, đáp án fallback, atomic write, và cơ chế best effort always emit. |
-| An toàn cho GPU 16 GB | Dùng `--safe-mode` với cấu hình vLLM thận trọng. |
+| An toàn cho GPU 16 GB | Dùng `--safe-mode`, dynamic VRAM sizing, retry ladder, và chunk fallback theo wave. |
 
 Tóm lại, nguyên tắc vận hành của VietMind MCQ là: nhanh với câu dễ, cẩn trọng
 với câu khó, và bền bỉ khi triển khai ngoại tuyến.

@@ -47,6 +47,13 @@ returning a clean submission file.
 The final branch is `v03_gamma`. We chose it because it is the best practical
 balance of public-set accuracy, runtime, and 16 GB VRAM reliability.
 
+The current repo also includes the last hardening pass we made after locking the
+final branch: per-question compute logging, real `submission_time.csv`
+attribution, dynamic VRAM sizing from free memory, a headroom retry ladder,
+chunked prefill, wave-level chunk fallback on OOM-like failures, and an
+always-emit path so the run still writes the best available submission if it is
+interrupted.
+
 ## IV. Core Idea
 
 VietMind MCQ is built around adaptive reasoning: not every question deserves the
@@ -101,13 +108,38 @@ if possible, use a GPU with more VRAM to reduce risk and runtime.
 
 Full version notes: [docs/version_results.md](../version_results.md)
 
-## VI. Reports
+## VI. What Is Included In The Current Repo
+
+Beyond choosing `v03_gamma` as the final submission branch, the current repo
+also contains the hardening work that made the shipped container more practical
+to run on real judge hardware:
+
+- **Per-question instrumentation**: traces now record route, path, backend, and
+  compute attribution so degraded runs are diagnosable.
+- **Real `submission_time.csv` values**: timing is no longer a flat average; it
+  is written from trace attribution for each question.
+- **Dynamic VRAM sizing**: the runner reads free VRAM and chooses
+  `gpu_memory_utilization` from what is actually available.
+- **Safer retries**: if vLLM hits an OOM-like failure, the runner retries with
+  more headroom before accepting degradation.
+- **Chunked prefill and wave-level chunk fallback**: this reduces risk on long
+  prompts, especially large reading and self-consistency waves.
+- **Flexible I/O**: the repo supports both JSON and CSV inputs, including
+  questions with more than four choices.
+- **Practical never-crash behavior**: checkpointing, fallback answers, atomic
+  writes, and best-effort output are kept in the final path.
+
+These changes do not turn the project into a different architecture. They make
+the same `v03_gamma` design easier to run, easier to debug, and better aligned
+with the final Docker submission path.
+
+## VII. Reports
 
 - Vietnamese report: [docs/report/report_vi.md](../report/report_vi.md)
 - English report: [docs/report/report_en.md](../report/report_en.md)
 - Presentation slides: [docs/report/presentation_slide.pdf](../report/presentation_slide.pdf)
 
-## VII. Judge Run Instructions
+## VIII. Judge Run Instructions
 
 ### Requirements
 
@@ -198,7 +230,7 @@ The official BTC path is `/code/private_test.json`. The `/data/...` paths are
 kept for older local compatibility. CSV input may use option columns such as
 `A,B,C,D,...`; questions with more than four choices are supported.
 
-## VIII. Developer Run Instructions
+## IX. Developer Run Instructions
 
 Install dependencies:
 
@@ -224,13 +256,17 @@ Run the same entrypoint style as Docker:
 ./run.sh data/private_test.csv output/submission.csv output/trace.jsonl output/submission_time.csv
 ```
 
+`predict.py` is the BTC-compatible wrapper used by the container. It finds a
+supported input path, calls `src/v03_gamma.py`, and writes
+`submission_time.csv` from trace attribution.
+
 Run tests:
 
 ```bash
 python3.11 -m pytest
 ```
 
-## IX. Frequent Issues
+## X. Frequent Issues
 
 See [docs/faq.md](../faq.md) for practical setup fixes, including:
 
@@ -241,17 +277,21 @@ See [docs/faq.md](../faq.md) for practical setup fixes, including:
 - `vLLM unavailable`
 - missing input file inside `/data`
 
-## X. Notes
+## XI. Notes
 
 - The final path is offline at inference time.
 - The final path uses one open LLM only: `Qwen/Qwen3.5-4B`, under the 5B
   parameter limit.
 - No RAG, embedding model, reranker, semantic-router model, or second LLM is
   used.
+- The main container entrypoint is `inference.sh -> predict.py -> src/v03_gamma.py`.
+- The repo is now aligned with the Docker contract: default input is
+  `/code/private_test.json`, outputs are `/code/submission.csv` and
+  `/code/submission_time.csv`.
 - Runtime settings live in
   [configs/pipeline_config.yaml](../../configs/pipeline_config.yaml).
 
-## XI. Acknowledgements
+## XII. Acknowledgements
 
 Thank you to HackAIthon 2026, Hội Sinh Viên Việt Nam, VSDS, Vietcombank, and
 VNPT AI for creating this competition and giving students a place to build,
