@@ -18,6 +18,7 @@ from src.config import (
     SC_TOP_P,
     SHUFFLE_OPTIONS,
     TOKENS_BY_ROUTE,
+    WAVE2_THINK_TOKENS_BY_ROUTE,
 )
 from src.parser import ParsedQuestion
 

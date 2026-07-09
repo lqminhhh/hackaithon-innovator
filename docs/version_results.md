@@ -25,6 +25,18 @@
 - `v02_gamma_router_v2` runtime was measured on a 24 GB VRAM card; judge hardware is 16 GB.
 - Final branch choice is **`v03_gamma`**, even though `v03_delta` scored higher on the public set, because delta-like real-margin extraction was about 4x slower and remained OOM-prone on 16 GB judge-like runs.
 
+## Post-submission branch checkpoints (proxy only)
+
+These are **not** leaderboard submissions. They are internal branch checkpoints
+measured against `data/reference/reference_answers.csv`, which is only a proxy.
+
+| Checkpoint | Branch basis | What changed | Proxy result | Notes |
+| --- | --- | --- | --- | --- |
+| `v04_gamma` internal checkpoint | `v03_gamma` | Phase 0 instrumentation, Phase 1 dynamic VRAM sizing + retry ladder, Phase 1b.4 chunked prefill, one conservative READING Wave 2 think token trim | **426 / 463 = 92.01%** | Better than the older `submission_v03_gamma.csv` proxy of **424 / 463 = 91.58%**; official leaderboard score remains `85.96%` until re-submitted |
+| `v04_gamma` final hardening sanity run | `v03_gamma` | Same branch after wave-level chunk fallback and final reliability pass | **424 / 463 = 91.58%** | Essentially matched the historical `submission_v03_gamma.csv` proxy again; diff vs that saved run was balanced at 8 improvements and 8 regressions |
+| `v04_gamma` latest live output run | `v03_gamma` | Current `output/submission.csv` and `output/trace_v03_gamma.jsonl` after the latest local rerun | **423 / 463 = 91.36%** | Still on the intended vLLM gamma path; 13 diffs vs `submission_v03_gamma.csv` with 5 improvements, 6 regressions, and 2 still wrong in both |
+| `awq4bit` experiment | `v03_gamma` route/policy | Quantized side experiment with `cyankiwi/Qwen3.5-4B-AWQ-4bit` | **409 / 463 = 88.34%** | Faster, but clearly worse than the main full-precision branch; not promoted |
+
 ## Final Branch Choice
 
 We are choosing **`v03_gamma`** as the final submission branch.

@@ -38,6 +38,7 @@ from src.config import (
     SAFE_MAX_NUM_SEQS,
     SAFE_UTILIZATION_CLAMP_MAX,
     SAFE_UTILIZATION_CLAMP_MIN,
+    SAFE_WAVE_RETRY_CHUNK_SIZES,
 )
 from src.sc_policy import (
     GAMMA_MAX_MODEL_LEN,
@@ -264,7 +265,12 @@ def run_v03_gamma(
         print("Wave 1: batching all first passes...", flush=True)
         wave1, agent = _run_wave_with_retry(
             "wave1",
-            lambda active_agent: run_wave1(active_agent, parsed_list, restored_qids),
+            lambda active_agent, chunk_size=None: run_wave1(
+                active_agent,
+                parsed_list,
+                restored_qids,
+                chunk_size=chunk_size,
+            ),
             agent=agent,
             model_id=model_id,
             gpu_memory_utilization=chosen_gpu_util,
@@ -281,7 +287,13 @@ def run_v03_gamma(
         print("Wave 2: batching all escalations...", flush=True)
         wave2, agent = _run_wave_with_retry(
             "wave2",
-            lambda active_agent: run_wave2(active_agent, parsed_list, wave1, adaptive_sc=adaptive_sc),
+            lambda active_agent, chunk_size=None: run_wave2(
+                active_agent,
+                parsed_list,
+                wave1,
+                adaptive_sc=adaptive_sc,
+                chunk_size=chunk_size,
+            ),
             agent=agent,
             model_id=model_id,
             gpu_memory_utilization=chosen_gpu_util,
@@ -360,9 +372,9 @@ def _run_wave_with_retry(
     runtime_info: dict[str, Any],
 ) -> tuple[Any, Any]:
     try:
-        return runner(agent), agent
+        return runner(agent, None), agent
     except Exception as exc:
-        if not _should_retry_wave(agent, exc):
+        if getattr(agent, "_backend_info", {}).get("backend") != "vllm" or not _is_probable_oom(exc):
             raise
 
         current_index = int(getattr(agent, "_backend_info", {}).get("vllm_headroom_index", -1))
@@ -372,19 +384,46 @@ def _run_wave_with_retry(
             flush=True,
         )
         _dispose_agent(agent)
-        retry_agent = _load_agent(
-            model_id=model_id,
-            gpu_memory_utilization=gpu_memory_utilization,
-            max_model_len=max_model_len,
-            max_num_seqs=max_num_seqs,
-            t_start=t_start,
-            safe_mode=safe_mode,
-            min_headroom_index=current_index + 1,
-            retry_context=f"{wave_name}_oom_retry",
-        )
-        runtime_info.update(getattr(retry_agent, "_backend_info", {}))
-        _log_runtime_info(runtime_info)
-        return runner(retry_agent), retry_agent
+        chunk_sizes = [size for size in SAFE_WAVE_RETRY_CHUNK_SIZES if size > 0]
+        retry_headroom_index = _wave_retry_headroom_index(agent, exc)
+        retry_plan: list[int | None] = [None] + chunk_sizes
+        last_exc: Exception = exc
+
+        for retry_number, chunk_size in enumerate(retry_plan, start=1):
+            retry_agent = _load_agent(
+                model_id=model_id,
+                gpu_memory_utilization=gpu_memory_utilization,
+                max_model_len=max_model_len,
+                max_num_seqs=max_num_seqs,
+                t_start=t_start,
+                safe_mode=safe_mode,
+                min_headroom_index=retry_headroom_index,
+                retry_context=f"{wave_name}_oom_retry",
+            )
+            runtime_info.update(getattr(retry_agent, "_backend_info", {}))
+            _log_runtime_info(runtime_info)
+            if chunk_size is not None:
+                print(
+                    f"[v03_gamma] retrying {wave_name} with conservative chunk_size={chunk_size} "
+                    f"(attempt {retry_number}/{len(retry_plan)})",
+                    flush=True,
+                )
+            try:
+                return runner(retry_agent, chunk_size), retry_agent
+            except Exception as retry_exc:
+                last_exc = retry_exc
+                if not _is_probable_oom(retry_exc):
+                    _dispose_agent(retry_agent)
+                    raise
+                print(
+                    f"[v03_gamma] {wave_name} retry failed"
+                    + (f" at chunk_size={chunk_size}" if chunk_size is not None else "")
+                    + f": {retry_exc}",
+                    flush=True,
+                )
+                _dispose_agent(retry_agent)
+
+        raise last_exc
 
 
 def _save_ckpt(path: Path, answers: dict[str, str]) -> None:
@@ -501,17 +540,17 @@ def _warmup_agent(agent: Any) -> None:
     print(f"[v03_gamma] Warmup complete in {time.time() - t0:.1f}s", flush=True)
 
 
-def _should_retry_wave(agent: Any, exc: Exception) -> bool:
+def _wave_retry_headroom_index(agent: Any, exc: Exception) -> int:
     backend_info = getattr(agent, "_backend_info", {})
-    if backend_info.get("backend") != "vllm":
-        return False
+    if backend_info.get("backend") != "vllm" or not _is_probable_oom(exc):
+        return 0
+    current_index = int(backend_info.get("vllm_headroom_index", 0))
     if backend_info.get("gpu_memory_utilization_requested") is not None:
-        return False
-    if not _is_probable_oom(exc):
-        return False
-    headroom_index = int(backend_info.get("vllm_headroom_index", -1))
+        return max(current_index, 0)
     headroom_ladder = backend_info.get("vllm_headroom_ladder_gb") or []
-    return headroom_index + 1 < len(headroom_ladder)
+    if current_index + 1 < len(headroom_ladder):
+        return current_index + 1
+    return max(current_index, 0)
 
 
 def _is_probable_oom(exc: BaseException) -> bool:

@@ -13,6 +13,7 @@ from src.parser import ParsedQuestion
 from src.sc_policy import (
     SC_N_HIGH_CHOICE_KNOWLEDGE,
     SC_N_STEM,
+    WAVE2_THINK_TOKENS_BY_ROUTE,
     knowledge_escalation_reason,
     reading_escalation_reason,
     should_use_think_mode,
@@ -343,6 +344,7 @@ def test_wave2_escalates_reading_detail_lookup_questions():
     assert len(agent.generated) == 1
     assert len(agent.generated[0]["prompts"]) == 3
     assert agent.generated[0]["kwargs"]["mode"] == "think"
+    assert agent.generated[0]["kwargs"]["max_tokens"] == WAVE2_THINK_TOKENS_BY_ROUTE["READING"]
 
 
 def test_wave2_does_not_escalate_high_margin_low_choice_knowledge():

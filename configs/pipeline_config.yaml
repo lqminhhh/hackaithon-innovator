@@ -61,6 +61,8 @@ route_policy:
     STEM: 3072
     KNOWLEDGE: 256
     SAFETY: 128
+  wave2_think_tokens_by_route:
+    READING: 2560
 
 quantisation:
   load_in_4bit: true
@@ -84,6 +86,11 @@ safe_vllm:
     - 3.0
   utilization_clamp_min: 0.50
   utilization_clamp_max: 0.92
+  wave_retry_chunk_sizes:
+    - 128
+    - 64
+    - 32
+    - 16
 
 runner:
   checkpoint_path: checkpoint.json

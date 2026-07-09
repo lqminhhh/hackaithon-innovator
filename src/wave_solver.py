@@ -24,6 +24,7 @@ from src.sc_policy import (
     SC_TEMP,
     SC_TOP_P,
     TOKENS_BY_ROUTE,
+    WAVE2_THINK_TOKENS_BY_ROUTE,
     build_sc_reasoning_prompt,
     duplicate_option_label_map,
     knowledge_escalation_reason,
@@ -239,33 +240,19 @@ def _allocate_time_shares(
     return {qid: even_share for qid in per_qid_tokens}
 
 
-def run_wave1(
+def _iter_chunks(items: list[object], chunk_size: int | None) -> list[list[object]]:
+    if chunk_size is None or chunk_size <= 0 or len(items) <= chunk_size:
+        return [items]
+    return [items[start:start + chunk_size] for start in range(0, len(items), chunk_size)]
+
+
+def _run_wave1_pending(
     agent: ReasoningAgent,
-    parsed_list: list[ParsedQuestion],
-    skip_qids: set[str],
+    pending: list[tuple[ParsedQuestion, str]],
 ) -> dict[str, Wave1Result]:
-    """Batch all first-pass route reasoning and guided-choice extraction."""
-    results: dict[str, Wave1Result] = {}
-    pending: list[tuple[ParsedQuestion, str]] = []
-
-    for parsed in parsed_list:
-        if parsed.qid in skip_qids:
-            continue
-        route = route_question(parsed)
-        forced = get_forced_answer(parsed, route)
-        if forced is not None:
-            results[parsed.qid] = Wave1Result(
-                qid=parsed.qid,
-                route=route,
-                answer=forced,
-                margin=None,
-                forced=True,
-            )
-        else:
-            pending.append((parsed, route))
-
+    chunk_results: dict[str, Wave1Result] = {}
     if not pending:
-        return results
+        return chunk_results
 
     wave_start = time.perf_counter()
     reasoning_prompts = [_build_reasoning_prompt(parsed, route) for parsed, route in pending]
@@ -330,7 +317,7 @@ def run_wave1(
     for i, (parsed, route) in enumerate(pending):
         try:
             choice = choices[i]
-            results[parsed.qid] = Wave1Result(
+            chunk_results[parsed.qid] = Wave1Result(
                 qid=parsed.qid,
                 route=route,
                 answer=choice.letter,
@@ -342,7 +329,7 @@ def run_wave1(
                 wave1_think=i in think_idx,
             )
         except Exception as exc:
-            results[parsed.qid] = Wave1Result(
+            chunk_results[parsed.qid] = Wave1Result(
                 qid=parsed.qid,
                 route=route,
                 answer=FALLBACK,
@@ -354,6 +341,41 @@ def run_wave1(
                 wave1_think=i in think_idx,
             )
 
+    return chunk_results
+
+
+def run_wave1(
+    agent: ReasoningAgent,
+    parsed_list: list[ParsedQuestion],
+    skip_qids: set[str],
+    *,
+    chunk_size: int | None = None,
+) -> dict[str, Wave1Result]:
+    """Batch all first-pass route reasoning and guided-choice extraction."""
+    results: dict[str, Wave1Result] = {}
+    pending: list[tuple[ParsedQuestion, str]] = []
+
+    for parsed in parsed_list:
+        if parsed.qid in skip_qids:
+            continue
+        route = route_question(parsed)
+        forced = get_forced_answer(parsed, route)
+        if forced is not None:
+            results[parsed.qid] = Wave1Result(
+                qid=parsed.qid,
+                route=route,
+                answer=forced,
+                margin=None,
+                forced=True,
+            )
+        else:
+            pending.append((parsed, route))
+
+    if not pending:
+        return results
+    for pending_chunk in _iter_chunks(pending, chunk_size):
+        results.update(_run_wave1_pending(agent, pending_chunk))
+
     return results
 
 
@@ -363,6 +385,7 @@ def run_wave2(
     wave1: dict[str, Wave1Result],
     *,
     adaptive_sc: bool = True,
+    chunk_size: int | None = None,
 ) -> dict[str, Wave2Result]:
     """Batch all self-consistency escalations and return final SC answers."""
     escalated: list[tuple[ParsedQuestion, str, Wave1Result, int, str]] = []
@@ -394,6 +417,20 @@ def run_wave2(
     if not escalated:
         return {}
 
+    wave2: dict[str, Wave2Result] = {}
+    for escalated_chunk in _iter_chunks(escalated, chunk_size):
+        wave2.update(_run_wave2_escalated(agent, escalated_chunk))
+    return wave2
+
+
+def _run_wave2_escalated(
+    agent: ReasoningAgent,
+    escalated: list[tuple[ParsedQuestion, str, Wave1Result, int, str]],
+) -> dict[str, Wave2Result]:
+    wave2: dict[str, Wave2Result] = {}
+    if not escalated:
+        return wave2
+
     wave_start = time.perf_counter()
     flat_sc: list[
         tuple[str, str, str, str, dict[str, str], dict[str, str], bool]
@@ -415,23 +452,44 @@ def run_wave2(
                 )
             )
 
-    think_sc_idx = [i for i, item in enumerate(flat_sc) if item[6]]
+    reading_think_sc_idx = [
+        i for i, item in enumerate(flat_sc)
+        if item[6] and item[1] == "reading"
+    ]
+    other_think_sc_idx = [
+        i for i, item in enumerate(flat_sc)
+        if item[6] and item[1] != "reading"
+    ]
     other_sc_idx = [i for i, item in enumerate(flat_sc) if not item[6]]
 
     sc_outputs = [GenerationOutput(text="")] * len(flat_sc)
 
-    if think_sc_idx:
+    if other_think_sc_idx:
         outputs = _normalize_generation_outputs(
             batch_generate(
                 agent,
-                [flat_sc[i][3] for i in think_sc_idx],
+                [flat_sc[i][3] for i in other_think_sc_idx],
                 mode="think",
                 max_tokens=TOKENS_BY_ROUTE["STEM"],
                 temperature=SC_TEMP,
                 top_p=SC_TOP_P,
             )
         )
-        for pos, idx in enumerate(think_sc_idx):
+        for pos, idx in enumerate(other_think_sc_idx):
+            sc_outputs[idx] = outputs[pos]
+
+    if reading_think_sc_idx:
+        outputs = _normalize_generation_outputs(
+            batch_generate(
+                agent,
+                [flat_sc[i][3] for i in reading_think_sc_idx],
+                mode="think",
+                max_tokens=WAVE2_THINK_TOKENS_BY_ROUTE.get("READING", TOKENS_BY_ROUTE["STEM"]),
+                temperature=SC_TEMP,
+                top_p=SC_TOP_P,
+            )
+        )
+        for pos, idx in enumerate(reading_think_sc_idx):
             sc_outputs[idx] = outputs[pos]
 
     if other_sc_idx:
@@ -503,7 +561,6 @@ def run_wave2(
     for i, (qid, _route, _query, _prompt, _options, _reverse_map, _use_think) in enumerate(flat_sc):
         qid_sample_tokens[qid].append(sample_token_counts[i])
 
-    wave2: dict[str, Wave2Result] = {}
     for parsed, _route, w1, _sc_n, esc_reason in escalated:
         choices = qid_choices.get(parsed.qid, [])
         use_think = should_use_think_mode(parsed, w1.route, stage="wave2")

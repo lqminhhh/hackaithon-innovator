@@ -222,7 +222,7 @@ def test_run_v03_gamma_retries_wave_on_oom_like_failure(tmp_path, monkeypatch):
 
     wave1_calls = {"count": 0}
 
-    def fake_run_wave1(_agent, parsed_list, _skip_qids):
+    def fake_run_wave1(_agent, parsed_list, _skip_qids, *, chunk_size=None):
         wave1_calls["count"] += 1
         if wave1_calls["count"] == 1:
             raise RuntimeError("CUDA out of memory")
@@ -266,6 +266,87 @@ def test_run_v03_gamma_retries_wave_on_oom_like_failure(tmp_path, monkeypatch):
     assert rows == [{"qid": "q1", "answer": "B"}]
 
 
+def test_run_v03_gamma_retries_wave_with_chunked_fallback(tmp_path, monkeypatch):
+    input_path = tmp_path / "input.json"
+    output_path = tmp_path / "pred.csv"
+    trace_path = tmp_path / "trace.jsonl"
+    input_path.write_text(
+        json.dumps(
+            [{"qid": "q1", "question": "2 + 2 = ?", "choices": ["3", "4"]}],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(v03_gamma, "SAFE_WAVE_RETRY_CHUNK_SIZES", (32,))
+
+    load_calls: list[int] = []
+
+    class _FakeAgent:
+        is_vllm = True
+
+        def __init__(self, headroom_index: int):
+            self._llm = None
+            self._backend_info = {
+                "backend": "vllm",
+                "backend_reason": "loaded_vllm",
+                "gpu_memory_utilization_requested": None,
+                "gpu_memory_headroom_gb": float(headroom_index + 1),
+                "vllm_headroom_index": headroom_index,
+                "vllm_headroom_ladder_gb": [1.0, 2.0, 3.0],
+            }
+
+    def fake_load_agent(**kwargs):
+        idx = int(kwargs.get("min_headroom_index", 0))
+        load_calls.append(idx)
+        return _FakeAgent(idx)
+
+    wave1_calls: list[int | None] = []
+
+    def fake_run_wave1(_agent, parsed_list, _skip_qids, *, chunk_size=None):
+        wave1_calls.append(chunk_size)
+        if chunk_size is None:
+            raise RuntimeError("CUDA out of memory")
+        qid = parsed_list[0].qid
+        return {
+            qid: type(
+                "W1",
+                (),
+                {
+                    "qid": qid,
+                    "answer": "B",
+                    "route": "stem",
+                    "margin": 1.0,
+                    "forced": False,
+                    "error": None,
+                    "reasoning_prompt": "",
+                    "per_letter_logprob": {"A": -1.0, "B": 0.0},
+                },
+            )()
+        }
+
+    monkeypatch.setattr(v03_gamma, "_load_agent", fake_load_agent)
+    monkeypatch.setattr(v03_gamma, "_warmup_agent", lambda _agent: None)
+    monkeypatch.setattr("src.wave_solver.run_wave1", fake_run_wave1)
+    monkeypatch.setattr("src.wave_solver.run_wave2", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr("src.wave_solver.finalize_answers", lambda parsed_list, _wave1, _wave2, _answers: {parsed.qid: "B" for parsed in parsed_list})
+    monkeypatch.setattr("src.wave_solver.write_traces", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.wave_solver.path_counts", lambda *_args, **_kwargs: {"wave_direct": 1})
+
+    v03_gamma.run_v03_gamma(
+        input_path=str(input_path),
+        output_path=str(output_path),
+        trace_output=str(trace_path),
+        install_handlers=False,
+    )
+
+    assert load_calls == [0, 1, 1]
+    assert wave1_calls == [None, None, 32]
+    with output_path.open(encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+    assert rows == [{"qid": "q1", "answer": "B"}]
+
+
 def test_v03_gamma_runs_additive_warmup_before_pipeline(tmp_path, monkeypatch):
     input_path = tmp_path / "input.json"
     output_path = tmp_path / "pred.csv"
@@ -286,7 +367,7 @@ def test_v03_gamma_runs_additive_warmup_before_pipeline(tmp_path, monkeypatch):
     monkeypatch.setattr(v03_gamma, "_load_agent", lambda **_kwargs: _FakeAgent())
     monkeypatch.setattr(v03_gamma, "_warmup_agent", lambda _agent: calls.append("warmup"))
 
-    def fake_run_wave1(_agent, parsed_list, _skip_qids):
+    def fake_run_wave1(_agent, parsed_list, _skip_qids, *, chunk_size=None):
         calls.append("wave1")
         qid = parsed_list[0].qid
         return {
@@ -306,7 +387,7 @@ def test_v03_gamma_runs_additive_warmup_before_pipeline(tmp_path, monkeypatch):
             )()
         }
 
-    def fake_run_wave2(_agent, _parsed_list, _wave1, adaptive_sc=True):
+    def fake_run_wave2(_agent, _parsed_list, _wave1, adaptive_sc=True, chunk_size=None):
         calls.append("wave2")
         return {}
 
