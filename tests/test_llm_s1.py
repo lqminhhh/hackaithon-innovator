@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.config import GPU_MEM_UTIL, LLM_MODEL
+from src.config import ENABLE_CHUNKED_PREFILL, GPU_MEM_UTIL, LLM_MODEL
 from src.llm import LLM
 from src.models import load_vllm_primary
 
@@ -42,6 +42,7 @@ class _FakeEngine:
                     SimpleNamespace(
                         text=f"out-{i}",
                         logprobs=[{"A": -0.1}],
+                        token_ids=[101, 102, 103],
                     )
                 ]
             )
@@ -68,6 +69,7 @@ def test_llm_constructor_uses_s1_vllm_defaults():
     assert "quantization" not in _FakeEngineCls.last_kwargs
     assert _FakeEngineCls.last_kwargs["gpu_memory_utilization"] == GPU_MEM_UTIL
     assert _FakeEngineCls.last_kwargs["enable_prefix_caching"] is True
+    assert _FakeEngineCls.last_kwargs["enable_chunked_prefill"] == ENABLE_CHUNKED_PREFILL
     assert _FakeEngineCls.last_kwargs["trust_remote_code"] is True
 
 
@@ -86,6 +88,7 @@ def test_generate_text_batches_prompts_and_passes_thinking_flag():
 
     assert [o.text for o in outputs] == ["out-0", "out-1"]
     assert outputs[0].logprobs == [{"A": -0.1}]
+    assert outputs[0].num_generated_tokens == 3
     assert len(engine.calls) == 1
     call = engine.calls[0]
     assert call["kwargs"]["chat_template_kwargs"] == {"enable_thinking": True}
@@ -138,6 +141,7 @@ def test_load_vllm_primary_uses_s1_wrapper_defaults(monkeypatch):
     assert captured["quantization"] is None
     assert captured["gpu_memory_utilization"] == GPU_MEM_UTIL
     assert captured["enable_prefix_caching"] is True
+    assert captured["enable_chunked_prefill"] == ENABLE_CHUNKED_PREFILL
 
 
 def test_load_vllm_primary_uses_awq_only_for_awq_model_names(monkeypatch):

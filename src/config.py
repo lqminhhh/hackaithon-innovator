@@ -30,9 +30,19 @@ GPU_MEM_UTIL = float(_CFG["vllm"]["gpu_memory_utilization"])
 MAX_MODEL_LEN = int(_CFG["vllm"]["max_model_len"])
 MAX_NUM_SEQS = _CFG["vllm"].get("max_num_seqs")
 ENABLE_PREFIX_CACHING = bool(_CFG["vllm"].get("enable_prefix_caching", True))
+ENABLE_CHUNKED_PREFILL = bool(_CFG["vllm"].get("enable_chunked_prefill", True))
 SAFE_GPU_MEM_UTIL = float(_CFG["safe_vllm"]["gpu_memory_utilization"])
 SAFE_MAX_MODEL_LEN = int(_CFG["safe_vllm"]["max_model_len"])
 SAFE_MAX_NUM_SEQS = int(_CFG["safe_vllm"]["max_num_seqs"])
+SAFE_DYNAMIC_HEADROOM_GB = float(_CFG["safe_vllm"].get("dynamic_headroom_gb", 1.0))
+SAFE_HEADROOM_LADDER_GB = tuple(
+    float(value) for value in _CFG["safe_vllm"].get("headroom_ladder_gb", [1.0, 2.0, 3.0])
+)
+SAFE_UTILIZATION_CLAMP_MIN = float(_CFG["safe_vllm"].get("utilization_clamp_min", 0.50))
+SAFE_UTILIZATION_CLAMP_MAX = float(_CFG["safe_vllm"].get("utilization_clamp_max", 0.92))
+SAFE_WAVE_RETRY_CHUNK_SIZES = tuple(
+    int(value) for value in _CFG["safe_vllm"].get("wave_retry_chunk_sizes", [128, 64, 32, 16])
+)
 
 FALLBACK = str(_CFG["submission"]["fallback_answer"])
 MAX_CHOICES = int(_CFG["question_parsing"]["max_choices"])
@@ -64,6 +74,10 @@ SHUFFLE_OPTIONS = bool(_CFG["route_policy"]["shuffle_options"])
 TOKENS_BY_ROUTE = {
     route: int(tokens)
     for route, tokens in _CFG["route_policy"]["tokens_by_route"].items()
+}
+WAVE2_THINK_TOKENS_BY_ROUTE = {
+    route: int(tokens)
+    for route, tokens in _CFG["route_policy"].get("wave2_think_tokens_by_route", {}).items()
 }
 
 GAMMA_GPU_MEM_UTIL = GPU_MEM_UTIL

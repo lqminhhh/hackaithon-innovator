@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import time
 from pathlib import Path
 
@@ -35,7 +36,41 @@ def _find_input(explicit: str | None) -> str:
     raise FileNotFoundError(f"No input file found. Expected one of: {joined}")
 
 
-def _write_submission_time(submission_path: str, time_path: str, elapsed: float) -> None:
+def _load_attributed_times(trace_path: str | None) -> dict[str, float]:
+    if not trace_path:
+        return {}
+
+    path = Path(trace_path)
+    if not path.exists():
+        return {}
+
+    attributed_times: dict[str, float] = {}
+    with path.open(encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            qid = str(record.get("qid", ""))
+            if not qid:
+                continue
+            try:
+                attributed_times[qid] = float(record.get("attributed_time_seconds", 0.0))
+            except (TypeError, ValueError):
+                continue
+    return attributed_times
+
+
+def _write_submission_time(
+    submission_path: str,
+    time_path: str,
+    elapsed: float,
+    *,
+    trace_path: str | None = None,
+) -> None:
     submission = Path(submission_path)
     target = Path(time_path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -50,14 +85,17 @@ def _write_submission_time(submission_path: str, time_path: str, elapsed: float)
         rows = list(csv.DictReader(f))
 
     per_sample_time = elapsed / len(rows) if rows else 0.0
+    attributed_times = _load_attributed_times(trace_path)
     with target.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["qid", "answer", "time"])
         writer.writeheader()
         for row in rows:
+            qid = row.get("qid", row.get("id", ""))
+            time_value = attributed_times.get(qid, per_sample_time)
             writer.writerow({
-                "qid": row.get("qid", row.get("id", "")),
+                "qid": qid,
                 "answer": row.get("answer", ""),
-                "time": f"{per_sample_time:.6f}",
+                "time": f"{time_value:.6f}",
             })
 
 
@@ -93,7 +131,12 @@ def main() -> None:
         warmup=not args.no_warmup,
     )
     elapsed = time.perf_counter() - start
-    _write_submission_time(args.output, args.time_output, elapsed)
+    _write_submission_time(
+        args.output,
+        args.time_output,
+        elapsed,
+        trace_path=args.trace_output,
+    )
     print(f"Written timing file to {args.time_output}", flush=True)
 
 

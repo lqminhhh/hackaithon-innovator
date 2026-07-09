@@ -3,6 +3,12 @@
 > Goal: fix the 0.375 speed score by cutting per-question token spend and wall-clock
 > time, with little to no accuracy loss (85.96% public / 91.58% proxy must hold).
 >
+> Current branch note: the intermediate hardening branch peaked at
+> **426 / 463 = 92.01%** on the proxy reference, while the newest live local
+> rerun in `output/submission.csv` is **423 / 463 = 91.36%**. That keeps the
+> branch in roughly the same accuracy band as the historical `v03_gamma` proxy
+> baseline, but it is not a clean improvement over it.
+>
 > Organizer feedback addressed:
 >
 > 1. "Adjust token usage for each route so not too much token is spent on one problem."
@@ -204,6 +210,12 @@ parameter, or answer.
    engaged/disabled status to the Phase 0 startup log and confirm on the dev run.
 
 ### Phase 2 — True per-route token budgets (the organizer's core ask)
+
+> Status note: this phase is now **closed conservatively** for the final
+> branch. We kept one measured low-risk trim — a smaller dedicated READING Wave
+> 2 think budget — but we are intentionally not continuing broader token-budget
+> intervention in this branch. The remaining items below are preserved as
+> archival design notes rather than active planned work.
 
 - In `src/wave_solver.py` (`run_wave1`, `run_wave2`): assign each question its own
   `max_tokens` from `TOKENS_BY_ROUTE` via the **per-request `SamplingParams`**

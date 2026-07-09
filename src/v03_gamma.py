@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import gc
 import json
 import os
 import signal
@@ -28,9 +29,18 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.config import FALLBACK, SAFE_GPU_MEM_UTIL, SAFE_MAX_MODEL_LEN, SAFE_MAX_NUM_SEQS
+from src.config import (
+    FALLBACK,
+    MAX_NUM_SEQS,
+    SAFE_DYNAMIC_HEADROOM_GB,
+    SAFE_HEADROOM_LADDER_GB,
+    SAFE_MAX_MODEL_LEN,
+    SAFE_MAX_NUM_SEQS,
+    SAFE_UTILIZATION_CLAMP_MAX,
+    SAFE_UTILIZATION_CLAMP_MIN,
+    SAFE_WAVE_RETRY_CHUNK_SIZES,
+)
 from src.sc_policy import (
-    GAMMA_GPU_MEM_UTIL,
     GAMMA_MAX_MODEL_LEN,
     SC_N_STEM,
 )
@@ -168,13 +178,11 @@ def run_v03_gamma(
     chosen_max_len = max_model_len
     chosen_max_seqs = max_num_seqs
     if safe_mode:
-        chosen_gpu_util = chosen_gpu_util if chosen_gpu_util is not None else SAFE_GPU_MEM_UTIL
         chosen_max_len = chosen_max_len if chosen_max_len is not None else SAFE_MAX_MODEL_LEN
         chosen_max_seqs = chosen_max_seqs if chosen_max_seqs is not None else SAFE_MAX_NUM_SEQS
     else:
-        chosen_gpu_util = chosen_gpu_util if chosen_gpu_util is not None else GAMMA_GPU_MEM_UTIL
         chosen_max_len = chosen_max_len if chosen_max_len is not None else GAMMA_MAX_MODEL_LEN
-        chosen_max_seqs = chosen_max_seqs if chosen_max_seqs is not None else 16
+        chosen_max_seqs = chosen_max_seqs if chosen_max_seqs is not None else (MAX_NUM_SEQS or 32)
 
     questions = load_questions(input_path)
     if limit is not None:
@@ -233,6 +241,12 @@ def run_v03_gamma(
     wave2: dict[str, Any] = {}
     failed = False
     succeeded = False
+    runtime_info = _build_runtime_info(
+        safe_mode=safe_mode,
+        gpu_memory_utilization=chosen_gpu_util,
+        max_model_len=chosen_max_len,
+        max_num_seqs=chosen_max_seqs,
+    )
 
     try:
         agent = _load_agent(
@@ -241,18 +255,54 @@ def run_v03_gamma(
             max_model_len=chosen_max_len,
             max_num_seqs=chosen_max_seqs,
             t_start=t_start,
+            safe_mode=safe_mode,
         )
+        runtime_info.update(getattr(agent, "_backend_info", {}))
+        _log_runtime_info(runtime_info)
         if warmup:
             _warmup_agent(agent)
 
         print("Wave 1: batching all first passes...", flush=True)
-        wave1 = run_wave1(agent, parsed_list, restored_qids)
+        wave1, agent = _run_wave_with_retry(
+            "wave1",
+            lambda active_agent, chunk_size=None: run_wave1(
+                active_agent,
+                parsed_list,
+                restored_qids,
+                chunk_size=chunk_size,
+            ),
+            agent=agent,
+            model_id=model_id,
+            gpu_memory_utilization=chosen_gpu_util,
+            max_model_len=chosen_max_len,
+            max_num_seqs=chosen_max_seqs,
+            t_start=t_start,
+            safe_mode=safe_mode,
+            runtime_info=runtime_info,
+        )
         state["answers"].update({r.qid: r.answer for r in wave1.values()})
         _save_ckpt(ckpt_path, state["answers"])
         print(f"Wave 1 complete ({len(wave1)} items).", flush=True)
 
         print("Wave 2: batching all escalations...", flush=True)
-        wave2 = run_wave2(agent, parsed_list, wave1, adaptive_sc=adaptive_sc)
+        wave2, agent = _run_wave_with_retry(
+            "wave2",
+            lambda active_agent, chunk_size=None: run_wave2(
+                active_agent,
+                parsed_list,
+                wave1,
+                adaptive_sc=adaptive_sc,
+                chunk_size=chunk_size,
+            ),
+            agent=agent,
+            model_id=model_id,
+            gpu_memory_utilization=chosen_gpu_util,
+            max_model_len=chosen_max_len,
+            max_num_seqs=chosen_max_seqs,
+            t_start=t_start,
+            safe_mode=safe_mode,
+            runtime_info=runtime_info,
+        )
         state["answers"].update({qid: w2.answer for qid, w2 in wave2.items()})
         _save_ckpt(ckpt_path, state["answers"])
         print(f"Wave 2 complete ({len(wave2)} escalated).", flush=True)
@@ -260,7 +310,14 @@ def run_v03_gamma(
         final = finalize_answers(parsed_list, wave1, wave2, state["answers"])
         state["answers"].update(final)
         _write_results_atomic(final, parsed_list, output_path)
-        write_traces(trace_output, parsed_list, wave1, wave2, final)
+        write_traces(
+            trace_output,
+            parsed_list,
+            wave1,
+            wave2,
+            final,
+            runtime_info=runtime_info,
+        )
 
         try:
             ckpt_path.unlink(missing_ok=True)
@@ -299,6 +356,74 @@ def run_v03_gamma(
                 f"using checkpointed/fallback answers.",
                 flush=True,
             )
+
+
+def _run_wave_with_retry(
+    wave_name: str,
+    runner,
+    *,
+    agent: Any,
+    model_id: str | None,
+    gpu_memory_utilization: float | None,
+    max_model_len: int | None,
+    max_num_seqs: int | None,
+    t_start: float,
+    safe_mode: bool,
+    runtime_info: dict[str, Any],
+) -> tuple[Any, Any]:
+    try:
+        return runner(agent, None), agent
+    except Exception as exc:
+        if getattr(agent, "_backend_info", {}).get("backend") != "vllm" or not _is_probable_oom(exc):
+            raise
+
+        current_index = int(getattr(agent, "_backend_info", {}).get("vllm_headroom_index", -1))
+        current_headroom = getattr(agent, "_backend_info", {}).get("gpu_memory_headroom_gb")
+        print(
+            f"[v03_gamma] {wave_name} hit OOM-like failure at headroom={current_headroom} GB: {exc}",
+            flush=True,
+        )
+        _dispose_agent(agent)
+        chunk_sizes = [size for size in SAFE_WAVE_RETRY_CHUNK_SIZES if size > 0]
+        retry_headroom_index = _wave_retry_headroom_index(agent, exc)
+        retry_plan: list[int | None] = [None] + chunk_sizes
+        last_exc: Exception = exc
+
+        for retry_number, chunk_size in enumerate(retry_plan, start=1):
+            retry_agent = _load_agent(
+                model_id=model_id,
+                gpu_memory_utilization=gpu_memory_utilization,
+                max_model_len=max_model_len,
+                max_num_seqs=max_num_seqs,
+                t_start=t_start,
+                safe_mode=safe_mode,
+                min_headroom_index=retry_headroom_index,
+                retry_context=f"{wave_name}_oom_retry",
+            )
+            runtime_info.update(getattr(retry_agent, "_backend_info", {}))
+            _log_runtime_info(runtime_info)
+            if chunk_size is not None:
+                print(
+                    f"[v03_gamma] retrying {wave_name} with conservative chunk_size={chunk_size} "
+                    f"(attempt {retry_number}/{len(retry_plan)})",
+                    flush=True,
+                )
+            try:
+                return runner(retry_agent, chunk_size), retry_agent
+            except Exception as retry_exc:
+                last_exc = retry_exc
+                if not _is_probable_oom(retry_exc):
+                    _dispose_agent(retry_agent)
+                    raise
+                print(
+                    f"[v03_gamma] {wave_name} retry failed"
+                    + (f" at chunk_size={chunk_size}" if chunk_size is not None else "")
+                    + f": {retry_exc}",
+                    flush=True,
+                )
+                _dispose_agent(retry_agent)
+
+        raise last_exc
 
 
 def _save_ckpt(path: Path, answers: dict[str, str]) -> None:
@@ -415,6 +540,176 @@ def _warmup_agent(agent: Any) -> None:
     print(f"[v03_gamma] Warmup complete in {time.time() - t0:.1f}s", flush=True)
 
 
+def _wave_retry_headroom_index(agent: Any, exc: Exception) -> int:
+    backend_info = getattr(agent, "_backend_info", {})
+    if backend_info.get("backend") != "vllm" or not _is_probable_oom(exc):
+        return 0
+    current_index = int(backend_info.get("vllm_headroom_index", 0))
+    if backend_info.get("gpu_memory_utilization_requested") is not None:
+        return max(current_index, 0)
+    headroom_ladder = backend_info.get("vllm_headroom_ladder_gb") or []
+    if current_index + 1 < len(headroom_ladder):
+        return current_index + 1
+    return max(current_index, 0)
+
+
+def _is_probable_oom(exc: BaseException) -> bool:
+    try:
+        import torch
+
+        if isinstance(exc, torch.OutOfMemoryError):
+            return True
+    except Exception:
+        pass
+
+    message = str(exc).lower()
+    needles = (
+        "out of memory",
+        "cuda out of memory",
+        "oom",
+        "enginedeaderror",
+    )
+    return any(needle in message for needle in needles)
+
+
+def _dispose_agent(agent: Any) -> None:
+    llm = getattr(agent, "_llm", None)
+    engine = getattr(llm, "engine", None)
+    shutdown = getattr(engine, "shutdown", None)
+    if callable(shutdown):
+        try:
+            shutdown()
+        except Exception:
+            pass
+    del agent
+    gc.collect()
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
+def _build_runtime_info(
+    *,
+    safe_mode: bool,
+    gpu_memory_utilization: float | None,
+    max_model_len: int | None,
+    max_num_seqs: int | None,
+) -> dict[str, Any]:
+    runtime_info: dict[str, Any] = {
+        "safe_mode": safe_mode,
+        "gpu_memory_utilization": gpu_memory_utilization,
+        "max_model_len": max_model_len,
+        "max_num_seqs": max_num_seqs,
+        "enable_prefix_caching_requested": True,
+    }
+    try:
+        import torch
+
+        runtime_info["torch_version"] = getattr(torch, "__version__", None)
+        runtime_info["cuda_available"] = bool(torch.cuda.is_available())
+        runtime_info["torch_cuda_version"] = getattr(torch.version, "cuda", None)
+        if torch.cuda.is_available():
+            device_index = torch.cuda.current_device()
+            props = torch.cuda.get_device_properties(device_index)
+            runtime_info["gpu_name"] = props.name
+            runtime_info["gpu_total_vram_gb"] = round(props.total_memory / (1024 ** 3), 2)
+            runtime_info["gpu_capability"] = f"{props.major}.{props.minor}"
+            runtime_info["cuda_arch_list"] = list(torch.cuda.get_arch_list())
+            try:
+                probe = torch.zeros(1, device=f"cuda:{device_index}")
+                runtime_info["cuda_smoke_test"] = float((probe + 1).item()) == 1.0
+            except Exception as exc:
+                runtime_info["cuda_smoke_test"] = False
+                runtime_info["cuda_smoke_test_error"] = str(exc)
+    except Exception as exc:
+        runtime_info["runtime_probe_error"] = str(exc)
+
+    try:
+        import vllm
+
+        runtime_info["vllm_version"] = getattr(vllm, "__version__", None)
+    except Exception as exc:
+        runtime_info["vllm_version"] = None
+        runtime_info["vllm_probe_error"] = str(exc)
+
+    return runtime_info
+
+
+def _log_runtime_info(runtime_info: dict[str, Any]) -> None:
+    print(
+        "[v03_gamma] Runtime info: "
+        + json.dumps(runtime_info, ensure_ascii=False, sort_keys=True),
+        flush=True,
+    )
+
+
+def _build_vllm_attempts(
+    *,
+    requested_utilization: float | None,
+    headroom_ladder_gb: tuple[float, ...],
+    clamp_min: float,
+    clamp_max: float,
+    min_headroom_index: int,
+) -> list[dict[str, Any]]:
+    if requested_utilization is not None:
+        return [
+            {
+                "headroom_gb": None,
+                "headroom_index": 0,
+                "gpu_memory_utilization": requested_utilization,
+                "dynamic_vram_sizing": False,
+            }
+        ]
+
+    attempts: list[dict[str, Any]] = []
+    for idx, headroom_gb in enumerate(headroom_ladder_gb):
+        if idx < min_headroom_index:
+            continue
+        attempts.append(
+            _dynamic_vllm_attempt(
+                headroom_gb=headroom_gb,
+                headroom_index=idx,
+                clamp_min=clamp_min,
+                clamp_max=clamp_max,
+            )
+        )
+    return attempts
+
+
+def _dynamic_vllm_attempt(
+    *,
+    headroom_gb: float,
+    headroom_index: int,
+    clamp_min: float,
+    clamp_max: float,
+) -> dict[str, Any]:
+    import torch
+
+    free_bytes, total_bytes = torch.cuda.mem_get_info()
+    gib = float(1024 ** 3)
+    free_gb = free_bytes / gib
+    total_gb = total_bytes / gib
+    requested_util = (free_bytes - (headroom_gb * gib)) / total_bytes
+    effective_util = max(clamp_min, min(clamp_max, requested_util))
+    return {
+        "headroom_gb": round(headroom_gb, 3),
+        "headroom_index": headroom_index,
+        "gpu_memory_utilization": round(effective_util, 6),
+        "gpu_memory_utilization_unclamped": round(requested_util, 6),
+        "gpu_memory_free_gb": round(free_gb, 3),
+        "gpu_memory_total_gb": round(total_gb, 3),
+        "gpu_memory_free_bytes": int(free_bytes),
+        "gpu_memory_total_bytes": int(total_bytes),
+        "utilization_clamp_min": clamp_min,
+        "utilization_clamp_max": clamp_max,
+        "dynamic_vram_sizing": True,
+    }
+
+
 def _load_agent(
     *,
     model_id: str | None,
@@ -422,29 +717,129 @@ def _load_agent(
     max_model_len: int | None,
     max_num_seqs: int | None,
     t_start: float,
+    safe_mode: bool,
+    min_headroom_index: int = 0,
+    retry_context: str = "initial_load",
 ) -> Any:
     from src.models import load_primary_model, load_vllm_primary
     from src.reasoning_agent import ReasoningAgent
     import torch
 
-    if torch.cuda.is_available():
-        try:
-            print("Loading primary model with vLLM...", flush=True)
-            llm = load_vllm_primary(
-                model_id=model_id,
-                gpu_memory_utilization=gpu_memory_utilization,
-                max_model_len=max_model_len,
-                max_num_seqs=max_num_seqs,
-            )
-            print(f"Model loaded (vLLM) in {time.time() - t_start:.1f}s", flush=True)
-            return ReasoningAgent(llm=llm)
-        except Exception as exc:
-            print(f"vLLM unavailable ({exc}), falling back to HuggingFace", flush=True)
+    clamp_min = SAFE_UTILIZATION_CLAMP_MIN
+    clamp_max = SAFE_UTILIZATION_CLAMP_MAX
+    headroom_ladder_gb = tuple(SAFE_HEADROOM_LADDER_GB) or (SAFE_DYNAMIC_HEADROOM_GB,)
 
-    print("Loading primary model with HuggingFace...", flush=True)
+    if torch.cuda.is_available():
+        attempt_records: list[dict[str, Any]] = []
+        attempts = _build_vllm_attempts(
+            requested_utilization=gpu_memory_utilization,
+            headroom_ladder_gb=headroom_ladder_gb,
+            clamp_min=clamp_min,
+            clamp_max=clamp_max,
+            min_headroom_index=min_headroom_index,
+        )
+        for attempt_number, attempt in enumerate(attempts, start=1):
+            effective_util = float(attempt["gpu_memory_utilization"])
+            headroom_gb = attempt.get("headroom_gb")
+            label = (
+                f"dynamic util={effective_util:.3f} (free={attempt['gpu_memory_free_gb']:.2f} GB, "
+                f"headroom={headroom_gb:.2f} GB)"
+                if attempt.get("dynamic_vram_sizing")
+                else f"explicit util={effective_util:.3f}"
+            )
+            try:
+                print(
+                    f"Loading primary model with vLLM ({retry_context}, attempt {attempt_number}/{len(attempts)}; {label})...",
+                    flush=True,
+                )
+                print(
+                    f"[v03_gamma] vLLM sizing probe: free={attempt.get('gpu_memory_free_gb')} GB, "
+                    f"total={attempt.get('gpu_memory_total_gb')} GB, "
+                    f"chosen_util={effective_util:.3f}",
+                    flush=True,
+                )
+                llm = load_vllm_primary(
+                    model_id=model_id,
+                    gpu_memory_utilization=effective_util,
+                    max_model_len=max_model_len,
+                    max_num_seqs=max_num_seqs,
+                )
+                print(f"Model loaded (vLLM) in {time.time() - t_start:.1f}s", flush=True)
+                agent = ReasoningAgent(llm=llm)
+                agent._backend_info = {
+                    "backend": "vllm",
+                    "backend_reason": "loaded_vllm",
+                    "model_id": getattr(llm, "model", model_id),
+                    "safe_mode": safe_mode,
+                    "gpu_memory_utilization_requested": gpu_memory_utilization,
+                    "gpu_memory_utilization_effective": effective_util,
+                    "gpu_memory_headroom_gb": headroom_gb,
+                    "gpu_memory_free_gb": attempt.get("gpu_memory_free_gb"),
+                    "gpu_memory_total_gb": attempt.get("gpu_memory_total_gb"),
+                    "gpu_memory_utilization_unclamped": attempt.get("gpu_memory_utilization_unclamped"),
+                    "utilization_clamp_min": clamp_min,
+                    "utilization_clamp_max": clamp_max,
+                    "dynamic_vram_sizing": attempt.get("dynamic_vram_sizing", False),
+                    "vllm_headroom_index": attempt.get("headroom_index", 0),
+                    "vllm_headroom_ladder_gb": list(headroom_ladder_gb),
+                    "vllm_attempt_count": attempt_number,
+                    "vllm_attempts": attempt_records + [dict(attempt, status="loaded")],
+                    "enable_prefix_caching_effective": getattr(llm, "enable_prefix_caching", None),
+                    "enable_chunked_prefill_effective": getattr(llm, "enable_chunked_prefill", None),
+                }
+                return agent
+            except Exception as exc:
+                failure_record = dict(attempt)
+                failure_record["status"] = "failed"
+                failure_record["error"] = str(exc)
+                attempt_records.append(failure_record)
+                print(
+                    f"[v03_gamma] vLLM attempt {attempt_number}/{len(attempts)} failed: {exc}",
+                    flush=True,
+                )
+                _dispose_agent_locals(locals().get("llm"))
+                if attempt_number == len(attempts):
+                    fallback_reason = f"vllm_retry_exhausted:{exc}"
+                    break
+        else:
+            fallback_reason = "vllm_attempts_unavailable"
+    else:
+        fallback_reason = "cuda_unavailable"
+
+    print(
+        f"Loading primary model with HuggingFace... (reason={fallback_reason})",
+        flush=True,
+    )
     model, tokenizer = load_primary_model(model_id=model_id)
     print(f"Model loaded (HF) in {time.time() - t_start:.1f}s", flush=True)
-    return ReasoningAgent(model=model, tokenizer=tokenizer)
+    agent = ReasoningAgent(model=model, tokenizer=tokenizer)
+    agent._backend_info = {
+        "backend": "huggingface",
+        "backend_reason": fallback_reason,
+        "model_id": model_id,
+        "enable_prefix_caching_effective": False,
+        "enable_chunked_prefill_effective": False,
+    }
+    return agent
+
+
+def _dispose_agent_locals(llm: Any) -> None:
+    engine = getattr(llm, "engine", None)
+    shutdown = getattr(engine, "shutdown", None)
+    if callable(shutdown):
+        try:
+            shutdown()
+        except Exception:
+            pass
+    del llm
+    gc.collect()
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

@@ -1,13 +1,17 @@
 # Project Status
 
-> Last updated: 2026-06-23. This file gives AI agents fast context on where
+> Last updated: 2026-07-08. This file gives AI agents fast context on where
 > the project stands. Read this before touching any code.
 
 ## What this project is
 
 Vietnamese multiple-choice QA system for HackAIthon 2026 Bang C.
-Input: JSON or CSV of questions with choices. Competition output:
-`/output/pred.csv` (`qid,answer`).
+Shipped container entrypoint: `inference.sh` -> `predict.py`.
+Competition input: `/code/private_test.json` by default, with CSV/legacy
+fallbacks also supported.
+Competition outputs:
+- `/code/submission.csv` (`qid,answer`)
+- `/code/submission_time.csv` (`qid,answer,time`)
 Scored on a private set of ~2000 questions on a 16 GB VRAM GPU.
 
 ## Competition constraints (non-negotiable)
@@ -20,6 +24,15 @@ Scored on a private set of ~2000 questions on a 16 GB VRAM GPU.
 ## Current final runner
 
 **`v03_gamma`** — **85.96%** on the public 463-question set.
+
+Latest internal branch checkpoint on the proxy reference:
+- Intermediate high-water checkpoint: **426 / 463 = 92.01%**
+- Previous final hardening sanity run: **424 / 463 = 91.58%**
+- Latest live `output/submission.csv` sanity run: **423 / 463 = 91.36%**
+- The newest local run is slightly below the historical
+  `submission_v03_gamma.csv` proxy level, but remains in the same narrow band
+  and kept the same route/path structure
+- These are internal verification checkpoints, not new leaderboard scores
 
 > `v03_gamma` keeps the hardened `v03_alpha` router, restores useful compute for
 > hard KNOWLEDGE and READING cases, adds length-safe extraction so long-context
@@ -65,16 +78,24 @@ Architecture:
 
 Full details: `docs/version_results.md`
 
-## VRAM safety settings (tuned for unknown 16 GB judge cards)
+## Runtime behavior (current branch)
 
-| Setting | Normal | Safe mode (`--safe-mode`) |
-|---|---|---|
-| `gpu_memory_utilization` | 0.80 (12.8 GB) | 0.70 (11.2 GB) |
-| `max_model_len` | 4096 | 4096 |
-| `max_num_seqs` | 16 | 4 |
+| Setting | Current behavior |
+|---|---|
+| `gpu_memory_utilization` | Dynamic from free VRAM via `torch.cuda.mem_get_info()`, with retry headroom ladder |
+| `max_model_len` | 4096 |
+| `max_num_seqs` | 32 ceiling; actual concurrency still self-limited by KV cache |
+| `enable_prefix_caching` | enabled |
+| `enable_chunked_prefill` | enabled |
 
-Model weights (FP16): ~8 GB. KV cache budget in normal mode: ~4.3 GB.
-These settings are in `src/config.py`, `src/sc_policy.py`, and `configs/pipeline_config.yaml`.
+Important nuance:
+- `--safe-mode` still exists as a CLI flag, but after the dynamic VRAM work it
+  is no longer the old strong fixed-memory mode
+- the main safety behavior now comes from dynamic sizing, retry headroom, and
+  always-emit recovery rather than a tiny fixed `max_num_seqs`
+
+These settings are in `src/config.py`, `src/sc_policy.py`, `src/v03_gamma.py`,
+and `configs/pipeline_config.yaml`.
 
 ## Key files and what they do
 
@@ -146,6 +167,49 @@ These exist in the repo for historical/analysis purposes but are banned by compe
 - Any external API or internet access
 
 ## Recent changes (this session)
+
+### Post-submission branch summary
+
+After the last final submission candidate was chosen, we continued a limited
+post-submission branch focused on deployment reliability and diagnosability
+rather than headline architecture changes.
+
+Why:
+- BTC feedback emphasized that token usage should be more controlled
+- BTC also asked for route-level / per-question compute logging so degraded
+  runs on judge hardware could be diagnosed instead of guessed at
+- judge-style 16 GB deployment risk remained a bigger operational concern than
+  chasing one more fragile public-set gain
+
+What stayed the same:
+- final architecture is still `v03_gamma`
+- official public leaderboard score is still **85.96%**
+- no extra model, no RAG, no internet, no second LLM
+
+What changed in the branch:
+- Phase 0 instrumentation landed
+- Phase 1 dynamic VRAM sizing and retry ladder landed
+- Phase 1b.4 chunked prefill landed
+- wave-level chunk fallback landed for OOM-like retries before degrading
+- one conservative Phase 2 token-budget trim was kept for READING Wave 2 think
+- broader Phase 2 performance intervention was intentionally frozen
+- AWQ/FP8 quantized model experiments were tested but not promoted
+
+Current branch position:
+- the final runner remains `v03_gamma`
+- the branch is now better instrumented and more judge-diagnosable
+- the branch is also more resilient to late-wave OOM-like failures
+- the latest live output sanity run is **423 / 463 = 91.36%**
+- compared with the saved `submission_v03_gamma.csv`, the latest live run had
+  **13 answer diffs**: **5 improvements**, **6 regressions**, and **2 still
+  wrong in both runs**
+- route/path counts in the latest live trace stayed on the intended gamma
+  structure:
+  `reading=100`, `stem=201`, `knowledge=155`, `safety=7`;
+  `wave_reading_sc=42`, `wave_stem_sc=201`, `wave_direct=135`,
+  `wave_knowledge_sc=78`, `forced_safety=7`
+- quantized side experiments did not beat the main full-precision path on the
+  proxy reference
 
 ### Final choice: why `v03_gamma` over `v03_delta` / `v03_epsilon`
 
@@ -246,6 +310,70 @@ answered correctly by v02_gamma.
 `write_traces` outputs real `votes` list and `escalation_reason` field instead
 of hardcoded `"votes": []`. Existing traces still have empty votes (pre-fix).
 
+### Phase 0 speed instrumentation landed
+
+We completed the first phase of `docs/speed_optimization_plan.md` without
+changing answer policy:
+
+- `src/llm.py` now records generated-token counts in `GenerationOutput`
+  (`num_generated_tokens`) so token spend can be measured directly.
+- `src/reasoning_agent.py` can now return structured generation outputs in
+  addition to plain text, while keeping the old text-only path for existing
+  callers.
+- `src/wave_solver.py` now measures and writes per-question compute metadata:
+  - `gen_tokens_wave1`
+  - `gen_tokens_wave2`
+  - `wave2_sample_tokens`
+  - `sc_n`
+  - `wave1_time_share`
+  - `wave2_time_share`
+  - `attributed_time_seconds`
+  - backend/runtime metadata in `runtime_info`
+- `src/v03_gamma.py` now logs the effective runtime environment at startup:
+  safe mode, chosen engine settings, GPU name/VRAM, CUDA capability, vLLM
+  version, prefix-caching status, backend loaded, and fallback reason if vLLM
+  did not load.
+- `predict.py` now writes per-question `time` values into
+  `submission_time.csv` using trace-attributed runtime instead of a flat
+  average copied across all rows.
+
+This was intentionally a measurement-only pass: it should not change routing,
+SC policy, prompts, or nominal accuracy. Its purpose is to make later speed
+work diagnosable on judge hardware.
+
+### Current speed-plan state
+
+- **Phase 0:** done
+- **Phase 1:** done
+- Dynamic free-VRAM sizing now computes effective `gpu_memory_utilization`
+  from `torch.cuda.mem_get_info()` unless the user explicitly overrides it
+- vLLM init now retries across a headroom ladder before any HuggingFace fallback
+- Wave-level OOM-like failures now trigger one more conservative vLLM reload and
+  resume instead of degrading immediately
+- **Phase 1b.4:** done
+- vLLM construction now enables chunked prefill through the shared wrapper and
+  runtime metadata records whether chunked prefill was effectively enabled
+- Repo sanity after the change: `python3.11 -m py_compile src/*.py predict.py`,
+  `python3.11 -m pytest tests/ -q`, `python3.11 -m src.v03_gamma --help`, and
+  `python3.11 predict.py --help` all passed
+- **Phase 2:** closed conservatively
+- We used the measured trace data to land one low-risk token-budget change:
+  READING Wave 2 think-mode SC now uses a smaller dedicated cap
+- We are intentionally **not** continuing broader Phase 2 budget cuts in this
+  branch, because the user requested no further performance intervention and we
+  do not want to trade away accuracy stability late
+- Remaining unfinished items in the original speed plan are now archival notes,
+  not active planned work for the final branch
+
+### Quantized side experiments (not promoted)
+
+- `cyankiwi/Qwen3.5-4B-AWQ-4bit` was tested on the post-submission branch and
+  did run on vLLM, but reached only **409 / 463 = 88.34%** on the proxy
+  reference, clearly below the main branch checkpoint
+- FP8 experiments also showed hardware-path caveats on non-native FP8 GPUs, so
+  they remain exploratory rather than deployment candidates
+- conclusion: quantized variants are not the preferred path for this branch
+
 ## Known bugs and accuracy blockers
 
 ### LIMITATION: gamma margins are saturated (`~1.0`) in practice
@@ -308,14 +436,20 @@ capability the model lacks, not a prompt tweak. See `reports/eval/persistent_fai
 ## Remaining work
 
 - Docker image / entrypoint should stay aligned with `src/v03_gamma.py` + `--safe-mode`
-- Private test set is ~2000 questions (~4.3x public set); wall-clock estimate: 2-4 hours on judge GPU
+- Phase 1b of `docs/speed_optimization_plan.md` is still pending: merged wave generation batches, cheaper prompt-fit tokenization, chunked prefill validation, and prefix-caching verification
+- Private test set is ~2000 questions (~4.3x public set); conservative 16 GB judge-style runs can take far longer than the old public-set extrapolation. Recent safe-mode reports suggest planning for very long wall-clock runs, potentially on the order of 30+ hours on a slow 16 GB setup
 
 ## Docs index
 
 | File | Purpose |
 |---|---|
 | `docs/status.md` | This file — current project state for AI context |
-| `docs/planning_v3.md` | Build spec: segments S0-S8, architecture, invariants |
 | `docs/version_results.md` | Score and runtime log per version |
-| `docs/note_v3.md` | Design rationale and decision log |
+| `docs/post_submission_branch_changes.md` | Summary of branch work after the last final submission candidate, including BTC-feedback response |
+| `docs/speed_optimization_plan.md` | Current throughput and judge-runtime optimization roadmap |
 | `docs/research_v3.md` | Evidence map for architectural choices |
+| `docs/faq.md` | Runtime setup notes and common environment issues |
+| `docs/report/report_vi.md` | Main Vietnamese report for judges |
+| `docs/report/report_en.md` | English report |
+| `docs/report/presentation_slide.pdf` | Presentation deck |
+| `docs/translations/README_en.md` | English README mirror of the main Vietnamese README |

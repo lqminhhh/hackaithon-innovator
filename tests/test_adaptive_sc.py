@@ -2,22 +2,25 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src.llm import GenerationOutput
 from src.parser import ParsedQuestion
 from src.sc_policy import (
     SC_N_HIGH_CHOICE_KNOWLEDGE,
     SC_N_STEM,
+    WAVE2_THINK_TOKENS_BY_ROUTE,
     knowledge_escalation_reason,
     reading_escalation_reason,
     should_use_think_mode,
     stem_sc_n,
 )
 import src.wave_solver as wave_solver
-from src.wave_solver import Wave1Result, _fit_extraction_prompt, run_wave1, run_wave2
+from src.wave_solver import Wave1Result, _fit_extraction_prompt, run_wave1, run_wave2, write_traces
 
 
 def _parsed(
@@ -73,6 +76,14 @@ class _FakeAgent:
 
     def generate_freeform(self, prompts, **kwargs):
         self.generated.append({"prompts": prompts, "kwargs": kwargs})
+        if kwargs.get("return_outputs"):
+            return [
+                GenerationOutput(
+                    text=f"reasoning-{idx}",
+                    num_generated_tokens=idx + 1,
+                )
+                for idx, _prompt in enumerate(prompts)
+            ]
         return [f"reasoning-{idx}" for idx, _prompt in enumerate(prompts)]
 
     def score_valid_labels(self, prompt, valid_labels):
@@ -188,6 +199,7 @@ def test_wave1_uses_length_fitted_extraction_prompts(monkeypatch):
     assert "Bạn đang chốt đáp án trắc nghiệm tiếng Việt." in scored_prompt
     assert "Lời giải nháp rút gọn:" in scored_prompt
     assert "Đoạn thông tin:\n---\n" not in scored_prompt
+    assert results[parsed.qid].wave1_time_share >= 0.0
 
 
 def test_wave2_uses_seven_stem_samples_for_low_margin_when_adaptive():
@@ -213,6 +225,8 @@ def test_wave2_uses_seven_stem_samples_for_low_margin_when_adaptive():
     assert len(agent.generated[0]["prompts"]) == SC_N_STEM["low"]
     assert len(agent.scored_prompts) == SC_N_STEM["low"]
     assert agent.generated[0]["kwargs"]["mode"] == "think"
+    assert wave2[parsed.qid].sc_n == SC_N_STEM["low"]
+    assert len(wave2[parsed.qid].wave2_sample_tokens) == SC_N_STEM["low"]
 
 
 def test_wave2_uses_three_stem_samples_when_adaptive_disabled():
@@ -237,6 +251,7 @@ def test_wave2_uses_three_stem_samples_when_adaptive_disabled():
     assert len(agent.generated) == 1
     assert len(agent.generated[0]["prompts"]) == SC_N_STEM["high"]
     assert len(agent.scored_prompts) == SC_N_STEM["high"]
+    assert wave2[parsed.qid].sc_n == SC_N_STEM["high"]
 
 
 def test_wave2_escalates_high_choice_knowledge_even_with_high_margin():
@@ -262,6 +277,7 @@ def test_wave2_escalates_high_choice_knowledge_even_with_high_margin():
     assert len(agent.generated[0]["prompts"]) == SC_N_HIGH_CHOICE_KNOWLEDGE
     assert len(agent.scored_prompts) == SC_N_HIGH_CHOICE_KNOWLEDGE
     assert agent.generated[0]["kwargs"]["mode"] == "think"
+    assert wave2[parsed.qid].sc_n == SC_N_HIGH_CHOICE_KNOWLEDGE
 
 
 def test_wave2_escalates_ambiguous_knowledge_even_with_high_margin():
@@ -328,6 +344,7 @@ def test_wave2_escalates_reading_detail_lookup_questions():
     assert len(agent.generated) == 1
     assert len(agent.generated[0]["prompts"]) == 3
     assert agent.generated[0]["kwargs"]["mode"] == "think"
+    assert agent.generated[0]["kwargs"]["max_tokens"] == WAVE2_THINK_TOKENS_BY_ROUTE["READING"]
 
 
 def test_wave2_does_not_escalate_high_margin_low_choice_knowledge():
@@ -348,3 +365,50 @@ def test_wave2_does_not_escalate_high_margin_low_choice_knowledge():
     assert wave2 == {}
     assert agent.generated == []
     assert agent.scored_prompts == []
+
+
+def test_write_traces_includes_runtime_and_compute_fields(tmp_path):
+    parsed = _parsed()
+    wave1 = {
+        parsed.qid: Wave1Result(
+            qid=parsed.qid,
+            route="stem",
+            answer="B",
+            margin=0.9,
+            gen_tokens_wave1=12,
+            wave1_time_share=1.5,
+            wave1_think=True,
+        )
+    }
+    wave2 = {
+        parsed.qid: wave_solver.Wave2Result(
+            answer="B",
+            votes=["B", "B", "B"],
+            escalation_reason="stem_sc_adaptive_n3",
+            gen_tokens_wave2=18,
+            wave2_sample_tokens=[5, 6, 7],
+            wave2_time_share=2.5,
+            wave2_think=True,
+            sc_n=3,
+        )
+    }
+    trace_path = tmp_path / "trace.jsonl"
+
+    write_traces(
+        str(trace_path),
+        [parsed],
+        wave1,
+        wave2,
+        {parsed.qid: "B"},
+        runtime_info={"backend": "vllm", "backend_reason": "loaded_vllm"},
+    )
+
+    record = json.loads(trace_path.read_text(encoding="utf-8").strip())
+    assert record["gen_tokens_wave1"] == 12
+    assert record["gen_tokens_wave2"] == 18
+    assert record["wave2_sample_tokens"] == [5, 6, 7]
+    assert record["sc_n"] == 3
+    assert record["wave1_time_share"] == 1.5
+    assert record["wave2_time_share"] == 2.5
+    assert record["attributed_time_seconds"] == 4.0
+    assert record["backend"] == "vllm"
